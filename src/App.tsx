@@ -6,10 +6,12 @@ import { Toaster } from "@/components/ui/sonner";
 import { LangProvider, type Lang } from "@/lib/i18n";
 import { queryClient } from "@/lib/query";
 import { CartProvider } from "@/lib/cart";
+import { FavoritesProvider } from "@/lib/favorites";
 import { SiteContentProvider } from "@/lib/site-content";
 import { AdminPage } from "@/pages/AdminPage";
 import { HomePage } from "@/pages/HomePage";
 import { CategoryPage } from "@/pages/CategoryPage";
+import { FavoritesPage } from "@/pages/FavoritesPage";
 import { OffersPage } from "@/pages/OffersPage";
 
 function ScrollToTop() {
@@ -33,10 +35,11 @@ function LangShell({ lang }: { lang: Lang }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+      <ThemeProvider attribute="class" defaultTheme="dark" storageKey="al-saif-theme" enableSystem={false} enableColorScheme={false} disableTransitionOnChange>
         <ScrollToTop />
         <SiteContentProvider>
         <CartProvider>
+        <FavoritesProvider>
         <Switch>
           <Route path="/">
             <Redirect to="/ar" />
@@ -55,6 +58,16 @@ export default function App() {
           <Route path="/en/offers">
             <LangProvider lang="en">
               <OffersPage />
+            </LangProvider>
+          </Route>
+          <Route path="/ar/favorites">
+            <LangProvider lang="ar">
+              <FavoritesPage />
+            </LangProvider>
+          </Route>
+          <Route path="/en/favorites">
+            <LangProvider lang="en">
+              <FavoritesPage />
             </LangProvider>
           </Route>
           <Route path="/ar/c/:id">
@@ -81,6 +94,7 @@ export default function App() {
             <Redirect to="/ar" />
           </Route>
         </Switch>
+        </FavoritesProvider>
         </CartProvider>
         </SiteContentProvider>
         <Toaster />

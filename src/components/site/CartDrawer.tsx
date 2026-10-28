@@ -1,6 +1,7 @@
 import { useEffect, useId } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { useCart } from "@/lib/cart";
+import { publicUrl } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 import { OFFER_PRODUCTS } from "@/lib/products";
 import { useSiteContent } from "@/lib/site-content";
@@ -10,7 +11,7 @@ function money(value: number) {
 }
 
 function photoFor(id: string) {
-  return id === "case" ? `/card-photos/product-${id}.png` : `/showcase/${id}.png`;
+  return publicUrl(id === "case" ? `/card-photos/product-${id}.png` : `/showcase/${id}.png`);
 }
 
 export function CartDrawer() {
@@ -51,7 +52,7 @@ export function CartDrawer() {
         onClick={(event) => event.stopPropagation()}
         className="flex h-full w-full max-w-md flex-col bg-white text-navy shadow-2xl"
       >
-        <div className="flex items-center justify-between gap-3 bg-[#062E26] px-4 py-4 text-white">
+        <div className="flex items-center justify-between gap-3 bg-navy px-4 py-4 text-white">
           <h2 id={titleId} className="text-lg font-bold">
             {t.cart}
           </h2>
@@ -74,7 +75,7 @@ export function CartDrawer() {
                 <img src={photoFor(line.id)} alt="" className="size-16 shrink-0 object-contain" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-semibold">{copy?.name ?? line.id}</p>
-                  <p className="mt-1 text-sm font-bold text-emerald">
+                  <p className="mt-1 text-sm font-bold text-brand-ink">
                     {product ? `${money(product.price)} ${t.deals.currency}` : ""}
                   </p>
                   <div className="mt-2 flex items-center justify-between gap-2">
@@ -111,7 +112,7 @@ export function CartDrawer() {
           <div className="border-t border-navy/10 px-4 py-4">
             <p className="flex items-center justify-between text-sm">
               <span className="text-navy/60">{t.cartTotal}</span>
-              <span className="text-lg font-bold text-emerald">
+              <span className="text-lg font-bold text-brand-ink">
                 {money(total)} {t.deals.currency}
               </span>
             </p>

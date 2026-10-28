@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Boxes } from "lucide-react";
 import { ProductDialog, type OfferProduct } from "@/components/site/Offers";
-import { ProductCard, ShowcaseStage } from "@/components/site/showcase";
+import { IconTile, ProductCard } from "@/components/site/showcase";
+import { useFavorites } from "@/lib/favorites";
 import { useLang } from "@/lib/i18n";
 import { useSiteContent } from "@/lib/site-content";
 
@@ -17,7 +18,7 @@ export function Bestsellers() {
   const { content, copyOf, productById } = useSiteContent();
   const block = content.bestsellers[lang];
   const [group, setGroup] = useState("all");
-  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const { has, toggle } = useFavorites();
   const [openId, setOpenId] = useState<string | null>(null);
 
   const selectedFilter = t.bestsellers.filters.find((filter) => filter.id === group) ?? t.bestsellers.filters[0];
@@ -29,21 +30,21 @@ export function Bestsellers() {
   const openProduct = openId ? productById(openId) ?? null : null;
 
   return (
-    <section className="ambient bg-[#F7F8F5] py-10" aria-labelledby="bestsellers-title">
-      <div className="mx-auto max-w-7xl px-4">
+    <section className="ambient section-y tone-b tone-swap-light" aria-labelledby="bestsellers-title">
+      <div className="page-shell">
         <div className="reveal flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
-            <p className="text-sm font-medium text-navy/55">{block.eyebrow}</p>
-            <h2 id="bestsellers-title" className="mt-2 text-2xl font-bold leading-tight text-navy sm:text-3xl">
+            <p className="eyebrow">{block.eyebrow}</p>
+            <h2 id="bestsellers-title" className="section-title">
               {title}
             </h2>
-            <p className="mt-2 max-w-xl text-sm leading-7 text-navy/55">{block.lead}</p>
+            <p className="section-lead">{block.lead}</p>
           </div>
           <div className="flex flex-col items-start gap-3 lg:items-end">
             <button
               type="button"
               onClick={() => setGroup("all")}
-              className="inline-flex h-10 items-center rounded-full bg-navy px-5 text-sm font-medium text-white"
+              className="inline-flex h-11 cursor-pointer items-center rounded-full bg-navy px-5 text-sm font-semibold text-white transition-colors hover:bg-deep"
             >
               {t.bestsellers.viewAll}
             </button>
@@ -56,8 +57,10 @@ export function Bestsellers() {
                     type="button"
                     aria-pressed={selected}
                     onClick={() => setGroup(filter.id)}
-                    className={`h-9 rounded-full px-4 text-sm ${
-                      selected ? "bg-navy text-white" : "border border-navy/10 bg-white text-navy"
+                    className={`h-11 cursor-pointer rounded-full px-4 text-sm font-medium transition-colors ${
+                      selected
+                        ? "bg-brand text-navy"
+                        : "border border-navy/15 bg-white text-navy hover:border-brand hover:text-brand-ink"
                     }`}
                   >
                     {filter.label}
@@ -68,7 +71,7 @@ export function Bestsellers() {
           </div>
         </div>
 
-        <div className="reveal-stagger mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <div className="reveal-stagger mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">
           {products.map((product) => {
             const copy = copyOf(lang, product.id) ?? t.deals.products[product.id];
             return (
@@ -77,29 +80,24 @@ export function Bestsellers() {
                 product={product}
                 name={copy?.name ?? ""}
                 category={copy?.category ?? ""}
-                liked={saved[product.id] ?? false}
+                liked={has(product.id)}
                 badge={t.bestsellers.badges[product.id]}
                 onOpen={() => setOpenId(product.id)}
-                onToggleSave={() => setSaved((current) => ({ ...current, [product.id]: !current[product.id] }))}
+                onToggleSave={() => toggle(product.id)}
               />
             );
           })}
         </div>
 
-        <div className="mt-6 flex flex-col gap-4 rounded-2xl bg-[#e7f6ee] px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
-          <div className="flex items-center gap-3">
-            <ShowcaseStage size="icon">
-              <Boxes />
-            </ShowcaseStage>
+        <div className="mt-10 flex flex-col gap-5 promo-strip rounded-3xl border px-5 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <div className="flex items-center gap-4">
+            <IconTile icon={Boxes} />
             <div>
-              <p className="font-bold text-navy">{block.bannerTitle}</p>
-              <p className="mt-1 text-sm leading-6 text-navy/60">{block.bannerLead}</p>
+              <p className="text-base font-bold text-navy">{block.bannerTitle}</p>
+              <p className="mt-1 text-sm leading-6 text-ink-soft">{block.bannerLead}</p>
             </div>
           </div>
-          <button
-            type="button"
-            className="inline-flex h-11 shrink-0 items-center justify-center rounded-xl bg-emerald px-5 text-sm font-semibold text-white"
-          >
+          <button type="button" className="btn-brand shrink-0">
             {t.bestsellers.bannerAction}
           </button>
         </div>
@@ -108,11 +106,9 @@ export function Bestsellers() {
       {openProduct ? (
         <ProductDialog
           product={openProduct}
-          liked={saved[openProduct.id] ?? false}
+          liked={has(openProduct.id)}
           onClose={() => setOpenId(null)}
-          onToggleSave={() =>
-            setSaved((current) => ({ ...current, [openProduct.id]: !current[openProduct.id] }))
-          }
+          onToggleSave={() => toggle(openProduct.id)}
         />
       ) : null}
     </section>

@@ -229,7 +229,7 @@ const TREE: Input[] = [
     textAr: "جوالات وأجهزة لوحية وملحقاتها.",
     textEn: "Phones, tablets, and their add-ons.",
     icon: "smartphone",
-    image: "/departments/phones-tablets.png",
+    image: "/departments/phones-tablets-v2.jpg",
     featured: true,
     children: [
       { slug: "phones", ar: "جوالات", en: "Phones", textAr: "أجهزة الاتصال اليومي.", textEn: "Everyday phones.", icon: "smartphone" },

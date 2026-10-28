@@ -45,7 +45,7 @@ export function CategoryMenu() {
         aria-expanded={open}
         aria-controls={menuId}
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex h-10 items-center gap-2 rounded-full bg-emerald px-4 text-sm font-medium text-white"
+        className="inline-flex h-11 shrink-0 cursor-pointer items-center gap-2 rounded-full bg-brand px-4 text-sm font-bold text-navy transition-colors hover:bg-brand-hover"
       >
         <LayoutGrid className="size-4" />
         {t.allCategories}
@@ -57,24 +57,32 @@ export function CategoryMenu() {
           className="absolute start-0 z-30 mt-2 w-[min(880px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-navy/10 bg-white text-navy shadow-xl"
         >
           <div className="flex h-[min(70vh,32rem)] min-h-0 flex-col sm:flex-row">
-            <div className="min-h-0 max-h-[46%] overflow-y-auto overscroll-contain border-b border-navy/10 bg-[#f7f8f5] p-2 sm:max-h-none sm:w-60 sm:shrink-0 sm:border-b-0 sm:border-e">
+            <div className="min-h-0 max-h-[46%] overflow-y-auto overscroll-contain border-b border-navy/10 bg-[#f4f7fb] p-2 sm:max-h-none sm:w-60 sm:shrink-0 sm:border-b-0 sm:border-e">
               {roots.map((item) => {
                 const selected = item.id === active.id;
                 const Icon = catalogIcon(item.icon);
                 return (
-                  <button
+                  <Link
                     key={item.id}
-                    type="button"
+                    href={`/${lang}/c/${item.slug}`}
                     onMouseEnter={() => setActiveId(item.id)}
                     onFocus={() => setActiveId(item.id)}
-                    onClick={() => setActiveId(item.id)}
+                    onClick={(event) => {
+                      // Touch screens have no hover, so a tap previews the department first.
+                      if (window.matchMedia("(hover: none)").matches && item.id !== activeId) {
+                        event.preventDefault();
+                        setActiveId(item.id);
+                        return;
+                      }
+                      setOpen(false);
+                    }}
                     className={`flex w-full items-center gap-2 rounded-xl px-3 py-2.5 text-start text-sm ${
-                      selected ? "bg-white font-semibold text-emerald shadow-sm" : "text-navy/80 hover:bg-white/70"
+                      selected ? "bg-white font-semibold text-brand-ink shadow-sm" : "text-navy/80 hover:bg-white/70"
                     }`}
                   >
                     <Icon className="size-4 shrink-0" />
                     <span className="line-clamp-2">{categoryLabel(item, lang)}</span>
-                  </button>
+                  </Link>
                 );
               })}
             </div>
@@ -109,12 +117,12 @@ function DepartmentPanel({
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-base font-bold">{categoryLabel(active, lang)}</p>
-          <p className="mt-1 text-xs leading-5 text-navy/55">{categoryBlurb(active, lang)}</p>
+          <p className="mt-1 text-xs leading-5 text-ink-soft">{categoryBlurb(active, lang)}</p>
         </div>
         <Link
           href={`/${lang}/c/${active.slug}`}
           onClick={onNavigate}
-          className="shrink-0 text-sm font-semibold text-emerald"
+          className="shrink-0 text-sm font-semibold text-brand-ink"
         >
           {t.categoryPage.open}
         </Link>
@@ -127,7 +135,7 @@ function DepartmentPanel({
               <Link
                 href={`/${lang}/c/${branch.slug}`}
                 onClick={onNavigate}
-                className="text-sm font-semibold text-navy hover:text-emerald"
+                className="text-sm font-semibold text-navy hover:text-brand-ink"
               >
                 {categoryLabel(branch, lang)}
               </Link>
@@ -138,7 +146,7 @@ function DepartmentPanel({
                       <Link
                         href={`/${lang}/c/${leaf.slug}`}
                         onClick={onNavigate}
-                        className="text-xs text-navy/60 hover:text-emerald"
+                        className="text-xs text-ink-soft hover:text-brand-ink"
                       >
                         {categoryLabel(leaf, lang)}
                       </Link>

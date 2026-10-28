@@ -1,9 +1,9 @@
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { ArrowLeft, Eye, Heart, ShoppingCart, Star, type LucideIcon } from "lucide-react";
 import { Link } from "wouter";
 import { useCart } from "@/lib/cart";
-import { cardEdge } from "@/lib/card-edge";
+import { publicUrl } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
 import type { OfferProduct } from "@/lib/products";
 
@@ -52,6 +52,7 @@ export function ProductCard({
   badge,
   onOpen,
   onToggleSave,
+  duplicate = false,
 }: {
   product: OfferProduct;
   name: string;
@@ -60,96 +61,116 @@ export function ProductCard({
   badge?: string;
   onOpen: () => void;
   onToggleSave: () => void;
+  /** A visual copy (e.g. for a looping rail): hidden from assistive tech and skipped by Tab. */
+  duplicate?: boolean;
 }) {
   const { t } = useLang();
   const { add } = useCart();
   const percent = Math.round((1 - product.price / product.compareAt) * 100);
 
-  const photo = product.id === "case" ? `/card-photos/product-${product.id}.png` : `/showcase/${product.id}.png`;
+  const photo = publicUrl(product.id === "case" ? `/card-photos/product-${product.id}.png` : `/showcase/${product.id}.png`);
 
   return (
-    <article
-      onClick={onOpen}
-      style={{ "--card-edge": cardEdge(product.id) } as CSSProperties}
-      className="showcase-card offer-card flex h-full cursor-pointer flex-col rounded-[1.4rem] border-transparent bg-white p-4 text-start text-navy shadow-[0_10px_28px_rgba(6,46,38,0.06)]"
-    >
+    <article aria-hidden={duplicate || undefined} className="showcase-card offer-card product-card flex h-full flex-col rounded-[1.25rem] bg-white p-3 text-start text-navy">
       <div className="relative">
-        <span className="absolute start-0 top-0 z-10 rounded-full bg-burgundy px-2.5 py-1 text-[11px] font-semibold text-white">
+        <span className="absolute start-2.5 top-2.5 z-10 rounded-lg bg-burgundy px-2 py-1 text-[11px] font-bold leading-none text-white">
           {t.deals.discount.replace("{percent}", String(percent))}
         </span>
-        <CardStand>
-          <img src={photo} alt="" className="card-photo__img" />
-        </CardStand>
+        <div className="absolute end-2.5 top-2.5 z-20 flex flex-col gap-2">
+          <button
+            type="button"
+            tabIndex={duplicate ? -1 : undefined}
+            aria-pressed={liked}
+            aria-label={t.wishlist}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSave();
+            }}
+            className={`grid size-10 cursor-pointer place-items-center rounded-full border bg-white/95 shadow-sm transition-colors hover:border-cyan hover:text-brand-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan ${
+              liked ? "border-brand-ink text-brand-ink" : "border-navy/10 text-navy"
+            }`}
+          >
+            <Heart className={`size-[18px] ${liked ? "fill-brand-ink" : ""}`} aria-hidden />
+          </button>
+          <button
+            type="button"
+            tabIndex={duplicate ? -1 : undefined}
+            aria-label={t.deals.quickView}
+            onClick={(event) => {
+              event.stopPropagation();
+              onOpen();
+            }}
+            className="grid size-10 cursor-pointer place-items-center rounded-full border border-navy/10 bg-white/95 text-navy shadow-sm transition-colors hover:border-cyan hover:text-brand-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
+          >
+            <Eye className="size-[18px]" aria-hidden />
+          </button>
+        </div>
+        <div className="card-photo product-photo">
+          <img src={photo} alt="" loading="lazy" decoding="async" className="card-photo__img" />
+        </div>
+        {badge ? (
+          <span className="absolute bottom-2.5 start-2.5 z-10 max-w-[80%] truncate rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-semibold text-ink-soft shadow-sm">
+            {badge}
+          </span>
+        ) : null}
       </div>
 
-      <div className="mt-1 flex items-start gap-2">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold text-emerald">{category}</p>
-          <h3 className="mt-1 line-clamp-2 text-sm font-bold leading-6 text-navy">{name}</h3>
-        </div>
-        <button
-          type="button"
-          aria-pressed={liked}
-          aria-label={t.wishlist}
-          onClick={(event) => {
-            event.stopPropagation();
-            onToggleSave();
-          }}
-          className={`grid size-8 shrink-0 place-items-center rounded-full border bg-white ${
-            liked ? "border-emerald text-emerald" : "border-navy/10 text-navy/45"
-          }`}
-        >
-          <Heart className={`size-3.5 ${liked ? "fill-emerald" : ""}`} />
-        </button>
-        <button
-          type="button"
-          aria-label={t.deals.quickView}
-          onClick={(event) => {
-            event.stopPropagation();
-            onOpen();
-          }}
-          className="grid size-8 shrink-0 place-items-center rounded-full border border-navy/10 bg-white text-navy/45"
-        >
-          <Eye className="size-3.5" />
-        </button>
-      </div>
+      <div className="mt-4 flex flex-1 flex-col px-1">
+        <p className="line-clamp-1 text-xs font-medium text-ink-mute">{category}</p>
+        <h3 className="mt-1 line-clamp-2 min-h-12 text-[0.9375rem] font-bold leading-6 text-navy">
+          <button
+            type="button"
+            tabIndex={duplicate ? -1 : undefined}
+            onClick={onOpen}
+            className="card-open cursor-pointer text-start after:absolute after:inset-0 after:content-['']"
+          >
+            {name}
+          </button>
+        </h3>
 
-      {badge ? <p className="mt-1 text-[11px] font-semibold text-navy/45">{badge}</p> : null}
-
-      <p className="mt-2 flex items-center gap-1 text-xs">
-        <Star className="size-3.5 fill-gold text-gold" />
-        <span className="font-semibold text-emerald">{product.rating.toFixed(1)}</span>
-        <span className="text-navy/40">({t.deals.reviews.replace("{count}", String(product.reviews))})</span>
-      </p>
-
-      <div className="mt-auto flex items-end justify-between gap-2 pt-3">
-        <div>
-          <p className="text-[11px] text-navy/35 line-through">
-            {money(product.compareAt)} {t.deals.currency}
+        {product.rating > 0 ? (
+          <p className="mt-1.5 flex items-center gap-1 text-xs">
+            <Star className="size-3.5 fill-gold text-gold" aria-hidden />
+            <span className="font-semibold text-navy">{product.rating.toFixed(1)}</span>
+            {product.reviews > 0 ? (
+              <span className="text-ink-mute">({t.deals.reviews.replace("{count}", String(product.reviews))})</span>
+            ) : null}
           </p>
-          <p className="text-lg font-bold text-emerald">
-            {money(product.price)} {t.deals.currency}
-          </p>
+        ) : null}
+
+        <div className="mt-auto pt-3">
+          <div className="flex min-h-7 flex-wrap items-baseline gap-x-2">
+            <p className="price-now text-xl font-bold leading-7 text-brand-ink">
+              {money(product.price)} {t.deals.currency}
+            </p>
+            {product.compareAt > product.price ? (
+              <p className="price-now text-xs text-ink-mute line-through">
+                {money(product.compareAt)} {t.deals.currency}
+              </p>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            tabIndex={duplicate ? -1 : undefined}
+            aria-label={`${t.deals.addToCart}: ${name}`}
+            onClick={(event) => {
+              event.stopPropagation();
+              add(product.id);
+              toast.success(t.cartAdded.replace("{name}", name));
+            }}
+            className="cart-btn relative z-20 mt-3 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl border border-cyan/45 bg-cyan/15 text-sm font-bold text-brand-ink transition-colors hover:bg-brand hover:text-navy focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan"
+          >
+            <ShoppingCart className="size-[18px]" aria-hidden />
+            {t.deals.addToCart}
+          </button>
         </div>
-        <button
-          type="button"
-          aria-label={t.deals.addToCart}
-          onClick={(event) => {
-            event.stopPropagation();
-            add(product.id);
-            toast.success(t.cartAdded.replace("{name}", name));
-          }}
-          className="cart-btn grid size-9 shrink-0 cursor-pointer place-items-center rounded-full bg-emerald text-white"
-        >
-          <ShoppingCart className="size-4" />
-        </button>
       </div>
     </article>
   );
 }
 
 function CardStand({ children }: { children: ReactNode }) {
-  return <div className="card-photo relative flex h-40 items-end justify-center">{children}</div>;
+  return <div className="card-photo">{children}</div>;
 }
 
 function CategoryVisual({ name, image, icon: Icon }: { name: string; image?: string; icon?: LucideIcon }) {
@@ -159,9 +180,16 @@ function CategoryVisual({ name, image, icon: Icon }: { name: string; image?: str
   return (
     <CardStand>
       {showImage ? (
-        <img src={image} alt="" onError={() => setFailed(true)} className="card-photo__img" />
+        <img
+          src={publicUrl(image)}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onError={() => setFailed(true)}
+          className="card-photo__img"
+        />
       ) : Icon ? (
-        <Icon className="card-photo__mark" strokeWidth={1.6} />
+        <Icon className="card-photo__mark" strokeWidth={1.6} aria-hidden />
       ) : (
         <span className="card-photo__mark text-2xl font-semibold">{name.slice(0, 1)}</span>
       )}
@@ -170,7 +198,6 @@ function CategoryVisual({ name, image, icon: Icon }: { name: string; image?: str
 }
 
 export function CategoryCard({
-  id,
   name,
   caption,
   image,
@@ -189,23 +216,20 @@ export function CategoryCard({
   onClick?: () => void;
 }) {
   const { dir } = useLang();
-  const className = `showcase-card catalog-card flex h-full w-full flex-col rounded-[1.4rem] border-transparent bg-white p-4 text-start text-navy shadow-[0_10px_28px_rgba(6,46,38,0.06)] ${
+  const className = `showcase-card catalog-card led-edge flex h-full w-full cursor-pointer flex-col rounded-[1.4rem] bg-white p-3 text-start text-navy ${
     pressed ? "is-selected" : ""
   }`;
-  const style = { "--card-edge": cardEdge(id) } as CSSProperties;
   const body = (
     <>
       <CategoryVisual name={name} image={image} icon={Icon} />
-      <div className="mt-3 flex items-center gap-2">
-        {Icon ? <Icon className="size-4 shrink-0 text-emerald" /> : null}
+      <div className="mt-3 flex items-center gap-2 px-1">
+        {Icon ? <Icon className="size-4 shrink-0 text-brand-ink" aria-hidden /> : null}
         <span className="line-clamp-2 text-sm font-bold leading-6">{name}</span>
       </div>
-      <span className="mt-1.5 line-clamp-2 text-xs leading-5 text-navy/50">
-        {caption}
-      </span>
-      <span className="mt-auto flex justify-end pt-4">
-        <span className="card-arrow grid size-9 place-items-center rounded-full bg-emerald text-white">
-          <ArrowLeft className={`size-4 ${dir === "ltr" ? "rotate-180" : ""}`} />
+      <span className="mt-1 line-clamp-2 min-h-10 px-1 text-xs leading-5 text-ink-soft">{caption}</span>
+      <span className="mt-auto flex justify-end px-1 pt-3">
+        <span className="card-arrow grid size-9 place-items-center rounded-full bg-brand text-navy">
+          <ArrowLeft className={`size-4 ${dir === "ltr" ? "rotate-180" : ""}`} aria-hidden />
         </span>
       </span>
     </>
@@ -213,14 +237,14 @@ export function CategoryCard({
 
   if (href) {
     return (
-      <Link href={href} style={style} className={className}>
+      <Link href={href} className={className}>
         {body}
       </Link>
     );
   }
 
   return (
-    <button type="button" onClick={onClick} aria-pressed={pressed} style={style} className={className}>
+    <button type="button" onClick={onClick} aria-pressed={pressed} className={className}>
       {body}
     </button>
   );
@@ -231,29 +255,34 @@ export function ServiceCard({
   title,
   text,
   tone = "light",
-  platform = true,
 }: {
   icon: LucideIcon;
   title: string;
   text: string;
-  tone?: "light" | "dark";
-  platform?: boolean;
+  tone?: "light" | "dark" | "bar" | "barLight";
 }) {
-  const dark = tone === "dark";
+  const dark = tone !== "light" && tone !== "barLight";
   return (
     <article
-      style={{ "--card-edge": cardEdge(title) } as CSSProperties}
-      className={`showcase-card flex items-center gap-3 rounded-2xl border p-3 text-start ${
-        dark ? "border-white/15 bg-white/5 text-white" : "border-navy/10 bg-white text-navy shadow-sm"
-      }`}
+      className={`flex flex-col items-start gap-3 rounded-2xl border p-4 text-start sm:flex-row ${
+        dark ? "border-white/15 bg-white/[0.06] text-white" : "border-navy/10 bg-white text-navy shadow-sm"
+      } ${tone === "bar" ? "border-0! bg-transparent! p-2!" : ""} ${tone === "barLight" ? "border-0! bg-transparent! p-2! shadow-none!" : ""}`}
     >
-      <ShowcaseStage size="icon" platform={platform}>
+      <span className={`icon-tile ${dark ? "icon-tile--dark" : ""}`} aria-hidden>
         <Icon />
-      </ShowcaseStage>
+      </span>
       <div className="min-w-0">
-        <p className="text-sm font-semibold">{title}</p>
-        <p className={`mt-1 text-xs leading-5 ${dark ? "text-white/65" : "text-navy/55"}`}>{text}</p>
+        <p className="text-sm font-bold leading-6">{title}</p>
+        <p className={`mt-0.5 text-[0.8125rem] leading-5 ${dark ? "text-white/80" : "text-ink-soft"}`}>{text}</p>
       </div>
     </article>
+  );
+}
+
+export function IconTile({ icon: Icon, tone = "light" }: { icon: LucideIcon; tone?: "light" | "dark" }) {
+  return (
+    <span className={`icon-tile ${tone === "dark" ? "icon-tile--dark" : ""}`} aria-hidden>
+      <Icon />
+    </span>
   );
 }

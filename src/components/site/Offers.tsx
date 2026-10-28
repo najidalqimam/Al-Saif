@@ -1,4 +1,5 @@
 import { useEffect, useId, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -15,14 +16,16 @@ import {
   X,
 } from "lucide-react";
 import { Link } from "wouter";
-import { ProductStage } from "@/components/site/ProductStage";
+import { RailTrack, useRail, useRailAutoplay } from "@/components/site/ScrollRail";
 import { ProductCard } from "@/components/site/showcase";
-import { bannerBackground } from "@/lib/banner";
 import { useCart } from "@/lib/cart";
+import { useFavorites } from "@/lib/favorites";
 import { useLang } from "@/lib/i18n";
 import { offerDetail } from "@/lib/offer-details";
 import { OFFER_PRODUCTS, type OfferProduct } from "@/lib/products";
 import { useSiteContent } from "@/lib/site-content";
+import { useIsLight } from "@/lib/theme";
+import { publicUrl } from "@/lib/utils";
 
 export { OFFER_PRODUCTS, type OfferProduct };
 
@@ -66,111 +69,137 @@ export function Offers() {
   const { content, visibleProducts } = useSiteContent();
   const deals = content.deals[lang];
   const countdown = useCountdown();
-  const gradient = bannerBackground(dir);
+  const light = useIsLight();
 
   return (
-    <section className="ambient-edge bg-white py-8" aria-labelledby="offers-title">
-      <div className="reveal mx-auto max-w-7xl px-4">
-        <div
-          className="flex flex-col gap-6 rounded-[28px] px-5 py-7 text-white sm:flex-row sm:items-center sm:justify-between sm:px-8 lg:px-10"
-          style={{ background: gradient }}
-        >
-          <div className="max-w-2xl">
-            <p className="flex items-center gap-2 text-sm font-medium text-gold">
-              <Flame className="size-4" />
-              {deals.eyebrow}
-            </p>
-            <h2 id="offers-title" className="mt-3 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl font-bold leading-tight sm:text-4xl">
-              <span>{deals.title}</span>
-              <span className="whitespace-nowrap text-gold">{deals.highlight}</span>
-            </h2>
-            <p className="mt-3 max-w-xl text-sm leading-7 text-white/70">{deals.lead}</p>
-          </div>
-          <div className="inline-flex w-fit items-center gap-3 rounded-2xl bg-black/30 px-4 py-3">
-            <span className="text-sm text-white/80">{t.deals.endsSoon}</span>
-            <div dir="ltr" className="flex items-center gap-1.5 text-lg font-semibold tabular-nums">
-              <Clock className="size-4 text-gold" />
-              <span>{pad(countdown.hours)}</span>
-              <span className="text-white/40">:</span>
-              <span>{pad(countdown.minutes)}</span>
-              <span className="text-white/40">:</span>
-              <span>{pad(countdown.seconds)}</span>
+    <section className="ambient-edge tone-a tone-swap-light section-y" aria-labelledby="offers-title">
+      <div className="page-shell">
+        <div className="reveal">
+          <div
+            className={`relative isolate overflow-hidden rounded-[1.5rem] px-6 py-5 sm:px-10 sm:py-6 lg:px-12 ${
+              light ? "border border-navy/10 text-navy" : "surface-dark text-white"
+            }`}
+            style={{ background: "var(--tone-promo)" }}
+          >
+            <div aria-hidden className="pointer-events-none absolute -end-20 -top-28 -z-10 size-80 rounded-full bg-cyan/20 blur-3xl" />
+            <div aria-hidden className="led-strip absolute inset-x-0 top-0 -z-10" />
+            <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+              <div className="max-w-2xl">
+                <p className={`flex items-center gap-2 text-sm font-semibold ${light ? "text-brand-ink" : "text-gold"}`}>
+                  <Flame className="size-4" aria-hidden />
+                  {deals.eyebrow}
+                </p>
+                <h2
+                  id="offers-title"
+                  className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl font-bold leading-tight sm:text-4xl"
+                >
+                  <span>{deals.title}</span>
+                  <span className={`whitespace-nowrap ${light ? "text-brand-ink" : "text-gold"}`}>{deals.highlight}</span>
+                </h2>
+                <p className={`mt-2 max-w-xl text-sm leading-7 ${light ? "text-navy/75" : "text-white/80"}`}>{deals.lead}</p>
+                <Link
+                  href={`/${lang}/offers`}
+                  className={`mt-4 inline-flex h-11 items-center gap-2 rounded-full px-6 text-sm font-semibold text-navy transition-colors ${
+                    light ? "bg-[#20C5D4] hover:bg-brand-hover" : "bg-[#fff] hover:bg-mint"
+                  }`}
+                >
+                  {t.deals.viewAll}
+                  {dir === "rtl" ? <ArrowLeft className="size-4" aria-hidden /> : <ArrowRight className="size-4" aria-hidden />}
+                </Link>
+              </div>
+              <div
+                role="timer"
+                aria-label={t.deals.endsSoon}
+                className={`flex w-fit flex-col gap-2 rounded-2xl border px-4 py-3.5 backdrop-blur-sm sm:flex-row sm:items-center sm:gap-4 ${
+                  light ? "border-navy/10 bg-white/70" : "border-white/15 bg-black/25"
+                }`}
+              >
+                <span className={`flex items-center gap-2 text-sm font-medium ${light ? "text-navy/85" : "text-white/90"}`}>
+                  <Clock className={`size-4 ${light ? "text-brand-ink" : "text-gold"}`} aria-hidden />
+                  {t.deals.endsSoon}
+                </span>
+                <div dir="ltr" className="flex items-center gap-1.5 tabular-nums">
+                  {[countdown.hours, countdown.minutes, countdown.seconds].map((value, index) => (
+                    <span key={index} className="flex items-center gap-1.5">
+                      {index > 0 ? <span className={light ? "text-navy/40" : "text-white/50"}>:</span> : null}
+                      <span className={`grid min-w-11 place-items-center rounded-lg px-2 py-1.5 text-xl font-bold ${light ? "bg-navy/[0.06]" : "bg-[rgb(255_255_255/0.1)] text-mint"}`}>
+                        {pad(value)}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
         </div>
+
+        <OfferGrid products={visibleProducts("home")} rail />
       </div>
-
-      <OfferGrid products={visibleProducts("home")} marquee />
-
-      <div className="mx-auto mt-8 flex max-w-7xl justify-center px-4">
-          <Link
-            href={`/${lang}/offers`}
-            className="inline-flex h-11 items-center gap-2 rounded-full bg-emerald px-6 text-sm font-medium text-white"
-          >
-            {t.deals.viewAll}
-            {dir === "rtl" ? <ArrowLeft className="size-4" /> : <ArrowRight className="size-4" />}
-          </Link>
-        </div>
     </section>
   );
 }
 
-export function OfferGrid({ products, marquee = false }: { products: readonly OfferProduct[]; marquee?: boolean }) {
+export function OfferGrid({ products, rail = false }: { products: readonly OfferProduct[]; rail?: boolean }) {
   const { t, lang } = useLang();
   const { copyOf } = useSiteContent();
-  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const railState = useRail();
+  useRailAutoplay(railState.trackRef, rail ? 28 : 0);
+  const { has, toggle } = useFavorites();
   const [openId, setOpenId] = useState<string | null>(null);
   const openProduct = products.find((item) => item.id === openId) ?? null;
 
-  const cards = (copyIndex: number) =>
-    products.map((product) => {
-      const copy = copyOf(lang, product.id) ?? t.deals.products[product.id];
-      return (
-        <div key={`${product.id}-${copyIndex}`} className={marquee ? "w-[17.5rem] shrink-0" : undefined}>
-          <ProductCard
-            product={product}
-            name={copy?.name ?? ""}
-            category={copy?.category ?? ""}
-            liked={saved[product.id] ?? false}
-            onOpen={() => setOpenId(product.id)}
-            onToggleSave={() => setSaved((current) => ({ ...current, [product.id]: !current[product.id] }))}
-          />
-        </div>
-      );
-    });
+  const renderCard = (product: OfferProduct, duplicate = false) => {
+    const copy = copyOf(lang, product.id) ?? t.deals.products[product.id];
+    return (
+      <ProductCard
+        product={product}
+        name={copy?.name ?? ""}
+        category={copy?.category ?? ""}
+        liked={has(product.id)}
+        onOpen={() => setOpenId(product.id)}
+        onToggleSave={() => toggle(product.id)}
+        duplicate={duplicate}
+      />
+    );
+  };
+
+  const cards = rail
+    ? [
+        ...products.map((product) => (
+          <div key={product.id} className="rail__item">
+            {renderCard(product)}
+          </div>
+        )),
+        // A second, hidden-from-assistive-tech set so the auto-scrolling rail can loop seamlessly.
+        ...products.map((product, index) => (
+          <div key={`copy-${product.id}`} className="rail__item" data-rail-copy={index === 0 ? "" : undefined}>
+            {renderCard(product, true)}
+          </div>
+        )),
+      ]
+    : products.map((product) => <div key={product.id}>{renderCard(product)}</div>);
 
   return (
     <>
-    {marquee ? (
-      <div className="offers-rail reveal mt-6 w-full overflow-hidden py-3">
-        <div className="offers-marquee flex w-max">
-          {[0, 1].map((copyIndex) => (
-            <div
-              key={copyIndex}
-              className="flex shrink-0 gap-4 pe-4"
-              aria-hidden={copyIndex === 1 || undefined}
-              inert={copyIndex === 1 || undefined}
-            >
-              {cards(copyIndex)}
-            </div>
-          ))}
+      {rail ? (
+        <div className="mt-6">
+          <div className="reveal">
+            <RailTrack trackRef={railState.trackRef} label={t.deals.pageTitle}>
+              {cards}
+            </RailTrack>
+          </div>
         </div>
-      </div>
-    ) : (
-    <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-      {cards(0)}
-    </div>
-    )}
-    {openProduct ? (
-      <ProductDialog
-        product={openProduct}
-        liked={saved[openProduct.id] ?? false}
-        onClose={() => setOpenId(null)}
-        onToggleSave={() =>
-          setSaved((current) => ({ ...current, [openProduct.id]: !current[openProduct.id] }))
-        }
-      />
-    ) : null}
+      ) : (
+        <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-5">{cards}</div>
+      )}
+      {openProduct ? (
+        <ProductDialog
+          product={openProduct}
+          liked={has(openProduct.id)}
+          onClose={() => setOpenId(null)}
+          onToggleSave={() => toggle(openProduct.id)}
+        />
+      ) : null}
     </>
   );
 }
@@ -209,51 +238,54 @@ export function ProductDialog({
     };
   }, [onClose]);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-navy/40 p-4 backdrop-blur-md" onClick={onClose}>
+  // Portal to <body>: the dialog must not inherit the stacking context of the section it was opened from,
+  // otherwise the sticky header (z-40) paints over its top edge.
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-y-auto bg-navy/40 p-4 backdrop-blur-md" onClick={onClose}>
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         onClick={(event) => event.stopPropagation()}
-        className="relative max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white p-5 shadow-2xl sm:p-7"
+        className="relative my-auto max-h-[calc(100dvh-2rem)] w-full max-w-4xl overflow-y-auto overscroll-contain rounded-3xl bg-white p-5 shadow-2xl sm:p-7"
       >
         <button
           type="button"
           onClick={onClose}
           aria-label={t.deals.close}
-          className="absolute end-4 top-4 z-20 grid size-9 place-items-center rounded-full bg-white text-navy/60 hover:bg-navy/5"
+          autoFocus
+          className="absolute end-4 top-4 z-20 grid size-10 cursor-pointer place-items-center rounded-full bg-white text-ink-soft hover:bg-navy/5"
         >
           <X className="size-5" />
         </button>
 
         <div className="grid items-start gap-6 lg:grid-cols-2">
           <div className="order-2 lg:order-1">
-            <p className="text-sm font-semibold text-emerald">{copy?.category}</p>
+            <p className="text-sm font-semibold text-brand-ink">{copy?.category}</p>
             <h2 id={titleId} className="mt-2 pe-8 text-2xl font-bold leading-snug text-navy">
               {copy?.name}
             </h2>
             <p className="mt-3 flex items-center gap-1 text-sm">
               <Star className="size-4 fill-gold text-gold" />
-              <span className="font-semibold text-emerald">{product.rating.toFixed(1)}</span>
-              <span className="text-navy/45">({t.deals.reviews.replace("{count}", String(product.reviews))})</span>
+              <span className="font-semibold text-brand-ink">{product.rating.toFixed(1)}</span>
+              <span className="text-ink-mute">({t.deals.reviews.replace("{count}", String(product.reviews))})</span>
             </p>
-            <p className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald">
+            <p className="mt-3 flex items-center gap-2 text-sm font-medium text-brand-ink">
               <Check className="size-4" />
               {t.deals.inStock}
             </p>
 
-            <div className="mt-4 rounded-2xl bg-[#f3faf6] px-4 py-3">
-              <span className="inline-flex rounded-full bg-emerald/15 px-3 py-1 text-xs font-semibold text-emerald">
+            <div className="mt-4 rounded-2xl bg-[#eef4fc] px-4 py-3">
+              <span className="inline-flex rounded-full bg-cyan/20 px-3 py-1 text-xs font-semibold text-brand-ink">
                 {t.deals.savedAmount
                   .replace("{amount}", money(savedAmount))
                   .replace("{currency}", t.deals.currency)}
               </span>
               <div className="mt-2 flex flex-wrap items-end gap-3">
-                <p className="text-3xl font-bold text-emerald">
+                <p className="text-3xl font-bold text-brand-ink">
                   {money(product.price)} {t.deals.currency}
                 </p>
-                <p className="pb-1 text-sm text-navy/35 line-through">
+                <p className="pb-1 text-sm text-ink-mute line-through">
                   {money(product.compareAt)} {t.deals.currency}
                 </p>
               </div>
@@ -262,8 +294,8 @@ export function ProductDialog({
             <h3 className="mt-5 text-sm font-semibold text-navy">{t.deals.featuresTitle}</h3>
             <ul className="mt-2 space-y-2">
               {detail?.features.map((feature) => (
-                <li key={feature} className="flex items-start gap-2 text-sm text-navy/75">
-                  <Check className="mt-0.5 size-4 shrink-0 text-emerald" />
+                <li key={feature} className="flex items-start gap-2 text-sm text-ink-soft">
+                  <Check className="mt-0.5 size-4 shrink-0 text-brand-ink" />
                   {feature}
                 </li>
               ))}
@@ -272,8 +304,8 @@ export function ProductDialog({
             <h3 className="mt-5 text-sm font-semibold text-navy">{t.deals.specsTitle}</h3>
             <dl className="mt-2 grid grid-cols-2 gap-2">
               {detail?.specs.map(([label, value]) => (
-                <div key={label} className="rounded-xl bg-[#f4f7f6] px-3 py-2">
-                  <dt className="text-[11px] text-navy/45">{label}</dt>
+                <div key={label} className="rounded-xl bg-[#f1f5fa] px-3 py-2">
+                  <dt className="text-[11px] text-ink-mute">{label}</dt>
                   <dd className="text-sm font-medium text-navy">{value}</dd>
                 </div>
               ))}
@@ -286,10 +318,10 @@ export function ProductDialog({
                 aria-label={t.wishlist}
                 onClick={onToggleSave}
                 className={`grid size-12 place-items-center rounded-xl border bg-white ${
-                  liked ? "border-emerald text-emerald" : "border-navy/10 text-navy/55"
+                  liked ? "border-brand-ink text-brand-ink" : "border-navy/10 text-ink-soft"
                 }`}
               >
-                <Heart className={`size-5 ${liked ? "fill-emerald" : ""}`} />
+                <Heart className={`size-5 ${liked ? "fill-brand-ink" : ""}`} />
               </button>
               <button
                 type="button"
@@ -297,7 +329,7 @@ export function ProductDialog({
                   add(product.id, qty);
                   toast.success(t.cartAdded.replace("{name}", copy?.name ?? ""));
                 }}
-                className="inline-flex h-12 min-w-40 flex-1 items-center justify-center gap-2 rounded-xl bg-emerald px-4 text-sm font-semibold text-white"
+                className="inline-flex h-12 min-w-40 flex-1 items-center justify-center gap-2 rounded-xl bg-brand px-4 text-sm font-bold text-navy transition-colors hover:bg-brand-hover"
               >
                 <ShoppingCart className="size-4" />
                 {t.deals.addToCart}
@@ -308,7 +340,7 @@ export function ProductDialog({
                   aria-label={t.deals.decrease}
                   disabled={qty === 1}
                   onClick={() => setQty((value) => Math.max(1, value - 1))}
-                  className="grid size-10 place-items-center text-navy disabled:text-navy/25"
+                  className="grid size-10 place-items-center text-navy disabled:text-navy/30"
                 >
                   <Minus className="size-4" />
                 </button>
@@ -324,23 +356,30 @@ export function ProductDialog({
               </div>
             </div>
 
-            <p className="mt-4 text-xs leading-5 text-navy/45">{t.deals.shippingNote}</p>
-            <p className="text-xs leading-5 text-navy/45">{t.deals.warrantyNote}</p>
+            <p className="mt-4 text-xs leading-5 text-ink-mute">{t.deals.shippingNote}</p>
+            <p className="text-xs leading-5 text-ink-mute">{t.deals.warrantyNote}</p>
           </div>
 
           <div className="order-1 lg:order-2">
-            <ProductStage id={product.id} alt={copy?.name ?? ""} size="lg">
+            {/* Plain white image well, matching the product cards. */}
+            <div className="relative h-64 overflow-hidden rounded-2xl border border-navy/10 bg-white sm:h-80">
               <span className="absolute start-3 top-3 z-10 rounded-lg bg-burgundy px-2.5 py-1 text-xs font-semibold text-white">
                 {t.deals.saveBadge.replace("{percent}", String(percent))}
               </span>
-            </ProductStage>
-            <p className="mt-3 flex items-center gap-2 text-sm font-medium text-emerald">
+              <img
+                src={publicUrl(product.id === "case" ? `/card-photos/product-${product.id}.png` : `/showcase/${product.id}.png`)}
+                alt={copy?.name ?? ""}
+                className="absolute inset-0 h-full w-full object-contain p-6 drop-shadow-[0_10px_8px_rgba(11,18,32,0.16)]"
+              />
+            </div>
+            <p className="mt-3 flex items-center gap-2 text-sm font-medium text-brand-ink">
               <ShieldCheck className="size-4" />
               {t.deals.original}
             </p>
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

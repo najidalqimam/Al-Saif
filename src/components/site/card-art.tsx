@@ -1,4 +1,5 @@
 import { STORE_CATEGORIES } from "@/data/categories";
+import { publicUrl } from "@/lib/utils";
 
 const PRODUCT_ALT: Record<string, string> = {
   phone: "جوال شاشة 6.7 بوصة",
@@ -25,9 +26,9 @@ const PRODUCT_ALT: Record<string, string> = {
 
 export function CategoryArt({ id, className = "h-14 w-full" }: { id: string; className?: string }) {
   const name = STORE_CATEGORIES.find((item) => item.id === id)?.name ?? "قسم المتجر";
-  return <img src={`/card-photos/cat-${id}.png`} alt={name} className={`${className} object-contain`} />;
+  return <img src={publicUrl(`/card-photos/cat-${id}.png`)} alt={name} className={`${className} object-contain`} />;
 }
 
 export function ProductArt({ id, className = "h-24 w-24" }: { id: string; className?: string }) {
-  return <img src={`/card-photos/product-${id}.png`} alt={PRODUCT_ALT[id] ?? "منتج"} className={`${className} object-contain`} />;
+  return <img src={publicUrl(`/card-photos/product-${id}.png`)} alt={PRODUCT_ALT[id] ?? "منتج"} className={`${className} object-contain`} />;
 }

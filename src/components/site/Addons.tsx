@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Check, Puzzle } from "lucide-react";
 import { ProductDialog, type OfferProduct } from "@/components/site/Offers";
 import { ProductCard } from "@/components/site/showcase";
+import { useFavorites } from "@/lib/favorites";
 import { useLang } from "@/lib/i18n";
 import { useSiteContent } from "@/lib/site-content";
 
@@ -11,7 +12,7 @@ export function Addons() {
   const { t, lang } = useLang();
   const { content, copyOf, productById } = useSiteContent();
   const block = content.addons[lang];
-  const [saved, setSaved] = useState<Record<string, boolean>>({});
+  const { has, toggle } = useFavorites();
   const [openId, setOpenId] = useState<string | null>(null);
 
   const products = PRODUCT_IDS.map((id) => productById(id)).filter((item): item is OfferProduct => item !== undefined);
@@ -23,7 +24,7 @@ export function Addons() {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
             <p className="flex items-center gap-2 text-sm font-medium text-navy/55">
-              <Puzzle className="size-4 text-emerald" />
+              <Puzzle className="size-4 text-brand-ink" />
               {block.eyebrow}
             </p>
             <h2 id="addons-title" className="mt-2 text-2xl font-bold leading-tight text-navy sm:text-3xl">
@@ -31,8 +32,8 @@ export function Addons() {
             </h2>
             <p className="mt-2 max-w-xl text-sm leading-7 text-navy/55">{block.lead}</p>
           </div>
-          <p className="flex items-center gap-2 text-sm font-medium text-emerald">
-            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-emerald text-white">
+          <p className="flex items-center gap-2 text-sm font-medium text-brand-ink">
+            <span className="grid size-6 shrink-0 place-items-center rounded-full bg-brand text-navy">
               <Check className="size-3.5" />
             </span>
             {block.ready}
@@ -48,10 +49,10 @@ export function Addons() {
                 product={product}
                 name={copy?.name ?? ""}
                 category={copy?.category ?? ""}
-                liked={saved[product.id] ?? false}
+                liked={has(product.id)}
                 badge={t.addons.badges[product.id]}
                 onOpen={() => setOpenId(product.id)}
-                onToggleSave={() => setSaved((current) => ({ ...current, [product.id]: !current[product.id] }))}
+                onToggleSave={() => toggle(product.id)}
               />
             );
           })}
@@ -61,11 +62,9 @@ export function Addons() {
       {openProduct ? (
         <ProductDialog
           product={openProduct}
-          liked={saved[openProduct.id] ?? false}
+          liked={has(openProduct.id)}
           onClose={() => setOpenId(null)}
-          onToggleSave={() =>
-            setSaved((current) => ({ ...current, [openProduct.id]: !current[openProduct.id] }))
-          }
+          onToggleSave={() => toggle(openProduct.id)}
         />
       ) : null}
     </section>

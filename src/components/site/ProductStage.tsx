@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { ShowcaseStage } from "@/components/site/showcase";
+import { publicUrl } from "@/lib/utils";
 
 const LIGHT_STAGE = new Set(["case"]);
 
@@ -20,7 +21,7 @@ export function ProductStage({
 
   return (
     <ShowcaseStage size={size} tone={light ? "light" : "green"} className={className} overlay={children}>
-      <img src={light ? `/card-photos/product-${id}.png` : `/showcase/${id}.png`} alt={alt} />
+      <img src={publicUrl(light ? `/card-photos/product-${id}.png` : `/showcase/${id}.png`)} alt={alt} />
     </ShowcaseStage>
   );
 }

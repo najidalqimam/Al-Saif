@@ -27,9 +27,9 @@ export function CategoryPage({ id }: { id: string }) {
   const trail = categoryTrail(category.id).slice(0, -1);
 
   return (
-    <div className="min-h-svh bg-[#F7F8F5] text-navy">
+    <div className="min-h-svh bg-[var(--tone-b)] text-navy">
       <SiteHeader />
-      <main className="mx-auto max-w-7xl px-4 py-10">
+      <main id="main" tabIndex={-1} className="tone-scope page-shell min-h-[60svh] py-10 outline-none">
         <p className="text-sm text-navy/45">
           <Link href={`/${lang}`} className="transition hover:text-navy">
             {t.brand}

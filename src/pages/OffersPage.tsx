@@ -9,9 +9,9 @@ export function OffersPage() {
   const { visibleProducts } = useSiteContent();
 
   return (
-    <div className="min-h-svh bg-white text-navy">
+    <div className="min-h-svh bg-[var(--tone-a)] text-navy">
       <SiteHeader />
-      <main className="mx-auto max-w-7xl px-4 py-10">
+      <main id="main" tabIndex={-1} className="tone-scope outline-none mx-auto max-w-7xl px-4 py-10">
         <h1 className="text-2xl font-bold tracking-tight text-navy sm:text-3xl">{t.deals.pageTitle}</h1>
         <p className="mt-2 max-w-xl text-sm leading-7 text-navy/60">{t.deals.pageLead}</p>
         <OfferGrid products={visibleProducts("all")} />

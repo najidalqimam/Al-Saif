@@ -1,26 +1,36 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, ChevronLeft, ChevronRight, ShieldCheck, Tag, Truck, Wallet } from "lucide-react";
+import { ArrowLeft, ShieldCheck, Tag, Truck, Wallet } from "lucide-react";
 import { ServiceCard } from "@/components/site/showcase";
 import { useLang, type Translations } from "@/lib/i18n";
+import { publicUrl } from "@/lib/utils";
 import { useSiteContent } from "@/lib/site-content";
+import { useIsLight } from "@/lib/theme";
 
 type Slide = Translations["hero"]["slides"][number];
 
 const VISUALS = [
-  { src: "/hero-visuals/console.png?v=3", tilt: -8, frame: "bottom-[18%] h-[68%] w-[86%]", cast: "w-[64%]" },
-  { src: "/hero-visuals/headset.png?v=5", tilt: 11, frame: "bottom-[18%] h-[58%] w-[54%]", cast: "w-[42%]" },
-  { src: "/hero-visuals/phone.png?v=3", tilt: -6, frame: "bottom-[18%] h-[60%] w-[34%]", cast: "w-[26%]" },
+  // Console + controller combo: wide (~1.73:1) cutout, already angled, with ~19% transparent padding under the
+  // products (baked shadow) and its own cyan glow, so no tilt / CSS rim and a low bottom offset.
+  { src: "/hero-visuals/console.png?v=4", tilt: 0, frame: "bottom-[4%] h-[78%] w-[82%]", cast: "w-[66%]", rim: false },
+  // Headset and phone cutouts ship with ~8-12% transparent padding, a baked soft shadow and a cyan glow:
+  // frames are taller than the product and sit lower (bottom offset) so the product itself lands on the podium.
+  { src: "/hero-visuals/headset.png?v=6", tilt: 0, frame: "bottom-[8%] h-[78%] w-[56%]", cast: "w-[42%]", rim: false },
+  { src: "/hero-visuals/phone.png?v=4", tilt: 0, frame: "bottom-[7%] h-[82%] w-[34%]", cast: "w-[26%]", rim: false },
 ];
 
 const PERK_ICONS = [Truck, ShieldCheck, Tag, Wallet];
-const AUTOPLAY_MS = 4500;
+const AUTOPLAY_MS = 3000;
+
+const HERO_BACKGROUND_LIGHT =
+  "radial-gradient(60% 80% at 28% 58%, rgba(255, 255, 255, 0.22), transparent 72%), radial-gradient(70% 45% at 50% 118%, rgba(32, 197, 212, 0.07), transparent 70%), linear-gradient(180deg, var(--chrome) 0%, var(--chrome) 100%)";
 
 const HERO_BACKGROUND =
-  "radial-gradient(ellipse at 68% 46%, rgba(0, 168, 120, 0.22), transparent 42%), radial-gradient(ellipse at 16% 82%, rgba(11, 64, 53, 0.55), transparent 40%), linear-gradient(180deg, #062E26 0%, #0B4035 54%, #062E26 100%)";
+  "radial-gradient(60% 75% at 50% 52%, rgba(37, 217, 230, 0.12), transparent 70%), radial-gradient(42% 60% at 6% 0%, rgba(100, 124, 255, 0.16), transparent 70%), radial-gradient(70% 45% at 50% 118%, rgba(37, 217, 230, 0.1), transparent 70%), linear-gradient(180deg, #111d32 0%, #1a2c47 58%, #15253d 100%)";
 
 export function Hero() {
   const { t, dir, lang } = useLang();
   const { content } = useSiteContent();
+  const light = useIsLight();
   const slides = t.hero.slides.map((slide, index) => ({
     ...slide,
     ...(content.hero[lang][index] ?? {}),
@@ -46,17 +56,39 @@ export function Hero() {
     return () => window.clearTimeout(timer);
   }, [paused, reducedMotion, total, index]);
 
-  function show(next: number) {
-    setIndex((next + total) % total);
-  }
-
   return (
-    <section id="hero" className="relative overflow-hidden text-white" style={{ background: HERO_BACKGROUND }}>
+    <section
+      id="hero"
+      className={`${light ? "hero-light text-navy" : "surface-dark text-white"} relative isolate overflow-hidden`}
+      style={{ background: light ? HERO_BACKGROUND_LIGHT : HERO_BACKGROUND }}
+    >
+      {/* Filters applied to existing PNGs: no asset is replaced.
+          hero-soft-glow: scales the alpha of the baked edge glow (~45% weaker); fully opaque product pixels are untouched.
+          hero-soft-led: dims the podium's cyan LED ~18% and softens its under-glow. */}
+      <svg aria-hidden="true" focusable="false" width="0" height="0" className="absolute">
+        <defs>
+          <filter id="hero-soft-glow" colorInterpolationFilters="sRGB">
+            <feComponentTransfer>
+              <feFuncA type="table" tableValues="0 0.055 0.11 0.165 0.22 0.275 0.33 0.385 0.44 0.62 1" />
+            </feComponentTransfer>
+          </filter>
+          <filter id="hero-soft-led" colorInterpolationFilters="sRGB">
+            <feColorMatrix type="matrix" values="0.82 0 0 0 0  0 0.82 0 0 0  0 0 0.82 0 0  0 0 0 1 0" />
+            <feComponentTransfer>
+              <feFuncA type="table" tableValues="0 0.04 0.09 0.14 0.19 0.25 0.31 0.38 0.46 0.62 1" />
+            </feComponentTransfer>
+          </filter>
+        </defs>
+      </svg>
       <div
-        className="overflow-hidden pt-6 sm:pt-8"
+        className="overflow-hidden pt-4 sm:pt-5"
+        role="region"
         aria-roledescription="carousel"
+        aria-label={t.hero.position.replace("{current}", String(index + 1)).replace("{total}", String(total))}
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
+        onFocus={() => setPaused(true)}
+        onBlur={() => setPaused(false)}
       >
         <div className="grid w-full min-w-0">
           {slides.map((item, itemIndex) => (
@@ -68,53 +100,34 @@ export function Hero() {
               tilt={(VISUALS[itemIndex] ?? VISUALS[0]).tilt}
               frame={(VISUALS[itemIndex] ?? VISUALS[0]).frame}
               cast={(VISUALS[itemIndex] ?? VISUALS[0]).cast}
+              rim={(VISUALS[itemIndex] ?? VISUALS[0]).rim}
               imageAlt={t.hero.imageAlt}
               active={itemIndex === index}
             />
           ))}
         </div>
 
-        <div className="mt-4 flex items-center justify-center gap-4">
-          <button
-            type="button"
-            aria-label={t.hero.prev}
-            onClick={() => show(index - 1)}
-            className="grid size-9 place-items-center rounded-full border border-white/20 text-white/75 transition-colors duration-300 hover:border-[#00A878] hover:text-[#B8E63E]"
-          >
-            <ChevronLeft className={`size-4 ${dir === "rtl" ? "rotate-180" : ""}`} />
-          </button>
-          <div className="flex items-center gap-1.5">
-            {slides.map((item, itemIndex) => (
-              <button
-                key={item.title}
-                type="button"
-                aria-label={item.title}
-                aria-current={itemIndex === index ? "true" : undefined}
-                onClick={() => show(itemIndex)}
-                className={`rounded-full transition-[width,background-color] duration-300 ${
-                  itemIndex === index ? "h-1.5 w-6 bg-emerald" : "size-1.5 bg-white/35 hover:bg-white/60"
-                }`}
-              />
-            ))}
-          </div>
-          <button
-            type="button"
-            aria-label={t.hero.next}
-            onClick={() => show(index + 1)}
-            className="grid size-9 place-items-center rounded-full border border-white/20 text-white/75 transition-colors duration-300 hover:border-[#00A878] hover:text-[#B8E63E]"
-          >
-            <ChevronRight className={`size-4 ${dir === "rtl" ? "rotate-180" : ""}`} />
-          </button>
-          <p className="sr-only">{t.hero.position.replace("{current}", String(index + 1)).replace("{total}", String(total))}</p>
+        <div className="pb-2">
+          <p className="sr-only" aria-live="polite">
+            {t.hero.position.replace("{current}", String(index + 1)).replace("{total}", String(total))}
+          </p>
         </div>
       </div>
 
-      <div className="mx-auto grid max-w-6xl gap-3 px-4 py-5 sm:grid-cols-2 lg:grid-cols-4 lg:py-6">
-        {t.catalog.perks.map((perk, perkIndex) => {
-          const Icon = PERK_ICONS[perkIndex] ?? Truck;
-          return <ServiceCard key={perk.title} icon={Icon} title={perk.title} text={perk.text} tone="dark" platform={false} />;
-        })}
+      {light ? null : <div className="led-strip mt-3" aria-hidden />}
+      <div className={`relative ${light ? "mt-3 bg-[var(--chrome)]" : "bg-[var(--chrome)]"}`}>
+        <div
+          className={`page-shell grid grid-cols-2 gap-x-2 gap-y-0 py-2 lg:grid-cols-4 lg:divide-x ${
+            light ? "lg:divide-navy/10" : "lg:divide-white/10"
+          }`}
+        >
+          {t.catalog.perks.map((perk, perkIndex) => {
+            const Icon = PERK_ICONS[perkIndex] ?? Truck;
+            return <ServiceCard key={perk.title} icon={Icon} title={perk.title} text={perk.text} tone={light ? "barLight" : "bar"} />;
+          })}
+        </div>
       </div>
+      {light ? <div className="led-strip" aria-hidden /> : null}
     </section>
   );
 }
@@ -128,6 +141,7 @@ function SlidePanel({
   tilt,
   frame,
   cast,
+  rim,
 }: {
   slide: Slide;
   dir: "rtl" | "ltr";
@@ -137,47 +151,64 @@ function SlidePanel({
   tilt: number;
   frame: string;
   cast: string;
+  rim: boolean;
 }) {
+  const light = useIsLight();
   return (
     <article
       aria-hidden={active ? undefined : true}
       inert={active ? undefined : true}
       className={`hero-panel ${active ? "is-active" : ""}`}
     >
-      <div className="mx-auto grid w-full max-w-6xl items-center gap-4 px-4 lg:grid-cols-2 lg:gap-8">
+      <div className="page-shell grid items-center gap-4 lg:grid-cols-2 lg:gap-10">
       <div className="flex flex-col items-start">
         <div className="hero-copy">
-          <p className="flex items-center gap-3 text-xs font-semibold tracking-[0.18em] text-emerald">
+          <p
+            className={`flex items-center gap-3 text-sm font-semibold ltr:text-xs ltr:uppercase ltr:tracking-[0.16em] ${
+              light ? "text-brand-ink" : "text-mint"
+            }`}
+          >
             {slide.eyebrow}
-            <span className="h-px w-14 bg-emerald/80" />
+            <span className={`h-px w-14 ${light ? "bg-brand-ink/50" : "bg-mint/60"}`} />
           </p>
-          <h1 className="mt-3 text-3xl font-bold leading-[1.15] tracking-tight sm:text-5xl">
+          <h1 className="mt-3 text-balance text-[1.875rem] font-bold leading-[1.22] tracking-tight sm:text-4xl lg:text-[2.6rem] lg:leading-[1.18]">
             {slide.title}
-            <span className="relative mt-2 block text-[#8ee0c0]">
+            <span className={`relative mt-2 block ${light ? "text-[#0a8a9b]" : "text-mint"}`}>
               {slide.titleRest}
-              <span className="absolute -bottom-1 start-0 h-[3px] w-24 rounded-full bg-emerald" />
+              <span className="absolute -bottom-2 start-0 h-[3px] w-20 rounded-full bg-cyan shadow-[0_0_12px_rgba(37,217,230,0.7)]" />
             </span>
           </h1>
-          <p className="mt-4 max-w-md text-base leading-7 text-white/70">{slide.lead}</p>
+          <p className={`mt-4 max-w-md text-base leading-8 ${light ? "text-navy/70" : "text-white/80"}`}>{slide.lead}</p>
+
         </div>
-        <div className="hero-cta mt-5 flex flex-wrap items-center gap-4">
-          <button
-            type="button"
-            className="inline-flex h-12 items-center gap-2 rounded-full bg-emerald px-6 text-sm font-semibold text-white shadow-[0_8px_24px_rgba(15,159,110,0.35)] transition hover:bg-[#14b47e]"
-          >
+        <div className="hero-cta mt-5 flex flex-wrap items-center gap-3">
+          <button type="button" className="btn-brand">
             {slide.primary}
-            <ArrowLeft className={`size-4 ${dir === "ltr" ? "rotate-180" : ""}`} />
+            <ArrowLeft className={`size-4 ${dir === "ltr" ? "rotate-180" : ""}`} aria-hidden />
           </button>
-          <button type="button" className="inline-flex items-center gap-3 text-sm font-medium text-white">
-            <span className="grid size-12 place-items-center rounded-full border border-white/25 bg-white/5">
-              <ArrowLeft className={`size-4 ${dir === "ltr" ? "rotate-180" : ""}`} />
-            </span>
+          <button type="button" className="btn-ghost-dark">
             {slide.secondary}
           </button>
         </div>
+        {slide.offer || slide.points?.length ? (
+          <div className="hero-cta mt-4">
+            <div className="hero-badge">
+              <div>
+                {slide.offer ? <p className="hero-badge__title">{slide.offer}</p> : null}
+                {slide.points?.length ? (
+                  <ul className="hero-badge__list">
+                    {slide.points.map((point) => (
+                      <li key={point}>{point}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
-      <HeroStage src={image} alt={active ? imageAlt : ""} tilt={tilt} frame={frame} cast={cast} />
+      <HeroStage src={image} alt={active ? imageAlt : ""} tilt={tilt} frame={frame} cast={cast} rim={rim} />
       </div>
     </article>
   );
@@ -189,34 +220,42 @@ function HeroStage({
   tilt,
   frame,
   cast,
+  rim,
 }: {
   src: string;
   alt: string;
   tilt: number;
   frame: string;
   cast: string;
+  rim: boolean;
 }) {
   return (
-    <div className="relative mx-auto h-[300px] w-full max-w-lg sm:h-[380px]">
+    <div className="relative mx-auto h-[190px] w-full max-w-lg sm:h-[250px] lg:h-[270px]">
       <div aria-hidden className="hero-ambient" />
       <div className={`hero-product absolute left-1/2 z-10 ${frame}`}>
         <div className="hero-float h-full w-full">
           <img
-            src={src}
+            src={publicUrl(src)}
             alt={alt}
             className="h-full w-full object-contain object-bottom"
             style={{
               transform: `rotate(${tilt}deg)`,
               transformOrigin: "center bottom",
-              filter: "drop-shadow(0 10px 8px rgba(0,0,0,0.18))",
+              // Cyan LED rim only; grounding shadows live on the platform so they can follow the float.
+              filter: rim
+                ? "drop-shadow(0 0 1px rgba(141,240,247,0.55)) drop-shadow(0 0 14px rgba(37,217,230,0.2))"
+                : "url(#hero-soft-glow)",
             }}
           />
         </div>
       </div>
-      <div aria-hidden className="hero-plinth absolute bottom-[1%] left-1/2 z-[5] w-[92%] -translate-x-1/2">
-        <span className="hero-plinth__shadow" />
-        <span className="hero-plinth__top" />
+      {/* Podium artwork: its top face is centred on the products' contact line (bottom-[18%]); the lower tiers hang below the stage. */}
+      <div aria-hidden className="hero-podium pointer-events-none absolute bottom-[18%] left-1/2 z-[4] w-[76%] -translate-x-1/2 sm:w-[90%] translate-y-[74%]">
+        <img src={publicUrl("/hero-visuals/podium.png?v=2")} alt="" width={1922} height={444} draggable={false} className="block h-auto w-full" style={{ filter: "url(#hero-soft-led)" }} />
+      </div>
+      <div aria-hidden className="hero-plinth absolute bottom-[4%] left-1/2 z-[5] w-[78%] -translate-x-1/2 sm:w-[92%]">
         <span className={`hero-plinth__cast ${cast}`} />
+        <span className={`hero-plinth__contact ${cast}`} />
       </div>
     </div>
   );

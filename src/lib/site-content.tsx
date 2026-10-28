@@ -134,6 +134,20 @@ function load(): SiteContent {
     if (parsed.catalog?.ar?.subtitle === retired.ar.subtitle) parsed.catalog.ar.subtitle = translations.ar.catalog.subtitle;
     if (parsed.catalog?.en?.title === retired.en.title) parsed.catalog.en.title = translations.en.catalog.title;
     if (parsed.catalog?.en?.subtitle === retired.en.subtitle) parsed.catalog.en.subtitle = translations.en.catalog.subtitle;
+    const listed = {
+      ar: { title: "تصفح الأقسام", subtitle: "أهم أقسام المتجر. باقي الأقسام من قائمة جميع الأقسام." },
+      en: { title: "Browse departments", subtitle: "The main departments. The rest are in All departments." },
+    };
+    const interim = {
+      ar: { title: "تصفح حسب القسم", subtitle: "اختار القسم اللي تدور عليه، وشوف المنتجات المتوفرة فيه." },
+      en: { title: "Browse by department", subtitle: "Pick a department to see the products in it." },
+    };
+    for (const l of ["ar", "en"] as const) {
+      if (parsed.catalog?.[l]?.title === interim[l].title) parsed.catalog[l].title = translations[l].catalog.title;
+      if (parsed.catalog?.[l]?.subtitle === interim[l].subtitle) parsed.catalog[l].subtitle = translations[l].catalog.subtitle;
+      if (parsed.catalog?.[l]?.title === listed[l].title) parsed.catalog[l].title = translations[l].catalog.title;
+      if (parsed.catalog?.[l]?.subtitle === listed[l].subtitle) parsed.catalog[l].subtitle = translations[l].catalog.subtitle;
+    }
     if (parsed.deals?.ar?.eyebrow === "أقوى عروض السيف") parsed.deals.ar.eyebrow = translations.ar.deals.eyebrow;
     if (parsed.deals?.en?.eyebrow === "Al-Saif's strongest offers") parsed.deals.en.eyebrow = translations.en.deals.eyebrow;
     if (parsed.setups?.ar?.title === "جلسة البلايستيشن وشاشتها") {
@@ -151,6 +165,20 @@ function load(): SiteContent {
         lead: translations.en.setups.lead,
         action: translations.en.setups.action,
       };
+    }
+    // The third hero slide used to describe a warranty; saved copies of it move to the current wording.
+    for (const l of ["ar", "en"] as const) {
+      const saved = parsed.hero[l][2];
+      const fresh = translations[l].hero.slides[2];
+      const stale = /ضمان|warranty|كل اللي تحتاجه|لتجربة لعب أفضل|سماعات، وأيدي تحكم/i;
+      if (saved && stale.test(`${saved.title} ${saved.titleRest} ${saved.lead}`)) {
+        parsed.hero[l][2] = { ...saved, title: fresh.title, titleRest: fresh.titleRest, lead: fresh.lead };
+      }
+    }
+    // The English phone slide's headline was a literal translation; saved copies move to the natural wording.
+    const phoneSlide = parsed.hero.en[2];
+    if (phoneSlide?.title === "Phones, selected" && phoneSlide.titleRest === "with care") {
+      parsed.hero.en[2] = { ...phoneSlide, title: translations.en.hero.slides[2].title, titleRest: translations.en.hero.slides[2].titleRest };
     }
     return parsed;
   } catch {

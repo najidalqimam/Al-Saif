@@ -8,6 +8,9 @@ export interface Translations {
   tagline: string;
   documentTitle: string;
   switchTo: string;
+  skipToContent: string;
+  railPrev: string;
+  railNext: string;
   top: {
     shipping: string;
     warranty: string;
@@ -16,6 +19,8 @@ export interface Translations {
   searchPlaceholder: string;
   searchLabel: string;
   wishlist: string;
+  themeToLight: string;
+  themeToDark: string;
   cart: string;
   cartEmpty: string;
   cartCount: string;
@@ -27,6 +32,12 @@ export interface Translations {
   allProducts: string;
   offers: string;
   navOffers: string;
+  favoritesPage: {
+    title: string;
+    lead: string;
+    empty: string;
+    browse: string;
+  };
   categoryPage: {
     related: string;
     empty: string;
@@ -43,6 +54,8 @@ export interface Translations {
     showDepartments: string;
     showMore: string;
     showLess: string;
+    moreDepartments: string;
+    fewerDepartments: string;
     productCount: string;
     perks: Array<{ title: string; text: string }>;
     items: Array<{ id: string; name: string; count: number }>;
@@ -117,6 +130,8 @@ export interface Translations {
     imageAlt: string;
     prev: string;
     next: string;
+    pause: string;
+    play: string;
     position: string;
     slides: Array<{
       eyebrow: string;
@@ -137,6 +152,9 @@ const ar: Translations = {
   tagline: "",
   documentTitle: "سوق الالكترونيات",
   switchTo: "English",
+  skipToContent: "تخطَّ إلى المحتوى الرئيسي",
+  railPrev: "السابق",
+  railNext: "التالي",
   top: {
     shipping: "شحن مجاني للطلبات فوق 300 ر.س",
     warranty: "ضمان محلي لمدة سنتين",
@@ -145,6 +163,8 @@ const ar: Translations = {
   searchPlaceholder: "ابحث عن جوال، بلايستيشن، أو إكسسوار...",
   searchLabel: "بحث في المتجر",
   wishlist: "المفضلة",
+  themeToLight: "التبديل إلى الوضع الفاتح",
+  themeToDark: "التبديل إلى الوضع الداكن",
   cart: "السلة",
   cartEmpty: "فارغة",
   cartCount: "{count} قطعة",
@@ -156,6 +176,12 @@ const ar: Translations = {
   allProducts: "جميع المنتجات",
   offers: "العروض",
   navOffers: "عروض وتخفيضات",
+  favoritesPage: {
+    title: "المفضلة",
+    lead: "المنتجات اللي حفظتها، علشان ترجع لها بسهولة.",
+    empty: "لسه ما حفظتش أي منتج. اضغط على القلب في أي منتج علشان يظهر هنا.",
+    browse: "تصفح العروض",
+  },
   categoryPage: {
     related: "التصنيفات داخل هذا القسم.",
     empty: "هذا القسم جاهز، والمنتجات تتضاف له لاحقًا.",
@@ -163,8 +189,8 @@ const ar: Translations = {
   },
   categories: ["جوالات", "بلايستيشن", "إكسسوارات بلايستيشن", "سماعات", "شواحن وكابلات"],
   catalog: {
-    title: "تصفح الأقسام",
-    subtitle: "أهم أقسام المتجر. باقي الأقسام من قائمة جميع الأقسام.",
+    title: "كل احتياجاتك التقنية، في مكان واحد",
+    subtitle: "اكتشف مجموعة واسعة من حلول الكمبيوتر والطباعة والشبكات والإلكترونيات، واختر القسم المناسب لاحتياجاتك.",
     kicker: "CATEGORIES",
     viewAllDepartments: "عرض جميع الأقسام",
     featuredBadge: "الأكثر مبيعاً",
@@ -172,6 +198,8 @@ const ar: Translations = {
     showDepartments: "عرض الأقسام ({count})",
     showMore: "عرض باقي الأقسام ({count})",
     showLess: "إخفاء الأقسام الإضافية",
+    moreDepartments: "استكشف جميع الأقسام",
+    fewerDepartments: "عرض أقسام أقل",
     productCount: "{count} منتج",
     perks: [
       {
@@ -355,40 +383,42 @@ const ar: Translations = {
     imageAlt: "جوال، يد تحكم، وسماعات على قماش فاتح",
     prev: "الخبر السابق",
     next: "الخبر التالي",
+    pause: "إيقاف التبديل التلقائي",
+    play: "تشغيل التبديل التلقائي",
     position: "الخبر {current} من {total}",
     slides: [
       {
         eyebrow: "وصل حديثًا",
-        title: "جوالات وبلايستيشن",
-        titleRest: "وإكسسواراتها",
-        lead: "مكان واحد للجوالات، وأجهزة البلايستيشن، وكمالياتها. أسعار واضحة، وقطع أصلية.",
+        title: "اختار جوالك",
+        titleRest: "بثقة",
+        lead: "مجموعة جوالات متنوعة، بمعلومات واضحة وأسعار تعرفها قبل ما تطلب.",
         points: ["أجهزة أصلية بضمان محلي", "إكسسوارات البلايستيشن جاهزة للطلب"],
-        primary: "تصفح الأجهزة",
+        primary: "اكتشف الجوالات",
         secondary: "شاهد العروض",
         badge: "مختارات سوق الالكترونيات",
         offer: "عروض على أجهزة مختارة",
       },
       {
         eyebrow: "خبر المتجر",
-        title: "إكسسوارات البلايستيشن",
-        titleRest: "وصلت المجموعة",
-        lead: "يد تحكم، سماعات، وشواحن. تقدر تطلب القطعة مع الجهاز أو لوحدها.",
+        title: "عالم الألعاب",
+        titleRest: "يبدأ من هنا",
+        lead: "اكتشف أجهزة البلايستيشن وملحقاتها، واختار تجهيزاتك من مكان واحد.",
         points: ["قطع متوافقة مع أجهزة البلايستيشن", "متوفرة للطلب هذا الأسبوع"],
-        primary: "تصفح الإكسسوارات",
+        primary: "اكتشف أجهزة الألعاب",
         secondary: "اقرأ الخبر",
         badge: "جديد هذا الأسبوع",
         offer: "متوفر للطلب الآن",
       },
       {
-        eyebrow: "العرض",
+        eyebrow: "الجوالات",
         title: "جوالات مختارة",
-        titleRest: "بضمان سنتين",
-        lead: "مجموعة جوالات بالضمان المحلي، والسعر واضح قبل ما تطلب.",
-        points: ["ضمان محلي لمدة سنتين", "استبدال خلال فترة الضمان"],
-        primary: "تصفح الجوالات",
-        secondary: "تفاصيل الضمان",
-        badge: "خبر الضمان",
-        offer: "الضمان على الأجهزة المختارة",
+        titleRest: "بعناية",
+        lead: "اكتشف مجموعة متنوعة من الجوالات، بمعلومات واضحة وأسعار تعرفها قبل ما تطلب.",
+        points: ["تعرّف على المنتجات وقارن بينها بسهولة"],
+        primary: "تصفّح الجوالات",
+        secondary: "شاهد العروض",
+        badge: "مختارات الجوالات",
+        offer: "اختيارات تناسبك",
       },
     ],
   },
@@ -399,6 +429,9 @@ const en: Translations = {
   tagline: "",
   documentTitle: "Electronics Market",
   switchTo: "العربية",
+  skipToContent: "Skip to main content",
+  railPrev: "Previous",
+  railNext: "Next",
   top: {
     shipping: "Free shipping on orders over SAR 300",
     warranty: "Two-year local warranty",
@@ -407,6 +440,8 @@ const en: Translations = {
   searchPlaceholder: "Search phones, PlayStation, or accessories...",
   searchLabel: "Search the store",
   wishlist: "Wishlist",
+  themeToLight: "Switch to light mode",
+  themeToDark: "Switch to dark mode",
   cart: "Cart",
   cartEmpty: "Empty",
   cartCount: "{count} items",
@@ -418,6 +453,12 @@ const en: Translations = {
   allProducts: "All products",
   offers: "Offers",
   navOffers: "Offers and discounts",
+  favoritesPage: {
+    title: "Wishlist",
+    lead: "Products you saved, so you can come back to them easily.",
+    empty: "You haven't saved any products yet. Tap the heart on any product to add it here.",
+    browse: "Browse offers",
+  },
   categoryPage: {
     related: "Categories inside this department.",
     empty: "This department is ready for products later.",
@@ -425,8 +466,8 @@ const en: Translations = {
   },
   categories: ["Phones", "PlayStation", "PlayStation accessories", "Audio", "Chargers and cables"],
   catalog: {
-    title: "Browse departments",
-    subtitle: "The main departments. The rest are in All departments.",
+    title: "All your tech needs, in one place",
+    subtitle: "Explore a wide range of computing, printing, networking, and electronics solutions, and choose the department that fits what you need.",
     kicker: "CATEGORIES",
     viewAllDepartments: "View all departments",
     featuredBadge: "Best seller",
@@ -434,6 +475,8 @@ const en: Translations = {
     showDepartments: "View departments ({count})",
     showMore: "Show the rest ({count})",
     showLess: "Hide extra departments",
+    moreDepartments: "Explore all departments",
+    fewerDepartments: "Show fewer departments",
     productCount: "{count} products",
     perks: [
       {
@@ -617,6 +660,8 @@ const en: Translations = {
     imageAlt: "A phone, a controller, and earbuds on light linen",
     prev: "Previous story",
     next: "Next story",
+    pause: "Pause auto-rotation",
+    play: "Start auto-rotation",
     position: "Story {current} of {total}",
     slides: [
       {
@@ -642,15 +687,15 @@ const en: Translations = {
         offer: "Ready to order now",
       },
       {
-        eyebrow: "The offer",
-        title: "Selected phones",
-        titleRest: "with a two-year warranty",
-        lead: "A phone selection covered by the local warranty, with the price shown before you order.",
-        points: ["Two-year local warranty", "Replacement during the warranty period"],
+        eyebrow: "Phones",
+        title: "Choose your phone",
+        titleRest: "with confidence",
+        lead: "Explore a range of phones, with clear details and prices you know before you order.",
+        points: ["Get to know the products and compare them easily"],
         primary: "Browse phones",
-        secondary: "Warranty details",
-        badge: "Warranty news",
-        offer: "Coverage on selected devices",
+        secondary: "See offers",
+        badge: "Phone picks",
+        offer: "Choices that fit you",
       },
     ],
   },

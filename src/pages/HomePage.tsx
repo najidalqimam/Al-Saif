@@ -28,9 +28,9 @@ export function HomePage() {
   }, []);
 
   return (
-    <div className="min-h-svh bg-white text-navy">
+    <div className="home-shell min-h-svh bg-white text-navy">
       <SiteHeader />
-      <main>
+      <main id="main" tabIndex={-1} className="outline-none">
         <Hero />
         <Categories />
         <Offers />
