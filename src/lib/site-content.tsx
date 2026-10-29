@@ -18,7 +18,15 @@ export type ProductRow = {
   nameEn: string;
   categoryAr: string;
   categoryEn: string;
+  /** Archived products stay saved but leave the store; the dashboard can restore them. */
+  archived?: boolean;
 };
+
+/** Home page sections the dashboard can switch off. The footer always shows. */
+export type SectionKey = "hero" | "catalog" | "deals" | "bestsellers" | "addons" | "setups";
+
+// The accessories block is not part of the home page yet, so it starts switched off.
+const DEFAULT_SECTION_HIDDEN: SectionKey[] = ["addons"];
 
 export type SlideCopy = { title: string; titleRest: string; lead: string };
 
@@ -32,6 +40,12 @@ export type SiteContent = {
   setups: Record<Lang, { eyebrow: string; title: string; lead: string; action: string }>;
   footer: Record<Lang, { about: string; shipping: string; warranty: string }>;
   categoryHidden: string[];
+  /** Departments archived from the dashboard; they are also listed in categoryHidden. */
+  categoryArchived: string[];
+  /** Hero slide positions switched off or archived from the dashboard. */
+  heroHidden: number[];
+  heroArchived: number[];
+  sectionHidden: SectionKey[];
 };
 
 type BlockKey = "catalog" | "deals" | "bestsellers" | "addons" | "setups" | "footer";
@@ -105,6 +119,10 @@ function defaults(): SiteContent {
       warranty: translations[lang].footer.warranty,
     })),
     categoryHidden: [],
+    categoryArchived: [],
+    heroHidden: [],
+    heroArchived: [],
+    sectionHidden: [...DEFAULT_SECTION_HIDDEN],
   };
 }
 
@@ -116,6 +134,10 @@ function load(): SiteContent {
     if (!Array.isArray(parsed.products) || parsed.products.length !== OFFER_PRODUCTS.length) return defaults();
     if (!parsed.hero?.ar?.length || !parsed.deals?.en || !parsed.footer?.ar) return defaults();
     if (!Array.isArray(parsed.categoryHidden)) parsed.categoryHidden = [];
+    if (!Array.isArray(parsed.categoryArchived)) parsed.categoryArchived = [];
+    if (!Array.isArray(parsed.heroHidden)) parsed.heroHidden = [];
+    if (!Array.isArray(parsed.heroArchived)) parsed.heroArchived = [];
+    if (!Array.isArray(parsed.sectionHidden)) parsed.sectionHidden = [...DEFAULT_SECTION_HIDDEN];
     const previous = {
       ar: "تصفح الجوالات، وأجهزة البلايستيشن، وإكسسواراتها.",
       en: "Browse phones, PlayStation consoles, and their accessories.",
@@ -208,7 +230,15 @@ type ContentApi = {
   visibleProducts: (mode: "home" | "all") => OfferProduct[];
   productById: (id: string) => OfferProduct | undefined;
   setCategoryHidden: (id: string, hidden: boolean) => void;
+  setCategoryArchived: (id: string, archived: boolean) => void;
+  setSlideHidden: (index: number, hidden: boolean) => void;
+  setSlideArchived: (index: number, archived: boolean) => void;
+  setSectionHidden: (key: SectionKey, hidden: boolean) => void;
 };
+
+function toggled(list: number[], value: number, on: boolean) {
+  return on ? [...new Set([...list, value])] : list.filter((item) => item !== value);
+}
 
 const SiteContentContext = createContext<ContentApi | null>(null);
 
@@ -261,12 +291,12 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
     },
     visibleProducts(mode) {
       return content.products
-        .filter((item) => !item.hidden && (mode === "all" || item.onHome))
+        .filter((item) => !item.hidden && !item.archived && (mode === "all" || item.onHome))
         .slice(0, mode === "home" ? HOME_LIMIT : undefined)
         .map(toOffer);
     },
     productById(id) {
-      const row = content.products.find((item) => item.id === id && !item.hidden);
+      const row = content.products.find((item) => item.id === id && !item.hidden && !item.archived);
       return row ? toOffer(row) : undefined;
     },
     setCategoryHidden(id, hidden) {
@@ -275,6 +305,29 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         categoryHidden: hidden
           ? [...new Set([...current.categoryHidden, id])]
           : current.categoryHidden.filter((item) => item !== id),
+      }));
+    },
+    setCategoryArchived(id, archived) {
+      setContent((current) => ({
+        ...current,
+        categoryArchived: archived
+          ? [...new Set([...current.categoryArchived, id])]
+          : current.categoryArchived.filter((item) => item !== id),
+        categoryHidden: archived
+          ? [...new Set([...current.categoryHidden, id])]
+          : current.categoryHidden.filter((item) => item !== id),
+      }));
+    },
+    setSlideHidden(index, hidden) {
+      setContent((current) => ({ ...current, heroHidden: toggled(current.heroHidden, index, hidden) }));
+    },
+    setSlideArchived(index, archived) {
+      setContent((current) => ({ ...current, heroArchived: toggled(current.heroArchived, index, archived) }));
+    },
+    setSectionHidden(key, hidden) {
+      setContent((current) => ({
+        ...current,
+        sectionHidden: hidden ? [...new Set([...current.sectionHidden, key])] : current.sectionHidden.filter((item) => item !== key),
       }));
     },
   };

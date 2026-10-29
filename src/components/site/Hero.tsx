@@ -31,14 +31,22 @@ export function Hero() {
   const { t, dir, lang } = useLang();
   const { content } = useSiteContent();
   const light = useIsLight();
-  const slides = t.hero.slides.map((slide, index) => ({
+  const allSlides = t.hero.slides.map((slide, index) => ({
     ...slide,
     ...(content.hero[lang][index] ?? {}),
+    visual: VISUALS[index] ?? VISUALS[0],
   }));
+  const shown = allSlides.filter((_, index) => !content.heroHidden.includes(index) && !content.heroArchived.includes(index));
+  // The banner never goes empty: if every slide is switched off, all of them show.
+  const slides = shown.length ? shown : allSlides;
   const [index, setIndex] = useState(0);
   const [paused, setPaused] = useState(false);
   const [reducedMotion, setReducedMotion] = useState(false);
   const total = slides.length;
+
+  useEffect(() => {
+    if (index >= total) setIndex(0);
+  }, [index, total]);
 
   useEffect(() => {
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -96,11 +104,11 @@ export function Hero() {
               key={item.title}
               slide={item}
               dir={dir}
-              image={(VISUALS[itemIndex] ?? VISUALS[0]).src}
-              tilt={(VISUALS[itemIndex] ?? VISUALS[0]).tilt}
-              frame={(VISUALS[itemIndex] ?? VISUALS[0]).frame}
-              cast={(VISUALS[itemIndex] ?? VISUALS[0]).cast}
-              rim={(VISUALS[itemIndex] ?? VISUALS[0]).rim}
+              image={item.visual.src}
+              tilt={item.visual.tilt}
+              frame={item.visual.frame}
+              cast={item.visual.cast}
+              rim={item.visual.rim}
               imageAlt={t.hero.imageAlt}
               active={itemIndex === index}
             />

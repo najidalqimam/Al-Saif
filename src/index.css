@@ -2010,3 +2010,67 @@ html.light .tone-swap-light.tone-b {
 .product-card [class*="bottom-2.5"] {
   pointer-events: none;
 }
+
+/* Admin dashboard (Midnight Circuit). Light is the default; html[data-admin-theme="dark"] swaps only the tokens.
+   The dashboard theme is separate from the storefront's html.light / html.dark. */
+.admin {
+  --a-bg: #f4f7fb;
+  --a-surface: #ffffff;
+  --a-surface-2: #eef3f9;
+  --a-line: rgb(11 18 32 / 0.08);
+  --a-text: #0b1220;
+  --a-muted: #5b6b82;
+  --a-accent: #25d9e6;
+  --a-accent-ink: #0a7f8b;
+  --a-accent-soft: rgb(37 217 230 / 0.14);
+  --a-blue: #4f66f0;
+  --a-blue-soft: rgb(100 124 255 / 0.12);
+  --a-side: #ffffff;
+  --a-side-text: #0b1220;
+  --a-side-muted: #6b7a90;
+  --a-side-hover: #f1f5fa;
+  --a-side-active: rgb(37 217 230 / 0.14);
+  --a-side-active-text: #0a7f8b;
+  --a-side-line: rgb(11 18 32 / 0.08);
+  --a-danger: #d0384f;
+  --a-danger-soft: rgb(208 56 79 / 0.1);
+  --a-warn: #a86a00;
+  --a-warn-soft: rgb(242 184 75 / 0.18);
+  --a-ok: #12875a;
+  --a-ok-soft: rgb(18 135 90 / 0.1);
+  --a-shadow: 0 1px 2px rgb(11 18 32 / 0.04), 0 8px 24px rgb(11 18 32 / 0.06);
+  --focus-ring: #0a7f8b;
+  background: var(--a-bg);
+  color: var(--a-text);
+  color-scheme: light;
+}
+
+html[data-admin-theme="dark"] .admin {
+  --a-bg: #0b1220;
+  --a-surface: #142238;
+  --a-surface-2: #1a2c47;
+  --a-line: rgb(255 255 255 / 0.08);
+  --a-text: #e6edf7;
+  --a-muted: #8b9bb4;
+  --a-accent: #25d9e6;
+  --a-accent-ink: #25d9e6;
+  --a-accent-soft: rgb(37 217 230 / 0.12);
+  --a-blue: #647cff;
+  --a-blue-soft: rgb(100 124 255 / 0.14);
+  --a-side: #08101d;
+  --a-side-text: #e6edf7;
+  --a-side-muted: rgb(230 237 247 / 0.5);
+  --a-side-hover: rgb(255 255 255 / 0.05);
+  --a-side-active: rgb(37 217 230 / 0.12);
+  --a-side-active-text: #25d9e6;
+  --a-side-line: rgb(255 255 255 / 0.06);
+  --a-danger: #ff6b81;
+  --a-danger-soft: rgb(255 107 129 / 0.12);
+  --a-warn: #f2b84b;
+  --a-warn-soft: rgb(242 184 75 / 0.14);
+  --a-ok: #3ddc97;
+  --a-ok-soft: rgb(61 220 151 / 0.12);
+  --a-shadow: 0 1px 0 rgb(255 255 255 / 0.03) inset, 0 12px 32px rgb(0 0 0 / 0.28);
+  --focus-ring: #25d9e6;
+  color-scheme: dark;
+}
