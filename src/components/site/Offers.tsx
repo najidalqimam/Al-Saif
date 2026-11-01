@@ -22,10 +22,9 @@ import { useCart } from "@/lib/cart";
 import { useFavorites } from "@/lib/favorites";
 import { useLang } from "@/lib/i18n";
 import { offerDetail } from "@/lib/offer-details";
-import { OFFER_PRODUCTS, type OfferProduct } from "@/lib/products";
+import { OFFER_PRODUCTS, productPhoto, type OfferProduct } from "@/lib/products";
 import { useSiteContent } from "@/lib/site-content";
 import { useIsLight } from "@/lib/theme";
-import { publicUrl } from "@/lib/utils";
 
 export { OFFER_PRODUCTS, type OfferProduct };
 
@@ -182,7 +181,7 @@ export function OfferGrid({ products, rail = false }: { products: readonly Offer
   return (
     <>
       {rail ? (
-        <div className="mt-6">
+        <div className="rail-bleed mt-6">
           <div className="reveal">
             <RailTrack trackRef={railState.trackRef} label={t.deals.pageTitle}>
               {cards}
@@ -265,29 +264,35 @@ export function ProductDialog({
             <h2 id={titleId} className="mt-2 pe-8 text-2xl font-bold leading-snug text-navy">
               {copy?.name}
             </h2>
-            <p className="mt-3 flex items-center gap-1 text-sm">
-              <Star className="size-4 fill-gold text-gold" />
-              <span className="font-semibold text-brand-ink">{product.rating.toFixed(1)}</span>
-              <span className="text-ink-mute">({t.deals.reviews.replace("{count}", String(product.reviews))})</span>
-            </p>
+            {product.rating > 0 ? (
+              <p className="mt-3 flex items-center gap-1 text-sm">
+                <Star className="size-4 fill-gold text-gold" />
+                <span className="font-semibold text-brand-ink">{product.rating.toFixed(1)}</span>
+                <span className="text-ink-mute">({t.deals.reviews.replace("{count}", String(product.reviews))})</span>
+              </p>
+            ) : null}
             <p className="mt-3 flex items-center gap-2 text-sm font-medium text-brand-ink">
               <Check className="size-4" />
               {t.deals.inStock}
             </p>
 
             <div className="mt-4 rounded-2xl bg-[#eef4fc] px-4 py-3">
-              <span className="inline-flex rounded-full bg-cyan/20 px-3 py-1 text-xs font-semibold text-brand-ink">
-                {t.deals.savedAmount
-                  .replace("{amount}", money(savedAmount))
-                  .replace("{currency}", t.deals.currency)}
-              </span>
-              <div className="mt-2 flex flex-wrap items-end gap-3">
+              {savedAmount > 0 ? (
+                <span className="mb-2 inline-flex rounded-full bg-cyan/20 px-3 py-1 text-xs font-semibold text-brand-ink">
+                  {t.deals.savedAmount
+                    .replace("{amount}", money(savedAmount))
+                    .replace("{currency}", t.deals.currency)}
+                </span>
+              ) : null}
+              <div className="flex flex-wrap items-end gap-3">
                 <p className="text-3xl font-bold text-brand-ink">
                   {money(product.price)} {t.deals.currency}
                 </p>
-                <p className="pb-1 text-sm text-ink-mute line-through">
-                  {money(product.compareAt)} {t.deals.currency}
-                </p>
+                {savedAmount > 0 ? (
+                  <p className="pb-1 text-sm text-ink-mute line-through">
+                    {money(product.compareAt)} {t.deals.currency}
+                  </p>
+                ) : null}
               </div>
             </div>
 
@@ -363,11 +368,13 @@ export function ProductDialog({
           <div className="order-1 lg:order-2">
             {/* Plain white image well, matching the product cards. */}
             <div className="relative h-64 overflow-hidden rounded-2xl border border-navy/10 bg-white sm:h-80">
-              <span className="absolute start-3 top-3 z-10 rounded-lg bg-burgundy px-2.5 py-1 text-xs font-semibold text-white">
-                {t.deals.saveBadge.replace("{percent}", String(percent))}
-              </span>
+              {percent > 0 ? (
+                <span className="absolute start-3 top-3 z-10 rounded-lg bg-burgundy px-2.5 py-1 text-xs font-semibold text-white">
+                  {t.deals.saveBadge.replace("{percent}", String(percent))}
+                </span>
+              ) : null}
               <img
-                src={publicUrl(product.id === "case" ? `/card-photos/product-${product.id}.png` : `/showcase/${product.id}.png`)}
+                src={productPhoto(product)}
                 alt={copy?.name ?? ""}
                 className="absolute inset-0 h-full w-full object-contain p-6 drop-shadow-[0_10px_8px_rgba(11,18,32,0.16)]"
               />

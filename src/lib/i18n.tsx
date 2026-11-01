@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 
 export type Lang = "ar" | "en";
 
@@ -18,6 +18,8 @@ export interface Translations {
   };
   searchPlaceholder: string;
   searchLabel: string;
+  searchFor: string;
+  searchDepartment: string;
   wishlist: string;
   themeToLight: string;
   themeToDark: string;
@@ -38,10 +40,31 @@ export interface Translations {
     empty: string;
     browse: string;
   };
+  productPage: {
+    buyNow: string;
+    description: string;
+    quantity: string;
+    soldBy: string;
+    related: string;
+    rating: string;
+    priceNote: string;
+  };
+  searchPage: {
+    title: string;
+    resultsFor: string;
+    count: string;
+    categories: string;
+    products: string;
+    empty: string;
+    prompt: string;
+    browse: string;
+  };
   categoryPage: {
     related: string;
     empty: string;
     open: string;
+    products: string;
+    noProducts: string;
   };
   categories: string[];
   catalog: {
@@ -148,9 +171,9 @@ export interface Translations {
 }
 
 const ar: Translations = {
-  brand: "سوق الالكترونيات",
+  brand: "سوق الكمبيوترات",
   tagline: "",
-  documentTitle: "سوق الالكترونيات",
+  documentTitle: "سوق الكمبيوترات",
   switchTo: "English",
   skipToContent: "تخطَّ إلى المحتوى الرئيسي",
   railPrev: "السابق",
@@ -162,6 +185,8 @@ const ar: Translations = {
   },
   searchPlaceholder: "ابحث عن جوال، بلايستيشن، أو إكسسوار...",
   searchLabel: "بحث في المتجر",
+  searchFor: "ابحث عن «{query}»",
+  searchDepartment: "قسم",
   wishlist: "المفضلة",
   themeToLight: "التبديل إلى الوضع الفاتح",
   themeToDark: "التبديل إلى الوضع الداكن",
@@ -182,10 +207,31 @@ const ar: Translations = {
     empty: "لسه ما حفظتش أي منتج. اضغط على القلب في أي منتج علشان يظهر هنا.",
     browse: "تصفح العروض",
   },
+  productPage: {
+    buyNow: "اشتري الآن",
+    description: "عن المنتج",
+    quantity: "الكمية",
+    soldBy: "البائع",
+    related: "منتجات مشابهة",
+    rating: "{rating} من 5",
+    priceNote: "السعر النهائي يظهر قبل ما تأكد الطلب.",
+  },
+  searchPage: {
+    title: "البحث",
+    resultsFor: "نتائج البحث عن «{query}»",
+    count: "{count} نتيجة",
+    categories: "أقسام مطابقة",
+    products: "منتجات مطابقة",
+    empty: "ما لقينا نتائج لـ «{query}». جرّب كلمة ثانية أو تصفح الأقسام.",
+    prompt: "اكتب اسم المنتج أو القسم في خانة البحث.",
+    browse: "تصفح العروض",
+  },
   categoryPage: {
     related: "التصنيفات داخل هذا القسم.",
     empty: "هذا القسم جاهز، والمنتجات تتضاف له لاحقًا.",
     open: "افتح القسم",
+    products: "المنتجات",
+    noProducts: "ما فيه منتجات في هذا القسم حاليًا. تقدر تشوف العروض أو ترجع للأقسام.",
   },
   categories: ["جوالات", "بلايستيشن", "إكسسوارات بلايستيشن", "سماعات", "شواحن وكابلات"],
   catalog: {
@@ -241,7 +287,7 @@ const ar: Translations = {
     ],
   },
   deals: {
-    eyebrow: "أقوى عروض سوق الالكترونيات",
+    eyebrow: "أقوى عروض سوق الكمبيوترات",
     title: "أقوى العروض الحصرية",
     highlight: "خصومات تصل إلى 60%",
     lead: "أسعار واضحة على جوالات، وأجهزة بلايستيشن، وإكسسوارات مختارة.",
@@ -377,7 +423,7 @@ const ar: Translations = {
     ],
     helpTitle: "الطلب",
     help: ["تختار الجهاز، ونكمل معاك الخطوة التالية", "قطع أصلية بضمان محلي", "طلب بخطوات بسيطة"],
-    rights: "© 2026 سوق الالكترونيات",
+    rights: "© 2026 سوق الكمبيوترات",
   },
   hero: {
     imageAlt: "جوال، يد تحكم، وسماعات على قماش فاتح",
@@ -389,22 +435,22 @@ const ar: Translations = {
     slides: [
       {
         eyebrow: "وصل حديثًا",
-        title: "اختار جوالك",
-        titleRest: "بثقة",
-        lead: "مجموعة جوالات متنوعة، بمعلومات واضحة وأسعار تعرفها قبل ما تطلب.",
+        title: "بلايستيشن",
+        titleRest: "وإكسسواراتها",
+        lead: "مكان واحد لأجهزة البلايستيشن وكمالياتها. أسعار واضحة، وقطع أصلية.",
         points: ["أجهزة أصلية بضمان محلي", "إكسسوارات البلايستيشن جاهزة للطلب"],
-        primary: "اكتشف الجوالات",
+        primary: "تسوّق البلايستيشن",
         secondary: "شاهد العروض",
-        badge: "مختارات سوق الالكترونيات",
+        badge: "مختارات سوق الكمبيوترات",
         offer: "عروض على أجهزة مختارة",
       },
       {
         eyebrow: "خبر المتجر",
-        title: "عالم الألعاب",
-        titleRest: "يبدأ من هنا",
-        lead: "اكتشف أجهزة البلايستيشن وملحقاتها، واختار تجهيزاتك من مكان واحد.",
+        title: "إكسسوارات البلايستيشن",
+        titleRest: "وصلت المجموعة",
+        lead: "يد تحكم، سماعات، وشواحن. تقدر تطلب القطعة مع الجهاز أو لوحدها.",
         points: ["قطع متوافقة مع أجهزة البلايستيشن", "متوفرة للطلب هذا الأسبوع"],
-        primary: "اكتشف أجهزة الألعاب",
+        primary: "تسوّق الإكسسوارات",
         secondary: "اقرأ الخبر",
         badge: "جديد هذا الأسبوع",
         offer: "متوفر للطلب الآن",
@@ -439,6 +485,8 @@ const en: Translations = {
   },
   searchPlaceholder: "Search phones, PlayStation, or accessories...",
   searchLabel: "Search the store",
+  searchFor: "Search for “{query}”",
+  searchDepartment: "Department",
   wishlist: "Wishlist",
   themeToLight: "Switch to light mode",
   themeToDark: "Switch to dark mode",
@@ -459,10 +507,31 @@ const en: Translations = {
     empty: "You haven't saved any products yet. Tap the heart on any product to add it here.",
     browse: "Browse offers",
   },
+  productPage: {
+    buyNow: "Buy now",
+    description: "About this product",
+    quantity: "Quantity",
+    soldBy: "Sold by",
+    related: "Similar products",
+    rating: "{rating} out of 5",
+    priceNote: "You see the final price before you confirm the order.",
+  },
+  searchPage: {
+    title: "Search",
+    resultsFor: "Results for “{query}”",
+    count: "{count} results",
+    categories: "Matching departments",
+    products: "Matching products",
+    empty: "No results for “{query}”. Try another word or browse the departments.",
+    prompt: "Type a product or department name in the search box.",
+    browse: "Browse offers",
+  },
   categoryPage: {
     related: "Categories inside this department.",
     empty: "This department is ready for products later.",
     open: "Open department",
+    products: "Products",
+    noProducts: "No products in this category yet. Browse the offers or go back to the departments.",
   },
   categories: ["Phones", "PlayStation", "PlayStation accessories", "Audio", "Chargers and cables"],
   catalog: {
@@ -666,11 +735,11 @@ const en: Translations = {
     slides: [
       {
         eyebrow: "Just in",
-        title: "Phones, PlayStation,",
+        title: "PlayStation",
         titleRest: "and accessories",
-        lead: "One place for phones, PlayStation consoles, and their add-ons. Clear prices, original gear.",
+        lead: "One place for PlayStation consoles and their add-ons. Clear prices, original gear.",
         points: ["Original devices with a local warranty", "PlayStation accessories ready to order"],
-        primary: "Browse devices",
+        primary: "Shop PlayStation",
         secondary: "See offers",
         badge: "Electronics Market picks",
         offer: "Offers on selected devices",
@@ -681,7 +750,7 @@ const en: Translations = {
         titleRest: "just arrived",
         lead: "Controllers, headsets, and chargers. Order a piece with the console, or on its own.",
         points: ["Gear that fits PlayStation consoles", "Available to order this week"],
-        primary: "Browse accessories",
+        primary: "Shop accessories",
         secondary: "Read the story",
         badge: "New this week",
         offer: "Ready to order now",
@@ -719,10 +788,12 @@ const LangContext = createContext<LangContextType>({
 
 export function LangProvider({ lang, children }: { lang: Lang; children: ReactNode }) {
   const [location] = useLocation();
+  const search = useSearch();
   const dir = lang === "ar" ? "rtl" : "ltr";
   const t = translations[lang];
   const other = lang === "ar" ? "en" : "ar";
-  const otherHref = location.replace(/^\/(ar|en)/, `/${other}`);
+  // Keeps the query string, so switching language on the search page keeps the search.
+  const otherHref = location.replace(/^\/(ar|en)/, `/${other}`) + (search ? `?${search}` : "");
 
   useEffect(() => {
     document.documentElement.dir = dir;

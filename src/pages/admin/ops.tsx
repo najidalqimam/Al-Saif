@@ -1,9 +1,15 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { api } from "@/lib/api";
+import { ORDERS_STORAGE_KEY, readPlacedOrders } from "@/lib/orders-store";
+import { useSiteContent } from "@/lib/site-content";
 import { SAMPLE_ORDERS, type Order, type OrderStatus, type PaymentStatus } from "./orders";
 
-// Shipping, payment, stock and order edits made in the dashboard. They live in this browser only
-// until the database lands in stage 3, and nothing here reaches the storefront or any provider.
+// Shipping, payment and order data for the dashboard. Once the dashboard is connected to the store's database
+// (useSiteContent reports source "admin"), shipping zones and methods, payment options and orders are read
+// from and saved to the API, and stock and the low-stock level come from the database too. Without the API
+// (a static preview) the browser copy below is used as before. Nothing here reaches any payment provider.
 const STORAGE_KEY = "alsaif-admin-ops";
+export const OPS_STORAGE_KEY = STORAGE_KEY;
 
 export type ShippingMethod = {
   id: string;
@@ -74,7 +80,8 @@ export function defaultOps(): Ops {
   };
 }
 
-function load(): Ops {
+/** Current shipping, payment and stock settings; the storefront checkout reads them too. */
+export function readOps(): Ops {
   const base = defaultOps();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -102,6 +109,9 @@ type OpsApi = {
   orders: Order[];
   updateShipping: (id: string, patch: Partial<ShippingMethod>) => void;
   updateZone: (id: string, patch: Partial<Zone>) => void;
+  addZone: () => void;
+  /** Deletes the zone for good and takes it off every shipping method. */
+  removeZone: (id: string) => void;
   updatePayment: (id: PaymentMethodId, patch: Partial<PaymentMethod>) => void;
   updateBank: (patch: Partial<Ops["bank"]>) => void;
   setStock: (id: string, qty: number | null) => void;
@@ -112,8 +122,129 @@ type OpsApi = {
 
 const OpsContext = createContext<OpsApi | null>(null);
 
+type Settings = Pick<Ops, "shipping" | "zones" | "payments" | "bank">;
+
+type ApiOrder = {
+  number: number;
+  status: "NEW" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
+  paymentStatus: "PENDING" | "PAID" | "FAILED" | "REFUNDED";
+  paymentMethod: "COD" | "BANK_TRANSFER" | "ONLINE";
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string | null;
+  customerId: string | null;
+  zoneCode: string;
+  city: string;
+  addressLine: string;
+  notes: string | null;
+  subtotal: string;
+  shippingFee: string;
+  paymentFee: string;
+  total: string;
+  locale: string;
+  placedAt: string;
+  shippingMethod: { code: string } | null;
+  items: Array<{ productName: string; quantity: number; unitPrice: string; lineTotal: string; product: { legacyId: string | null } | null }>;
+};
+
+/** A database order in the shape the dashboard pages use. Its id is the real order number. */
+function orderFromApi(order: ApiOrder): Order {
+  const lines = order.items.map((item) => ({ id: item.product?.legacyId ?? "", name: item.productName, qty: item.quantity, price: Number(item.unitPrice) }));
+  return {
+    id: String(order.number),
+    customer: order.customerName,
+    city: order.city,
+    zone: order.zoneCode,
+    productId: lines[0]?.id ?? "",
+    items: lines.reduce((sum, line) => sum + line.qty, 0),
+    total: Number(order.total),
+    status: order.status.toLowerCase() as OrderStatus,
+    date: new Date(order.placedAt).toLocaleDateString("en-CA"),
+    shippingMethod: order.shippingMethod?.code ?? "",
+    paymentMethod: order.paymentMethod === "BANK_TRANSFER" ? "bank" : "cod",
+    paymentStatus: order.paymentStatus.toLowerCase() as PaymentStatus,
+    source: "store",
+    phone: order.customerPhone,
+    email: order.customerEmail ?? undefined,
+    address: order.addressLine,
+    notes: order.notes ?? undefined,
+    lines,
+    subtotal: Number(order.subtotal),
+    shippingFee: Number(order.shippingFee),
+    paymentFee: Number(order.paymentFee),
+    lang: order.locale === "en" ? "en" : "ar",
+    account: order.customerId !== null,
+  };
+}
+
 export function OpsProvider({ children }: { children: ReactNode }) {
-  const [ops, setOps] = useState<Ops>(load);
+  const [ops, setOps] = useState<Ops>(readOps);
+  const [placed, setPlaced] = useState<Order[]>(readPlacedOrders);
+  const { content, catalogue, setStock: saveStock, setLowStock: saveLowStock } = useSiteContent();
+  const fromDatabase = catalogue.source === "admin";
+  // Database copies, used while connected: checkout settings and real orders.
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [dbOrders, setDbOrders] = useState<Order[] | null>(null);
+  const settingsTimer = useRef(0);
+
+  useEffect(() => {
+    if (!fromDatabase) return;
+    let cancelled = false;
+    api<{ configured: boolean; settings: Settings }>("/admin/checkout-settings")
+      .then(async (result) => {
+        if (result.configured) {
+          if (!cancelled) setSettings({ ...result.settings, payments: mergePayments(result.settings.payments) });
+          return;
+        }
+        // First connection: the settings made in this dashboard so far become the store's settings.
+        const local = readOps();
+        const initial: Settings = { shipping: local.shipping, zones: local.zones, payments: local.payments, bank: local.bank };
+        await api("/admin/checkout-settings", { method: "PUT", body: initial });
+        if (!cancelled) setSettings(initial);
+      })
+      .catch(() => {
+        // The settings stay on the browser copy if the API refuses (e.g. a role without access).
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fromDatabase]);
+
+  const loadOrders = useCallback(() => {
+    api<{ orders: ApiOrder[] }>("/admin/orders?limit=100")
+      .then((result) => setDbOrders(result.orders.map(orderFromApi)))
+      .catch(() => undefined);
+  }, []);
+
+  // Real orders, refreshed every 20 seconds so new orders and status changes show up on their own.
+  useEffect(() => {
+    if (!fromDatabase) return;
+    loadOrders();
+    const timer = window.setInterval(loadOrders, 20_000);
+    return () => window.clearInterval(timer);
+  }, [fromDatabase, loadOrders]);
+
+  const changeSettings = useCallback((change: (current: Settings) => Settings) => {
+    setSettings((current) => {
+      if (!current) return current;
+      const next = change(current);
+      window.clearTimeout(settingsTimer.current);
+      settingsTimer.current = window.setTimeout(() => {
+        void api("/admin/checkout-settings", { method: "PUT", body: next }).catch(() => undefined);
+      }, 600);
+      return next;
+    });
+  }, []);
+
+  // Orders and stock changes made by the storefront in another tab show up without a reload.
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.key === ORDERS_STORAGE_KEY) setPlaced(readPlacedOrders());
+      if (event.key === STORAGE_KEY) setOps(readOps());
+    };
+    window.addEventListener("storage", sync);
+    return () => window.removeEventListener("storage", sync);
+  }, []);
 
   useEffect(() => {
     try {
@@ -123,33 +254,83 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     }
   }, [ops]);
 
-  const api = useMemo<OpsApi>(() => {
-    const orders = SAMPLE_ORDERS.map((order) => ({ ...order, ...ops.orders[order.id] }));
+  const value = useMemo<OpsApi>(() => {
+    const remote = fromDatabase && settings !== null;
+    // Connected: the real orders from the database (numbered from 1001). Otherwise the browser's store orders
+    // and the sample orders, with the dashboard's local edits applied.
+    const orders = fromDatabase && dbOrders !== null ? dbOrders : [...placed, ...SAMPLE_ORDERS].map((order) => ({ ...order, ...ops.orders[order.id] }));
+    const stock: Record<string, number> = {};
+    for (const item of content.products) if (typeof item.stock === "number") stock[item.id] = item.stock;
+    const edit = <K extends keyof Settings>(key: K, change: (list: Settings[K]) => Settings[K]) =>
+      remote ? changeSettings((current) => ({ ...current, [key]: change(current[key]) })) : setOps((current) => ({ ...current, [key]: change(current[key]) }));
     return {
-      ops,
+      ops: fromDatabase ? { ...ops, ...(settings ?? {}), stock, lowStock: catalogue.lowStock } : ops,
       orders,
-      updateShipping: (id, patch) => setOps((current) => ({ ...current, shipping: current.shipping.map((item) => (item.id === id ? { ...item, ...patch } : item)) })),
-      updateZone: (id, patch) => setOps((current) => ({ ...current, zones: current.zones.map((item) => (item.id === id ? { ...item, ...patch } : item)) })),
-      updatePayment: (id, patch) =>
+      updateShipping: (id, patch) => edit("shipping", (list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item))),
+      updateZone: (id, patch) => edit("zones", (list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item))),
+      addZone: () => {
+        const id = `zone-${Date.now().toString(36)}`;
+        edit("zones", (list) => [...list, { id, nameAr: "منطقة جديدة", cities: "", enabled: true }]);
+      },
+      removeZone: (id) => {
+        if (remote) {
+          changeSettings((current) => ({
+            ...current,
+            zones: current.zones.filter((item) => item.id !== id),
+            shipping: current.shipping.map((method) => ({ ...method, zones: method.zones.filter((zone) => zone !== id) })),
+          }));
+          return;
+        }
         setOps((current) => ({
           ...current,
-          payments: current.payments.map((item) => (item.id === id ? { ...item, ...patch, enabled: id === "online" ? false : (patch.enabled ?? item.enabled) } : item)),
-        })),
-      updateBank: (patch) => setOps((current) => ({ ...current, bank: { ...current.bank, ...patch } })),
+          zones: current.zones.filter((item) => item.id !== id),
+          shipping: current.shipping.map((method) => ({ ...method, zones: method.zones.filter((zone) => zone !== id) })),
+        }));
+      },
+      updatePayment: (id, patch) =>
+        edit("payments", (list) => list.map((item) => (item.id === id ? { ...item, ...patch, enabled: id === "online" ? false : (patch.enabled ?? item.enabled) } : item))),
+      updateBank: (patch) => edit("bank", (current) => ({ ...current, ...patch })),
       setStock: (id, qty) =>
-        setOps((current) => {
+        fromDatabase
+          ? saveStock(id, qty)
+          : setOps((current) => {
           const stock = { ...current.stock };
           if (qty === null || !Number.isFinite(qty)) delete stock[id];
           else stock[id] = Math.max(0, Math.floor(qty));
           return { ...current, stock };
         }),
-      setLowStock: (value) => setOps((current) => ({ ...current, lowStock: Math.max(0, Math.floor(value) || 0) })),
-      updateOrder: (id, patch) => setOps((current) => ({ ...current, orders: { ...current.orders, [id]: { ...current.orders[id], ...patch } } })),
+      setLowStock: (value) => (fromDatabase ? saveLowStock(value) : setOps((current) => ({ ...current, lowStock: Math.max(0, Math.floor(value) || 0) }))),
+      updateOrder: (id, patch) => {
+        if (!(fromDatabase && dbOrders !== null)) {
+          setOps((current) => ({ ...current, orders: { ...current.orders, [id]: { ...current.orders[id], ...patch } } }));
+          return;
+        }
+        // Database orders: the order status and payment status are saved through the API (with their history);
+        // the shipping method of a placed order is not changed from here.
+        const body: Record<string, string> = {};
+        if (patch.status) body.status = patch.status.toUpperCase();
+        if (patch.paymentStatus) body.paymentStatus = patch.paymentStatus.toUpperCase();
+        if (!Object.keys(body).length) return;
+        setDbOrders((current) => current && current.map((order) => (order.id === id ? { ...order, ...(patch.status ? { status: patch.status } : {}), ...(patch.paymentStatus ? { paymentStatus: patch.paymentStatus } : {}) } : order)));
+        void api(`/admin/orders/${encodeURIComponent(id)}/status`, { method: "PATCH", body }).finally(loadOrders);
+      },
       resetOps: () => setOps(defaultOps()),
     };
-  }, [ops]);
+  }, [ops, placed, content.products, catalogue.lowStock, fromDatabase, saveStock, saveLowStock, settings, dbOrders, changeSettings, loadOrders]);
 
-  return <OpsContext.Provider value={api}>{children}</OpsContext.Provider>;
+  return <OpsContext.Provider value={value}>{children}</OpsContext.Provider>;
+}
+
+/** Takes ordered quantities off the recorded stock; products without a recorded quantity are left alone. */
+export function deductStock(lines: Array<{ id: string; qty: number }>) {
+  const ops = readOps();
+  let changed = false;
+  for (const line of lines) {
+    if (ops.stock[line.id] === undefined) continue;
+    ops.stock[line.id] = Math.max(0, ops.stock[line.id] - line.qty);
+    changed = true;
+  }
+  if (changed) localStorage.setItem(STORAGE_KEY, JSON.stringify(ops));
 }
 
 export function useOps() {
@@ -194,3 +375,8 @@ export const STOCK_LEVEL: Record<StockLevel, { label: string; tone: "muted" | "d
   low: { label: "منخفض", tone: "warn" },
   ok: { label: "متوفر", tone: "ok" },
 };
+
+/** The dashboard always lists all three payment options, whatever the database returned. */
+function mergePayments(saved: PaymentMethod[]) {
+  return defaultOps().payments.map((item) => ({ ...item, ...saved.find((row) => row.id === item.id) }));
+}

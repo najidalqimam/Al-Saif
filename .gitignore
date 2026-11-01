@@ -3,3 +3,35 @@ dist
 .DS_Store
 *.local
 .vite
+
+# Environment files hold secrets (database password, keys). Only the .example templates are committed.
+.env
+.env.*
+!.env.example
+!**/.env.example
+
+# Database dumps, backups and local data
+*.dump
+*.backup
+*.sql.gz
+*.bak
+pgdata/
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Server build output
+server/dist
+
+# Emails written by MAIL_TRANSPORT=log during local testing (customer addresses)
+server/mail-log/
+
+# Photos uploaded from the dashboard on this machine (test and local content). Production keeps uploads in
+# its own file storage, not in the repository.
+public/uploads/
+
+# Old logo cut from a chat image, kept locally only (the site uses public/brand/logo.png)
+public/brand/logo-mark.png

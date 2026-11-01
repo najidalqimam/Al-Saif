@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="20 60 520 420" width="743" height="600">
+  <defs>
+    <linearGradient id="lid" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3d424a"/>
+      <stop offset="1" stop-color="#15171a"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a45"/>
+      <stop offset="0.6" stop-color="#0b1322"/>
+      <stop offset="1" stop-color="#05080e"/>
+    </linearGradient>
+    <linearGradient id="deck" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3f47"/>
+      <stop offset="1" stop-color="#1e2126"/>
+    </linearGradient>
+    <linearGradient id="front" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#16181c"/>
+      <stop offset="1" stop-color="#0b0c0e"/>
+    </linearGradient>
+    <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#60a5fa"/>
+      <stop offset="1" stop-color="#1d4ed8"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3b82f6" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#3b82f6" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#0b1220" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#0b1220" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="280" cy="448" rx="250" ry="22" fill="url(#shadow)"/>
+
+  <!-- lid and screen -->
+  <rect x="110" y="84" width="340" height="236" rx="16" fill="url(#lid)"/>
+  <rect x="111" y="85" width="338" height="234" rx="15" fill="none" stroke="#5b616b" stroke-width="1.4" opacity="0.7"/>
+  <rect x="124" y="98" width="312" height="206" rx="6" fill="url(#screen)"/>
+  <circle cx="280" cy="91" r="2.4" fill="#0b0c0e"/>
+  <!-- screen UI -->
+  <circle cx="280" cy="196" r="92" fill="url(#halo)"/>
+  <path d="M280 134 L328 152 L328 192 C328 224 306 244 280 256 C254 244 232 224 232 192 L232 152 Z" fill="url(#shield)"/>
+  <path d="M280 134 L328 152 L328 192 C328 224 306 244 280 256 Z" fill="#0b1220" opacity="0.12"/>
+  <path d="M258 194 L274 210 L304 178" fill="none" stroke="#fff" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  <g fill="#60a5fa" opacity="0.5">
+    <rect x="140" y="114" width="54" height="6" rx="3"/>
+    <rect x="140" y="126" width="36" height="6" rx="3" opacity="0.6"/>
+    <rect x="372" y="282" width="48" height="8" rx="4" fill="#22c55e" opacity="1"/>
+  </g>
+  <path d="M130 104 L250 104 L170 300 L130 300 Z" fill="#fff" opacity="0.04"/>
+
+  <!-- base -->
+  <path d="M110 320 L450 320 L512 410 L48 410 Z" fill="url(#deck)"/>
+  <path d="M110 320 L450 320" stroke="#0b0c0e" stroke-width="4"/>
+  <!-- keyboard -->
+  <path d="M134 330 L426 330 L466 384 L94 384 Z" fill="#111316"/>
+  <g stroke="#2a2e34" stroke-width="2">
+    <path d="M128 343 L432 343"/><path d="M118 356 L442 356"/><path d="M106 370 L454 370"/>
+  </g>
+  <g stroke="#2a2e34" stroke-width="2">
+    <path d="M168 330 L144 384"/><path d="M206 330 L190 384"/><path d="M244 330 L236 384"/><path d="M282 330 L282 384"/>
+    <path d="M320 330 L328 384"/><path d="M358 330 L374 384"/><path d="M396 330 L420 384"/>
+  </g>
+  <!-- trackpad -->
+  <path d="M232 390 L328 390 L332 404 L228 404 Z" fill="#2c3036"/>
+  <path d="M48 410 L512 410 L506 422 Q500 428 490 428 L70 428 Q60 428 54 422 Z" fill="url(#front)"/>
+  <path d="M48 410 L512 410" stroke="#5b616b" stroke-width="1.2" opacity="0.7"/>
+</svg>

@@ -1,13 +1,14 @@
 import { useState } from "react";
-import { CheckCircle2, Clock, Inbox, MapPin, PackageCheck, Truck } from "lucide-react";
+import { CheckCircle2, Clock, Inbox, MapPin, PackageCheck, Plus, Trash2, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrderDrawer, OrdersTable } from "./OrdersPage";
 import { SHIP_STAGE, shipStage, useOps, type ShipStage, type ShippingMethod } from "./ops";
 import type { Order } from "./orders";
-import { Badge, DemoNote, Empty, NumberField, PageHead, Panel, StatCard, Switch, Tabs, num, sar } from "./ui";
+import { Badge, Button, Confirm, DemoNote, Empty, IconButton, NumberField, PageHead, Panel, StatCard, Switch, Tabs, num, sar } from "./ui";
 
 export function Shipping() {
-  const { ops, orders, updateShipping, updateZone } = useOps();
+  const { ops, orders, updateShipping, updateZone, addZone, removeZone } = useOps();
+  const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
   const [stage, setStage] = useState<Exclude<ShipStage, "cancelled">>("awaiting");
   const [viewing, setViewing] = useState<Order | null>(null);
 
@@ -17,16 +18,16 @@ export function Shipping() {
 
   return (
     <div className="space-y-6">
-      <PageHead title="الشحن والتوصيل" lead="طرق الشحن ورسومها ومناطق التوصيل ومدة الوصول، ومتابعة الطلبات حسب حالة الشحن." />
-      <DemoNote title="إعدادات محلية">
-        الإعدادات تتحفظ على هذا الجهاز وما هي مربوطة بأي شركة شحن، ولا تُطبَّق على صفحة الدفع في المتجر بعد. البوالص والتتبع يتفعّلون بعد ربط مزود شحن.
+      <PageHead title="الشحن والتوصيل" lead="طرق الشحن ورسومها ومناطق التوصيل، والطلبات حسب حالة الشحن." />
+      <DemoNote title="بدون شركة شحن">
+        غير مربوطة بأي شركة شحن، فالبوالص وأرقام التتبع ما تشتغل لسه. الرسوم والمناطق تتحفظ في قاعدة البيانات وتُطبَّق على صفحة إتمام الطلب لكل العملاء، والخادم يحسب بها إجمالي كل طلب.
       </DemoNote>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="بانتظار الشحن" value={num.format(count("awaiting"))} note="جديد أو قيد التجهيز" icon={Clock} tone="warn" demo onClick={() => setStage("awaiting")} />
-        <StatCard label="تم الشحن" value={num.format(count("shipped"))} note="في الطريق للعميل" icon={Truck} tone="blue" demo onClick={() => setStage("shipped")} />
-        <StatCard label="تم التسليم" value={num.format(count("delivered"))} note="وصلت للعميل" icon={PackageCheck} tone="ok" demo onClick={() => setStage("delivered")} />
-        <StatCard label="طرق شحن مفعّلة" value={`${num.format(activeMethods)} / ${num.format(ops.shipping.length)}`} note="من الإعدادات أدناه" icon={CheckCircle2} tone="accent" />
+        <StatCard label="بانتظار الشحن" value={num.format(count("awaiting"))} note="جديد أو قيد التجهيز" icon={Clock} tone="warn" onClick={() => setStage("awaiting")} />
+        <StatCard label="تم الشحن" value={num.format(count("shipped"))} note="في الطريق للعميل" icon={Truck} tone="blue" onClick={() => setStage("shipped")} />
+        <StatCard label="تم التسليم" value={num.format(count("delivered"))} note="وصلت للعميل" icon={PackageCheck} tone="ok" onClick={() => setStage("delivered")} />
+        <StatCard label="طرق شحن مفعّلة" value={`${num.format(activeMethods)} / ${num.format(ops.shipping.length)}`} note="من الإعدادات أدناه" icon={CheckCircle2} tone="blue" />
       </div>
 
       <section className="space-y-4">
@@ -47,11 +48,19 @@ export function Shipping() {
         </div>
       </section>
 
-      <Panel title="مناطق التوصيل" lead="المنطقة الموقوفة تختفي من كل طرق الشحن.">
+      <Panel
+        title="مناطق التوصيل"
+        lead="المنطقة الموقوفة تختفي من كل طرق الشحن. المنطقة الجديدة تظهر للعميل بعد ما تضيفها لطريقة شحن من الكروت فوق."
+        actions={
+          <Button icon={Plus} onClick={addZone}>
+            إضافة منطقة
+          </Button>
+        }
+      >
         <ul className="divide-y divide-(--a-line)">
           {ops.zones.map((zone) => (
             <li key={zone.id} className="flex flex-wrap items-center gap-4 px-5 py-4">
-              <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", zone.enabled ? "bg-(--a-accent-soft) text-(--a-accent-ink)" : "bg-(--a-surface-2) text-(--a-muted)")}>
+              <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", zone.enabled ? "bg-(--a-blue-soft) text-(--a-blue)" : "bg-(--a-surface-2) text-(--a-muted)")}>
                 <MapPin className="size-5" />
               </span>
               <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
@@ -70,13 +79,24 @@ export function Shipping() {
                 />
               </div>
               <span className="text-xs text-(--a-muted)">{num.format(orders.filter((order) => order.zone === zone.id).length)} طلب</span>
-              <Switch checked={zone.enabled} label={`تفعيل ${zone.nameAr}`} onChange={(enabled) => updateZone(zone.id, { enabled })} />
+              <Switch size="sm" checked={zone.enabled} label={`تفعيل ${zone.nameAr}`} onChange={(enabled) => updateZone(zone.id, { enabled })} />
+              {ops.zones.length > 1 ? (
+                <IconButton icon={Trash2} tone="danger" label={`حذف ${zone.nameAr}`} onClick={() => setRemoving({ id: zone.id, name: zone.nameAr })} />
+              ) : null}
             </li>
           ))}
         </ul>
       </Panel>
+      <Confirm
+        open={removing !== null}
+        onClose={() => setRemoving(null)}
+        onConfirm={() => removing && removeZone(removing.id)}
+        title={`حذف ${removing?.name ?? ""}؟`}
+        lead="المنطقة تنحذف نهائيًا وتنشال من كل طرق الشحن، وما تظهر للعملاء. الطلبات القديمة تحتفظ باسم منطقتها، والعناوين المحفوظة عليها تحتاج يختار العميل منطقة ثانية."
+        action="حذف المنطقة"
+      />
 
-      <Panel title="الطلبات حسب حالة الشحن" lead="طلبات تجريبية. افتح الطلب لتغيير طريقة شحنه أو حالته." actions={<Badge tone="blue">تجريبي</Badge>}>
+      <Panel title="الطلبات حسب حالة الشحن" lead="افتح الطلب لتغيير طريقة شحنه أو حالته.">
         <div className="border-b border-(--a-line) px-5 py-3">
           <Tabs
             value={stage}
@@ -118,7 +138,7 @@ function MethodCard({
     <article className={cn("flex flex-col overflow-hidden rounded-2xl border bg-(--a-surface) transition hover:shadow-(--a-shadow)", on ? "border-(--a-line)" : "border-dashed border-(--a-line)")}>
       <div className="flex items-center justify-between gap-3 border-b border-(--a-line) bg-(--a-surface-2)/40 px-5 py-3.5">
         <div className="flex min-w-0 items-center gap-3">
-          <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", on ? "bg-(--a-accent-soft) text-(--a-accent-ink)" : "bg-(--a-surface-2) text-(--a-muted)")}>
+          <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", on ? "bg-(--a-blue-soft) text-(--a-blue)" : "bg-(--a-surface-2) text-(--a-muted)")}>
             <Truck className="size-5" />
           </span>
           <div className="min-w-0">
@@ -133,7 +153,7 @@ function MethodCard({
 
       <div className={cn("flex-1 space-y-4 p-5", on ? "" : "opacity-60")}>
         <div className="flex flex-wrap gap-2 text-xs">
-          <Badge tone="accent">{method.fee ? sar.format(method.fee) : "مجاني"}</Badge>
+          <Badge tone="blue">{method.fee ? sar.format(method.fee) : "مجاني"}</Badge>
           {method.freeOver ? <Badge tone="ok">مجاني فوق {sar.format(method.freeOver)}</Badge> : null}
           <Badge>{eta}</Badge>
         </div>
@@ -160,7 +180,7 @@ function MethodCard({
                   onClick={() => onChange({ zones: picked ? method.zones.filter((id) => id !== zone.id) : [...method.zones, zone.id] })}
                   className={cn(
                     "h-8 rounded-full border px-3 text-xs transition disabled:cursor-not-allowed disabled:opacity-40",
-                    picked ? "border-(--a-accent)/50 bg-(--a-accent-soft) font-medium text-(--a-accent-ink)" : "border-(--a-line) text-(--a-muted) hover:text-(--a-text)",
+                    picked ? "border-(--a-blue)/50 bg-(--a-blue-soft) font-medium text-(--a-blue)" : "border-(--a-line) text-(--a-muted) hover:text-(--a-text)",
                   )}
                 >
                   {zone.nameAr}
@@ -171,7 +191,7 @@ function MethodCard({
         </fieldset>
       </div>
 
-      <div className="border-t border-(--a-line) px-5 py-3 text-xs text-(--a-muted)">{num.format(orders)} طلب تجريبي على هذي الطريقة</div>
+      <div className="border-t border-(--a-line) px-5 py-3 text-xs text-(--a-muted)">{num.format(orders)} طلب على هذي الطريقة</div>
     </article>
   );
 }

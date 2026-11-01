@@ -23,7 +23,7 @@ export function Offers({ onOpen }: { onOpen: (view: View) => void }) {
     <div className="space-y-6">
       <PageHead
         title="العروض والخصومات"
-        lead="اختر المنتجات اللي تظهر في قسم العروض، وعدّل السعر قبل وبعد الخصم. التعديل يظهر على المتجر مباشرة."
+        lead="منتجات قسم العروض وأسعارها قبل وبعد الخصم."
         actions={
           <Button icon={Pencil} onClick={() => onOpen("content")}>
             نصوص قسم العروض
@@ -32,7 +32,7 @@ export function Offers({ onOpen }: { onOpen: (view: View) => void }) {
       />
 
       <div className="grid gap-4 sm:grid-cols-3">
-        <StatCard label="في قسم العروض" value={num.format(onHome.length)} note="يظهر أول ١٠ منها في الرئيسية" icon={Tag} tone="accent" onClick={() => setFilter("home")} />
+        <StatCard label="في قسم العروض" value={num.format(onHome.length)} note="يظهر أول 10 منها في الرئيسية" icon={Tag} tone="blue" onClick={() => setFilter("home")} />
         <StatCard label="منتجات عليها خصم" value={num.format(discounted.length)} note="السعر قبل الخصم أعلى من الحالي" icon={BadgePercent} tone="ok" onClick={() => setFilter("discounted")} />
         <StatCard label="أعلى خصم" value={`${num.format(best)}٪`} note="من المنتجات المعروضة" icon={BadgePercent} tone="blue" />
       </div>
@@ -54,9 +54,9 @@ export function Offers({ onOpen }: { onOpen: (view: View) => void }) {
             {rows.map((item) => {
               const off = discountOf(item.price, item.compareAt);
               return (
-                <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
-                  <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-(--a-surface-2)">
-                    <ProductArt id={item.id} className="size-9" />
+                <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-2.5">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-(--a-surface-2)">
+                    <ProductArt id={item.id} className="size-8" />
                   </span>
                   <div className="min-w-40 flex-1">
                     <p className="font-medium">{item.nameAr}</p>
@@ -69,7 +69,7 @@ export function Offers({ onOpen }: { onOpen: (view: View) => void }) {
                   </div>
                   <label className="flex items-center gap-2 text-xs text-(--a-muted)">
                     في العروض
-                    <Switch checked={item.onHome} label={`إظهار ${item.nameAr} في العروض`} onChange={(next) => updateProduct(item.id, { onHome: next })} />
+                    <Switch size="sm" checked={item.onHome} label={`إظهار ${item.nameAr} في العروض`} onChange={(next) => updateProduct(item.id, { onHome: next })} />
                   </label>
                 </li>
               );

@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="30 50 500 450" width="667" height="600">
+  <defs>
+    <linearGradient id="body" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3d424a"/>
+      <stop offset="0.5" stop-color="#22252a"/>
+      <stop offset="1" stop-color="#111316"/>
+    </linearGradient>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#0c0d0f"/>
+      <stop offset="1" stop-color="#1c1f24"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1b2a45"/>
+      <stop offset="0.6" stop-color="#0b1322"/>
+      <stop offset="1" stop-color="#05080e"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.3" stop-color="#fff" stop-opacity="0.12"/>
+      <stop offset="0.55" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="bulbGlass" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0" stop-color="#ffffff"/>
+      <stop offset="0.55" stop-color="#fff6dc"/>
+      <stop offset="1" stop-color="#f3d58a"/>
+    </radialGradient>
+    <radialGradient id="bulbGlow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffd76a" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffd76a" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="base" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#9aa2ad"/>
+      <stop offset="0.45" stop-color="#e3e7ec"/>
+      <stop offset="1" stop-color="#7d8692"/>
+    </linearGradient>
+    <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#0b1220" stop-opacity="0.3"/>
+      <stop offset="1" stop-color="#0b1220" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <ellipse cx="280" cy="470" rx="230" ry="22" fill="url(#shadow)"/>
+
+  <!-- smart home control panel -->
+  <rect x="192" y="96" width="290" height="360" rx="30" fill="url(#edge)" transform="translate(10 6)"/>
+  <rect x="192" y="96" width="290" height="360" rx="30" fill="url(#body)"/>
+  <rect x="193" y="97" width="288" height="358" rx="29" fill="none" stroke="#5b616b" stroke-width="1.4" opacity="0.7"/>
+  <rect x="210" y="114" width="254" height="324" rx="18" fill="url(#screen)"/>
+  <path d="M214 118 L330 118 L250 434 L214 434 Z" fill="#fff" opacity="0.04"/>
+  <!-- house icon -->
+  <path d="M337 150 L392 196 L380 196 L380 244 L294 244 L294 196 L282 196 Z" fill="none" stroke="#60a5fa" stroke-width="8" stroke-linejoin="round"/>
+  <rect x="325" y="212" width="24" height="32" rx="3" fill="#60a5fa"/>
+  <!-- toggles -->
+  <g>
+    <rect x="234" y="276" width="206" height="44" rx="12" fill="#14203a"/>
+    <circle cx="258" cy="298" r="9" fill="#ffd76a"/>
+    <rect x="278" y="292" width="70" height="10" rx="5" fill="#4b5f86"/>
+    <rect x="388" y="286" width="40" height="24" rx="12" fill="#2563eb"/><circle cx="416" cy="298" r="9" fill="#fff"/>
+
+    <rect x="234" y="330" width="206" height="44" rx="12" fill="#14203a"/>
+    <rect x="250" y="343" width="16" height="18" rx="3" fill="none" stroke="#93c5fd" stroke-width="3"/>
+    <rect x="278" y="346" width="56" height="10" rx="5" fill="#4b5f86"/>
+    <rect x="388" y="340" width="40" height="24" rx="12" fill="#2563eb"/><circle cx="416" cy="352" r="9" fill="#fff"/>
+
+    <rect x="234" y="384" width="206" height="38" rx="12" fill="#14203a"/>
+    <text x="258" y="410" fill="#e2e8f0" font-family="Helvetica, Arial, sans-serif" font-size="18" font-weight="600">24°</text>
+    <rect x="300" y="398" width="60" height="9" rx="4.5" fill="#4b5f86"/>
+    <rect x="388" y="391" width="40" height="24" rx="12" fill="#334155"/><circle cx="400" cy="403" r="9" fill="#cbd5e1"/>
+  </g>
+
+  <!-- smart bulb in front -->
+  <circle cx="150" cy="282" r="120" fill="url(#bulbGlow)"/>
+  <path d="M150 196 C 196 196 222 232 222 268 C 222 298 202 314 192 334 L 108 334 C 98 314 78 298 78 268 C 78 232 104 196 150 196 Z" fill="url(#bulbGlass)" stroke="#e9c46a" stroke-width="1.5"/>
+  <path d="M112 240 C 118 222 134 212 150 210" fill="none" stroke="#fff" stroke-width="8" stroke-linecap="round" opacity="0.9"/>
+  <rect x="106" y="332" width="88" height="16" rx="5" fill="#f1f3f6" stroke="#b8c0cb"/>
+  <path d="M110 348 h80 v14 h-80z M114 362 h72 v12 h-72z M118 374 h64 v12 h-64z" fill="url(#base)" stroke="#6b737e" stroke-width="1"/>
+  <path d="M130 386 h40 l-8 18 h-24z" fill="#2b2f35"/>
+  <circle cx="150" cy="340" r="3.5" fill="#3b82f6"/>
+</svg>

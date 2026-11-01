@@ -1,0 +1,27 @@
+# Local PostgreSQL for development only. Credentials come from server/.env (copied from .env.example),
+# which Docker Compose reads automatically because it sits next to this file.
+# The port is published on 127.0.0.1 only, so the database is not reachable from other machines.
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: alsaif-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in server/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in server/.env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in server/.env}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - alsaif_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  # Named volume: data survives `docker compose stop` and `docker compose down`.
+  # It is only removed by `docker compose down -v`, which deletes the local database.
+  alsaif_pgdata:

@@ -1,12 +1,14 @@
 import { ShieldCheck, Truck } from "lucide-react";
 import { Link } from "wouter";
 import { categoryLabel, topDepartments } from "@/lib/catalog";
+import { BrandMark, useBrandText } from "@/components/site/Brand";
 import { useLang } from "@/lib/i18n";
 import { useSiteContent } from "@/lib/site-content";
 import { useIsLight } from "@/lib/theme";
 
 export function SiteFooter() {
   const { t, lang } = useLang();
+  const brand = useBrandText();
   const { content } = useSiteContent();
   const footer = content.footer[lang];
   const departments = topDepartments(content.categoryHidden, 7);
@@ -21,12 +23,10 @@ export function SiteFooter() {
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
         <div>
           <Link href={`/${lang}`} className="flex items-center gap-3">
-            <span className="grid size-11 place-items-center rounded-2xl bg-cyan text-lg font-bold text-navy">
-              {lang === "ar" ? "س" : "E"}
-            </span>
+            <BrandMark />
             <span className="leading-tight">
-              <span className="block text-lg font-semibold leading-7">{t.brand}</span>
-              {t.tagline ? <span className={`block text-xs ${c.tag}`}>{t.tagline}</span> : null}
+              <span className="block text-lg font-semibold leading-7">{brand.name}</span>
+              {brand.tagline ? <span className={`block text-xs ${c.tag}`}>{brand.tagline}</span> : null}
             </span>
           </Link>
           <p className={`mt-4 max-w-xs text-sm leading-7 ${c.about}`}>{footer.about}</p>

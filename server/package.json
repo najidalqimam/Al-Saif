@@ -1,0 +1,50 @@
+{
+  "name": "al-saif-server",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Backend and MySQL database for the Al-Saif store. Only this package talks to the database.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.17"
+  },
+  "scripts": {
+    "dev": "node --env-file=.env --watch --import tsx src/index.ts",
+    "start": "node --env-file=.env --import tsx src/index.ts",
+    "admin:create": "node --env-file=.env --import tsx src/scripts/create-admin.ts",
+    "db:up": "docker compose up -d --wait",
+    "db:down": "docker compose stop",
+    "db:logs": "docker compose logs -f db",
+    "db:validate": "prisma validate",
+    "db:format": "prisma format",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:deploy": "prisma migrate deploy",
+    "db:status": "prisma migrate status",
+    "db:studio": "prisma studio",
+    "typecheck": "tsc --noEmit",
+    "catalogue:manifest": "node --env-file=.env --import tsx src/scripts/catalogue-manifest.ts",
+    "catalogue:import": "node --env-file=.env --import tsx src/scripts/catalogue-import.ts",
+    "catalogue:verify": "node --env-file=.env --import tsx src/scripts/catalogue-verify.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "6.19.3",
+    "cors": "2.8.6",
+    "express": "5.3.0",
+    "express-rate-limit": "8.7.1",
+    "helmet": "8.3.0",
+    "nodemailer": "6.10.1",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@types/cors": "2",
+    "@types/express": "5",
+    "@types/node": "^20.17.0",
+    "@types/nodemailer": "6.4.17",
+    "prisma": "6.19.3",
+    "tsx": "4.23.15",
+    "typescript": "~5.8.3"
+  },
+  "prisma": {
+    "schema": "prisma/mysql/schema.prisma"
+  }
+}

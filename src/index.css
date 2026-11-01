@@ -16,13 +16,13 @@
   --color-gold: #d9a441;
   --color-burgundy: #c4455c;
   /* Midnight Circuit: cyan is the LED accent, electric blue is a rare highlight. */
-  --color-cyan: #20c7d7;
+  --color-cyan: var(--cyan);
   --color-blue: #647cff;
   --color-blue-soft: #a9b6ff;
-  --color-brand: #20c7d7;
-  --color-brand-hover: #4fd6e3;
-  --color-brand-ink: #0a6b78;
-  --color-mint: #8df0f7;
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-ink: var(--brand-ink);
+  --color-mint: var(--accent-soft);
   --color-ink-soft: #44526b;
   --color-ink-mute: #64748b;
   --color-surface: #eef3fa;
@@ -33,19 +33,33 @@
   --background: #f4f7fb;
   --foreground: #111d32;
   --primary: #00a878;
+  /* Accent palette: cyan on the dark theme (the default); html.light swaps it for blues below. */
+  --cyan: #20c7d7;
+  --brand: #20c7d7;
+  --brand-hover: #4fd6e3;
+  --brand-ink: #0a6b78;
+  --accent: #25d9e6;
+  --accent-rgb: 37 217 230;
+  --accent-glow-rgb: 32 199 215;
+  --accent-ink: #0a6b78;
+  --accent-ink-rgb: 10 107 120;
+  --accent-soft: #8df0f7;
+  --accent-soft-rgb: 141 240 247;
+  /* Text on an accent fill. */
+  --on-accent: #0b1220;
   --primary-foreground: #ffffff;
   --border: rgb(11 18 32 / 0.1);
   --ring: #00a878;
   --showcase-bg: linear-gradient(180deg, #142238 0%, #0b1220 100%);
-  --showcase-glow: radial-gradient(ellipse at 50% 42%, rgba(37, 217, 230, 0.45), rgba(20, 34, 56, 0.12) 52%, transparent 74%);
+  --showcase-glow: radial-gradient(ellipse at 50% 42%, rgb(var(--accent-rgb) / 0.45), rgba(20, 34, 56, 0.12) 52%, transparent 74%);
   --showcase-disc: radial-gradient(ellipse at 50% 38%, #3a5a86 0%, #1b3050 46%, #142238 100%);
   --showcase-base: linear-gradient(180deg, #142238, #0b1220);
   --showcase-shadow: 0 14px 18px rgba(0, 0, 0, 0.28);
-  --card-edge: #20c7d7;
+  --card-edge: var(--cyan);
   --card-border: #dce5ef;
-  --focus-ring: #0a6b78;
-  --led-spectrum: linear-gradient(90deg, transparent 0%, #25d9e6 22%, #25d9e6 64%, #647cff 90%, transparent 100%);
-  --led-edge: linear-gradient(135deg, rgba(37, 217, 230, 0.95), rgba(100, 124, 255, 0.75));
+  --focus-ring: var(--accent-ink);
+  --led-spectrum: linear-gradient(90deg, transparent 0%, var(--accent) 22%, var(--accent) 64%, #647cff 90%, transparent 100%);
+  --led-edge: linear-gradient(135deg, rgb(var(--accent-rgb) / 0.95), rgba(100, 124, 255, 0.75));
   --shadow-card: 0 1px 2px rgba(11, 18, 32, 0.05), 0 10px 28px rgba(11, 18, 32, 0.06);
   --shadow-card-hover: 0 2px 4px rgba(11, 18, 32, 0.06), 0 18px 36px rgba(11, 18, 32, 0.12);
 }
@@ -78,7 +92,7 @@ body {
 .surface-dark,
 #hero,
 footer {
-  --focus-ring: #25d9e6;
+  --focus-ring: var(--accent);
 }
 
 .skip-link {
@@ -245,6 +259,45 @@ footer {
   display: none;
 }
 
+/* The home page offers rail runs the full width of the screen, edge to edge, instead of stopping at the
+   page margins; it still scrolls only inside itself (the body clips horizontal overflow). */
+.rail-bleed .rail {
+  --rail-fade: clamp(3rem, 12vw, 11rem);
+}
+
+.rail-bleed .rail__track {
+  margin-inline: calc(50% - 50vw);
+  padding-inline: 1rem;
+  scroll-padding-inline: 1rem;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--rail-fade), #000 calc(100% - var(--rail-fade)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--rail-fade), #000 calc(100% - var(--rail-fade)), transparent 100%);
+}
+
+/* A soft blur over both screen edges, strongest at the edge, on top of the fade. */
+.rail-bleed .rail::before,
+.rail-bleed .rail::after {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  inset-block: 0;
+  width: var(--rail-fade);
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+
+.rail-bleed .rail::before {
+  left: calc(50% - 50vw);
+  -webkit-mask-image: linear-gradient(to right, #000, transparent);
+  mask-image: linear-gradient(to right, #000, transparent);
+}
+
+.rail-bleed .rail::after {
+  right: calc(50% - 50vw);
+  -webkit-mask-image: linear-gradient(to left, #000, transparent);
+  mask-image: linear-gradient(to left, #000, transparent);
+}
+
 .rail__track:focus-visible {
   outline-offset: -2px;
   border-radius: 1rem;
@@ -279,9 +332,17 @@ footer {
 }
 
 .rail__btn:hover:not(:disabled) {
-  border-color: #25d9e6;
-  background: #25d9e6;
-  color: #0b1220;
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+html.light [class~="bg-[#20C5D4]"]:not(:hover) {
+  background: var(--brand);
+}
+
+html.light #hero [class~="text-[#0a8a9b]"] {
+  color: var(--brand-ink);
 }
 
 .rail__btn:disabled {
@@ -345,7 +406,7 @@ footer {
   height: 46%;
   pointer-events: none;
   /* A soft, low halo centred under the product: no hard rim and no violet cast. */
-  background: radial-gradient(ellipse at 50% 62%, rgba(32, 199, 215, 0.22), rgba(32, 199, 215, 0.06) 45%, transparent 70%);
+  background: radial-gradient(ellipse at 50% 62%, rgb(var(--accent-glow-rgb) / 0.22), rgb(var(--accent-glow-rgb) / 0.06) 45%, transparent 70%);
   filter: blur(28px);
 }
 
@@ -402,8 +463,8 @@ footer {
 
   .showcase-card.is-selected,
   .catalog-card.is-selected {
-    border-color: #25d9e6;
-    box-shadow: 0 0 0 1px #25d9e6;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent);
   }
 
   .catalog-card:focus-visible {
@@ -415,7 +476,7 @@ footer {
     .catalog-card:hover,
     .offer-card:hover {
       transform: translateY(-4px);
-      border-color: rgb(37 217 230 / 0.55);
+      border-color: rgb(var(--accent-rgb) / 0.55);
       box-shadow: var(--shadow-card-hover);
     }
 
@@ -432,7 +493,7 @@ footer {
   .product-card:has(.card-open:focus-visible) {
     outline: 2px solid var(--focus-ring);
     outline-offset: 3px;
-    border-color: rgb(37 217 230 / 0.55);
+    border-color: rgb(var(--accent-rgb) / 0.55);
     box-shadow: var(--shadow-card-hover);
   }
 
@@ -453,7 +514,7 @@ footer {
     gap: 0.6rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #0a6b78;
+    color: var(--accent-ink);
   }
 
   .eyebrow::before {
@@ -462,10 +523,10 @@ footer {
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 999px;
-    background: #25d9e6;
+    background: var(--accent);
     box-shadow:
-      0 0 0 3px rgba(37, 217, 230, 0.18),
-      0 0 10px rgba(37, 217, 230, 0.6);
+      0 0 0 3px rgb(var(--accent-rgb) / 0.18),
+      0 0 10px rgb(var(--accent-rgb) / 0.6);
   }
 
   .section-title {
@@ -479,11 +540,11 @@ footer {
   }
 
   .on-dark {
-    --focus-ring: #25d9e6;
+    --focus-ring: var(--accent);
   }
 
   .on-dark .eyebrow {
-    color: #8df0f7;
+    color: var(--accent-soft);
   }
 
   .on-dark .section-title {
@@ -545,12 +606,12 @@ footer {
     justify-content: center;
     gap: 0.5rem;
     border-radius: 999px;
-    background: #25d9e6;
+    background: var(--accent);
     padding-inline: 1.5rem;
     font-size: 0.9375rem;
     font-weight: 700;
-    color: #0b1220;
-    box-shadow: 0 6px 18px rgba(37, 217, 230, 0.22);
+    color: var(--on-accent);
+    box-shadow: 0 6px 18px rgb(var(--accent-rgb) / 0.22);
     transition:
       background-color 200ms ease,
       box-shadow 200ms ease,
@@ -559,7 +620,7 @@ footer {
 
   .btn-brand:hover {
     background: #5be6f0;
-    box-shadow: 0 8px 24px rgba(37, 217, 230, 0.38);
+    box-shadow: 0 8px 24px rgb(var(--accent-rgb) / 0.38);
   }
 
   .btn-brand:active {
@@ -593,7 +654,7 @@ footer {
   /* Static RGB LED strip: a thin lit edge with a soft bloom, used as the brand signature. */
   .led-strip {
     position: relative;
-    height: 2px;
+    height: 3px;
     width: 100%;
     background: var(--led-spectrum);
   }
@@ -601,12 +662,12 @@ footer {
   .led-strip::after {
     content: "";
     position: absolute;
-    inset-inline: 8%;
+    inset-inline: 6%;
     top: 0;
-    height: 14px;
+    height: 18px;
     background: var(--led-spectrum);
     filter: blur(14px);
-    opacity: 0.45;
+    opacity: 0.7;
     pointer-events: none;
   }
 
@@ -649,8 +710,8 @@ footer {
     align-items: flex-start;
     gap: 0.75rem;
     border-radius: 1rem;
-    border: 1px solid rgb(141 240 247 / 0.12);
-    background: linear-gradient(135deg, rgb(37 217 230 / 0.05), rgb(20 34 56 / 0.5));
+    border: 1px solid rgb(var(--accent-soft-rgb) / 0.12);
+    background: linear-gradient(135deg, rgb(var(--accent-rgb) / 0.05), rgb(20 34 56 / 0.5));
     padding: 0.7rem 1rem;
     text-align: start;
   }
@@ -662,10 +723,10 @@ footer {
     width: 0.5rem;
     height: 0.5rem;
     border-radius: 999px;
-    background: #25d9e6;
+    background: var(--accent);
     box-shadow:
-      0 0 0 2px rgb(37 217 230 / 0.14),
-      0 0 6px rgb(37 217 230 / 0.5);
+      0 0 0 2px rgb(var(--accent-rgb) / 0.14),
+      0 0 6px rgb(var(--accent-rgb) / 0.5);
   }
 
   .hero-badge__title {
@@ -688,8 +749,8 @@ footer {
     flex-shrink: 0;
     place-items: center;
     border-radius: 0.875rem;
-    background: rgb(37 217 230 / 0.14);
-    color: #0a6b78;
+    background: rgb(var(--accent-rgb) / 0.14);
+    color: var(--accent-ink);
   }
 
   .icon-tile svg {
@@ -698,8 +759,8 @@ footer {
   }
 
   .icon-tile--dark {
-    background: rgb(141 240 247 / 0.14);
-    color: #8df0f7;
+    background: rgb(var(--accent-soft-rgb) / 0.14);
+    color: var(--accent-soft);
   }
 
   .card-arrow svg,
@@ -808,11 +869,11 @@ footer {
     right: 0;
     left: 0;
     height: 62%;
-    border-bottom: 2px solid rgb(141 240 247 / 0.85);
+    border-bottom: 2px solid rgb(var(--accent-soft-rgb) / 0.85);
     background: var(--showcase-disc);
     box-shadow:
       var(--showcase-shadow),
-      0 0 14px rgba(37, 217, 230, 0.35);
+      0 0 14px rgb(var(--accent-rgb) / 0.35);
     transition: box-shadow 320ms ease;
   }
 
@@ -831,7 +892,7 @@ footer {
     right: 18%;
     left: 18%;
     height: 70%;
-    background: rgb(37 217 230 / 0.28);
+    background: rgb(var(--accent-rgb) / 0.28);
     filter: blur(2px);
   }
 
@@ -860,7 +921,7 @@ footer {
     height: 100%;
     object-fit: contain;
     object-position: bottom;
-    filter: drop-shadow(0 14px 8px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 10px rgba(37, 217, 230, 0.18));
+    filter: drop-shadow(0 14px 8px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 10px rgb(var(--accent-rgb) / 0.18));
     transition: filter 320ms ease;
   }
 
@@ -927,7 +988,7 @@ footer {
   .offer-card:hover .showcase-stage__disc {
     box-shadow:
       0 16px 18px rgba(0, 0, 0, 0.38),
-      0 0 18px rgba(37, 217, 230, 0.5);
+      0 0 18px rgb(var(--accent-rgb) / 0.5);
   }
 
   .showcase-card:hover .showcase-stage__subject,
@@ -939,7 +1000,7 @@ footer {
   .showcase-card:hover .showcase-stage__subject img,
   .catalog-card:hover .showcase-stage__subject img,
   .offer-card:hover .showcase-stage__subject img {
-    filter: drop-shadow(0 18px 12px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgba(37, 217, 230, 0.32));
+    filter: drop-shadow(0 18px 12px rgba(0, 0, 0, 0.5)) drop-shadow(0 0 16px rgb(var(--accent-rgb) / 0.32));
   }
 
   .showcase-stage--light:hover .showcase-stage__subject img,
@@ -954,7 +1015,7 @@ footer {
     height: 100%;
     flex-direction: column;
     border-radius: 1.4rem;
-    border: 1px solid rgb(141 240 247 / 0.14);
+    border: 1px solid rgb(var(--accent-soft-rgb) / 0.14);
     background: linear-gradient(180deg, #284261 0%, #233750 100%);
     padding: 1rem 1rem 1.25rem;
     text-align: start;
@@ -969,10 +1030,10 @@ footer {
   @media (hover: hover) {
     .solution-card:hover {
       transform: translateY(-4px);
-      border-color: rgb(37 217 230 / 0.5);
+      border-color: rgb(var(--accent-rgb) / 0.5);
       box-shadow:
         0 18px 40px rgba(4, 8, 16, 0.5),
-        0 0 28px rgba(37, 217, 230, 0.12);
+        0 0 28px rgb(var(--accent-rgb) / 0.12);
     }
   }
 
@@ -991,7 +1052,7 @@ footer {
     width: 62%;
     height: 52%;
     transform: translateX(-50%);
-    background: radial-gradient(ellipse at 50% 50%, rgba(37, 217, 230, 0.34), transparent 72%);
+    background: radial-gradient(ellipse at 50% 50%, rgb(var(--accent-rgb) / 0.34), transparent 72%);
     filter: blur(14px);
     opacity: 0.8;
     pointer-events: none;
@@ -1023,7 +1084,7 @@ footer {
     inset: 22% 10% auto;
     height: 38%;
     border-radius: 50%;
-    background: linear-gradient(180deg, rgba(37, 217, 230, 0.3), rgba(20, 34, 56, 0.02));
+    background: linear-gradient(180deg, rgb(var(--accent-rgb) / 0.3), rgba(20, 34, 56, 0.02));
   }
 
   .solution-stage__img {
@@ -1051,8 +1112,8 @@ footer {
     height: 2.15rem;
     place-items: center;
     border-radius: 999px;
-    background: rgb(141 240 247 / 0.14);
-    color: #8df0f7;
+    background: rgb(var(--accent-soft-rgb) / 0.14);
+    color: var(--accent-soft);
     transition:
       background 320ms ease,
       color 320ms ease;
@@ -1060,8 +1121,8 @@ footer {
 
   .solution-card:hover .solution-card__arrow,
   .solution-card:focus-visible .solution-card__arrow {
-    background: #25d9e6;
-    color: #0b1220;
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   .solution-cta {
@@ -1071,12 +1132,12 @@ footer {
     align-items: center;
     gap: 0.5rem;
     border-radius: 999px;
-    background: #25d9e6;
+    background: var(--accent);
     padding-inline: 1.5rem;
     font-size: 0.875rem;
     font-weight: 700;
-    color: #0b1220;
-    box-shadow: 0 6px 18px rgba(37, 217, 230, 0.22);
+    color: var(--on-accent);
+    box-shadow: 0 6px 18px rgb(var(--accent-rgb) / 0.22);
     transition: background 320ms ease;
   }
 
@@ -1102,13 +1163,13 @@ footer {
 
 .ambient::before {
   background:
-    radial-gradient(ellipse at 6% 0%, rgba(37, 217, 230, 0.08), transparent 40%),
+    radial-gradient(ellipse at 6% 0%, rgb(var(--accent-rgb) / 0.08), transparent 40%),
     radial-gradient(ellipse at 98% 100%, rgba(20, 34, 56, 0.05), transparent 36%);
 }
 
 .ambient-edge::before {
   background:
-    radial-gradient(ellipse at 0% 18%, rgba(37, 217, 230, 0.06), transparent 32%),
+    radial-gradient(ellipse at 0% 18%, rgb(var(--accent-rgb) / 0.06), transparent 32%),
     radial-gradient(ellipse at 100% 82%, rgba(100, 124, 255, 0.05), transparent 28%);
 }
 
@@ -1158,16 +1219,16 @@ button.bg-emerald:hover,
 a.bg-emerald:hover,
 .solution-cta:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(37, 217, 230, 0.22);
+  box-shadow: 0 8px 18px rgb(var(--accent-rgb) / 0.22);
 }
 
 .solution-cta:hover {
-  box-shadow: 0 8px 22px rgba(37, 217, 230, 0.34);
+  box-shadow: 0 8px 22px rgb(var(--accent-rgb) / 0.34);
 }
 
 .cart-btn:hover {
   transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(37, 217, 230, 0.28);
+  box-shadow: 0 6px 14px rgb(var(--accent-rgb) / 0.28);
 }
 
 .cart-btn:active,
@@ -1188,7 +1249,7 @@ header nav > div > a::after {
   bottom: 0.3rem;
   height: 1.5px;
   border-radius: 999px;
-  background: #25d9e6;
+  background: var(--accent);
   transform: scaleX(0);
   transform-origin: center;
   transition: transform 220ms ease;
@@ -1202,7 +1263,7 @@ header nav > div > a[aria-current="page"]::after {
 }
 
 header input[type="search"]:focus {
-  box-shadow: 0 0 0 3px rgba(37, 217, 230, 0.16);
+  box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.16);
 }
 
 .cart-pulse {
@@ -1403,7 +1464,7 @@ footer::before {
   .dept-tile__mark {
     width: 2.25rem;
     height: 2.25rem;
-    color: #0a6b78;
+    color: var(--accent-ink);
   }
 
   .dept-tile__name {
@@ -1417,13 +1478,13 @@ footer::before {
   }
 
   .dept-tile:focus-visible {
-    outline: 2px solid #25d9e6;
+    outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
 
   @media (hover: hover) {
     .dept-tile:hover {
-      border-color: rgb(37 217 230 / 0.6);
+      border-color: rgb(var(--accent-rgb) / 0.6);
       box-shadow: 0 6px 18px rgba(11, 18, 32, 0.08);
     }
   }
@@ -1443,7 +1504,7 @@ footer::before {
     padding: 0 1rem;
     font-size: 0.875rem;
     font-weight: 600;
-    color: #0a6b78;
+    color: var(--accent-ink);
     cursor: pointer;
     transition:
       border-color 200ms ease,
@@ -1451,11 +1512,11 @@ footer::before {
   }
 
   .dept-toggle:hover {
-    border-color: rgb(37 217 230 / 0.6);
+    border-color: rgb(var(--accent-rgb) / 0.6);
   }
 
   .dept-toggle:focus-visible {
-    outline: 2px solid #25d9e6;
+    outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
 
@@ -1488,7 +1549,7 @@ footer::before {
     place-items: center;
     border-radius: 0.875rem;
     background: linear-gradient(145deg, #0b1220 0%, #142238 55%, #1d3159 100%);
-    color: #25d9e6;
+    color: var(--accent);
     box-shadow: 0 6px 14px rgba(11, 18, 32, 0.16);
   }
 
@@ -1516,7 +1577,7 @@ footer::before {
     place-items: center;
     border-radius: 999px;
     background: #fff;
-    color: #0a6b78;
+    color: var(--accent-ink);
     box-shadow: 0 1px 3px rgba(11, 18, 32, 0.12);
     transition:
       background-color 200ms ease,
@@ -1532,18 +1593,18 @@ footer::before {
   }
 
   .dept-toggle[aria-expanded="true"] {
-    border-color: rgb(37 217 230 / 0.6);
-    background: rgb(37 217 230 / 0.1);
+    border-color: rgb(var(--accent-rgb) / 0.6);
+    background: rgb(var(--accent-rgb) / 0.1);
   }
 
   @media (hover: hover) {
     .dept-tile:hover .dept-tile__badge {
       background: #0b1220;
-      color: #25d9e6;
+      color: var(--accent);
     }
 
     .dept-tile:hover .dept-tile__name {
-      color: #0a6b78;
+      color: var(--accent-ink);
     }
   }
 }
@@ -1553,8 +1614,8 @@ footer::before {
   .dept-tile__badge {
     width: 1.875rem;
     height: 1.875rem;
-    border: 1px solid rgb(37 217 230 / 0.35);
-    color: #0a6b78;
+    border: 1px solid rgb(var(--accent-rgb) / 0.35);
+    color: var(--accent-ink);
     box-shadow: 0 2px 6px rgba(11, 18, 32, 0.12);
   }
 
@@ -1578,7 +1639,7 @@ footer::before {
     height: 3px;
     margin-top: 0.625rem;
     border-radius: 999px;
-    background: linear-gradient(90deg, #25d9e6, #647cff);
+    background: linear-gradient(90deg, var(--accent), #647cff);
   }
 
   .dept-tile {
@@ -1637,7 +1698,7 @@ footer::before {
 /* Light theme (html.light). Dark is the default and has no overrides, so nothing here can alter it. */
 @layer components {
   html.light #hero {
-    --focus-ring: #0a6b78;
+    --focus-ring: var(--accent-ink);
   }
 
   html.light #hero .btn-ghost-dark {
@@ -1665,11 +1726,11 @@ footer::before {
   }
 
   html.light #hero .hero-ambient {
-    background: radial-gradient(ellipse at 50% 62%, rgba(32, 199, 215, 0.1), rgba(32, 199, 215, 0.03) 45%, transparent 70%);
+    background: radial-gradient(ellipse at 50% 62%, rgb(var(--accent-glow-rgb) / 0.1), rgb(var(--accent-glow-rgb) / 0.03) 45%, transparent 70%);
   }
 
   html.light footer {
-    --focus-ring: #0a6b78;
+    --focus-ring: var(--accent-ink);
   }
 }
 
@@ -1686,11 +1747,34 @@ footer::before {
 
 html.light {
   --tone-a: #ffffff;
-  --tone-b: #edf3f9;
+  --tone-b: #eef4ff;
   --tone-card: #ffffff;
-  --tone-edge: #dce5ef;
-  --tone-promo: #e2f7fa;
-  --chrome: #edf3f9;
+  --tone-edge: #d8e3f8;
+  --tone-promo: #e3edff;
+  --chrome: #eaf1ff;
+  /* Blues instead of the dark theme's cyan. */
+  --background: #f3f7ff;
+  --primary: #2563eb;
+  --ring: #2563eb;
+  --cyan: #3b82f6;
+  --brand: #2563eb;
+  --brand-hover: #1d4ed8;
+  --brand-ink: #1d4ed8;
+  --accent: #2563eb;
+  --accent-rgb: 37 99 235;
+  --accent-glow-rgb: 59 130 246;
+  --accent-ink: #1d4ed8;
+  --accent-ink-rgb: 29 78 216;
+  --accent-soft: #93c5fd;
+  --accent-soft-rgb: 147 197 253;
+  --on-accent: #ffffff;
+  --card-border: #d8e3f8;
+}
+
+/* Blue fills carry white text in the light theme (the dark theme's cyan fills use navy text). Unlayered so it
+   outranks text-navy. */
+html.light :is(.bg-brand, .bg-cyan, [class~="bg-[#20C5D4]"], .hover\:bg-brand:hover) {
+  color: var(--on-accent);
 }
 
 .tone-a {
@@ -1708,7 +1792,7 @@ html.light {
   }
 
   html.light .on-dark .eyebrow {
-    color: #0a6b78;
+    color: var(--accent-ink);
   }
 
   html.light .on-dark .section-title {
@@ -1720,13 +1804,13 @@ html.light {
   }
 
   html.light .on-dark {
-    --focus-ring: #0a6b78;
+    --focus-ring: var(--accent-ink);
   }
 
   /* Dark theme: content sections sit on dark tones, so their navy-on-white styling is remapped here. */
   html:not(.light) :is(.tone-a, .tone-b, .tone-scope) {
     color: #e8eef7;
-    --focus-ring: #25d9e6;
+    --focus-ring: var(--accent);
   }
 
   html:not(.light) :is(.tone-a, .tone-b, .tone-scope) .section-title {
@@ -1791,9 +1875,9 @@ html.light {
   }
 
   html:not(.light) :is(.tone-a, .tone-b, .tone-scope) .rail__btn:hover:not(:disabled) {
-    border-color: #25d9e6;
-    background: #25d9e6;
-    color: #0b1220;
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   html:not(.light) .dept-tile {
@@ -1831,7 +1915,7 @@ html.light {
 
   html:not(.light) :is(.tone-a, .tone-b, .tone-scope) [class*="bg-white/"].hover\:text-brand-ink:hover,
   html:not(.light) :is(.tone-a, .tone-b, .tone-scope) [class*="bg-white/"].text-brand-ink {
-    color: #0a6b78;
+    color: var(--accent-ink);
   }
 
 /* Light only: the categories section opens on clean white after the unified hero block. */
@@ -1854,7 +1938,7 @@ html.light .solution-card {
 
 @media (hover: hover) {
   html.light .solution-card:hover {
-    border-color: rgb(10 107 120 / 0.4);
+    border-color: rgb(var(--accent-ink-rgb) / 0.4);
     box-shadow: 0 14px 30px rgba(11, 18, 32, 0.1);
   }
 }
@@ -1888,14 +1972,14 @@ html.light .solution-card p {
 }
 
 html.light .solution-card__arrow {
-  background: rgb(10 107 120 / 0.1);
-  color: #0a6b78;
+  background: rgb(var(--accent-ink-rgb) / 0.1);
+  color: var(--accent-ink);
 }
 
 html.light .solution-card:hover .solution-card__arrow,
 html.light .solution-card:focus-visible .solution-card__arrow {
-  background: #25d9e6;
-  color: #0b1220;
+  background: var(--accent);
+  color: var(--on-accent);
 }
 
 /* Product cards: an LED-style border that travels around the rounded edge on hover (and keyboard focus). */
@@ -1917,8 +2001,8 @@ html.light .solution-card:focus-visible .solution-card__arrow {
   /* Two bright multicolor "comets" on a faint base ring; rotating the angle sends them around the edge. */
   --led-ring: conic-gradient(
     from var(--led-angle),
-    rgb(37 217 230 / 0.16) 0%,
-    rgb(37 217 230 / 0.16) 26%,
+    rgb(var(--accent-rgb) / 0.16) 0%,
+    rgb(var(--accent-rgb) / 0.16) 26%,
     #00e5ff 36%,
     #2f8bff 42%,
     #a45cff 47%,
@@ -2014,10 +2098,10 @@ html.light .tone-swap-light.tone-b {
 /* Admin dashboard (Midnight Circuit). Light is the default; html[data-admin-theme="dark"] swaps only the tokens.
    The dashboard theme is separate from the storefront's html.light / html.dark. */
 .admin {
-  --a-bg: #f4f7fb;
+  --a-bg: #f1f4f9;
   --a-surface: #ffffff;
   --a-surface-2: #eef3f9;
-  --a-line: rgb(11 18 32 / 0.08);
+  --a-line: rgb(11 18 32 / 0.11);
   --a-text: #0b1220;
   --a-muted: #5b6b82;
   --a-accent: #25d9e6;
@@ -2025,20 +2109,21 @@ html.light .tone-swap-light.tone-b {
   --a-accent-soft: rgb(37 217 230 / 0.14);
   --a-blue: #4f66f0;
   --a-blue-soft: rgb(100 124 255 / 0.12);
-  --a-side: #ffffff;
-  --a-side-text: #0b1220;
-  --a-side-muted: #6b7a90;
-  --a-side-hover: #f1f5fa;
+  /* The sidebar stays dark navy in both dashboard themes. */
+  --a-side: #0b1220;
+  --a-side-text: #e6edf7;
+  --a-side-muted: rgb(230 237 247 / 0.6);
+  --a-side-hover: rgb(255 255 255 / 0.06);
   --a-side-active: rgb(37 217 230 / 0.14);
-  --a-side-active-text: #0a7f8b;
-  --a-side-line: rgb(11 18 32 / 0.08);
+  --a-side-active-text: #25d9e6;
+  --a-side-line: rgb(255 255 255 / 0.08);
   --a-danger: #d0384f;
   --a-danger-soft: rgb(208 56 79 / 0.1);
   --a-warn: #a86a00;
   --a-warn-soft: rgb(242 184 75 / 0.18);
   --a-ok: #12875a;
   --a-ok-soft: rgb(18 135 90 / 0.1);
-  --a-shadow: 0 1px 2px rgb(11 18 32 / 0.04), 0 8px 24px rgb(11 18 32 / 0.06);
+  --a-shadow: 0 1px 2px rgb(11 18 32 / 0.06), 0 4px 14px rgb(11 18 32 / 0.05);
   --focus-ring: #0a7f8b;
   background: var(--a-bg);
   color: var(--a-text);
@@ -2049,7 +2134,7 @@ html[data-admin-theme="dark"] .admin {
   --a-bg: #0b1220;
   --a-surface: #142238;
   --a-surface-2: #1a2c47;
-  --a-line: rgb(255 255 255 / 0.08);
+  --a-line: rgb(255 255 255 / 0.1);
   --a-text: #e6edf7;
   --a-muted: #8b9bb4;
   --a-accent: #25d9e6;
@@ -2057,9 +2142,9 @@ html[data-admin-theme="dark"] .admin {
   --a-accent-soft: rgb(37 217 230 / 0.12);
   --a-blue: #647cff;
   --a-blue-soft: rgb(100 124 255 / 0.14);
-  --a-side: #08101d;
+  --a-side: #0b1220;
   --a-side-text: #e6edf7;
-  --a-side-muted: rgb(230 237 247 / 0.5);
+  --a-side-muted: rgb(230 237 247 / 0.6);
   --a-side-hover: rgb(255 255 255 / 0.05);
   --a-side-active: rgb(37 217 230 / 0.12);
   --a-side-active-text: #25d9e6;

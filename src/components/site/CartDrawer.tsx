@@ -1,18 +1,16 @@
 import { useEffect, useId } from "react";
 import { Minus, Plus, X } from "lucide-react";
+import { Link } from "wouter";
 import { useCart } from "@/lib/cart";
-import { publicUrl } from "@/lib/utils";
+import { CHECKOUT_COPY } from "@/lib/checkout-copy";
 import { useLang } from "@/lib/i18n";
-import { OFFER_PRODUCTS } from "@/lib/products";
+import { OFFER_PRODUCTS, productPhoto } from "@/lib/products";
 import { useSiteContent } from "@/lib/site-content";
 
 function money(value: number) {
   return value.toLocaleString("en-US");
 }
 
-function photoFor(id: string) {
-  return publicUrl(id === "case" ? `/card-photos/product-${id}.png` : `/showcase/${id}.png`);
-}
 
 export function CartDrawer() {
   const { t, lang } = useLang();
@@ -71,15 +69,22 @@ export function CartDrawer() {
         ) : (
           <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
             {rows.map(({ line, product, copy }) => (
-              <li key={line.id} className="flex gap-3 rounded-2xl border border-navy/10 p-3">
-                <img src={photoFor(line.id)} alt="" className="size-16 shrink-0 object-contain" />
+              // The whole card opens the product page and closes the cart; the quantity and remove buttons sit above the link.
+              <li key={line.id} className="group relative flex gap-3 rounded-2xl border border-navy/10 p-3 transition-colors hover:border-brand/40 hover:bg-brand/5">
+                <img src={productPhoto(product ?? { id: line.id })} alt="" className="size-16 shrink-0 object-contain" />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{copy?.name ?? line.id}</p>
+                  <Link
+                    href={`/${lang}/p/${encodeURIComponent(line.id)}`}
+                    onClick={() => setOpen(false)}
+                    className="block truncate text-sm font-semibold transition-colors group-hover:text-brand-ink after:absolute after:inset-0 after:rounded-2xl after:content-['']"
+                  >
+                    {copy?.name ?? line.id}
+                  </Link>
                   <p className="mt-1 text-sm font-bold text-brand-ink">
                     {product ? `${money(product.price)} ${t.deals.currency}` : ""}
                   </p>
-                  <div className="mt-2 flex items-center justify-between gap-2">
-                    <div className="inline-flex h-8 items-center rounded-full border border-navy/10">
+                  <div className="relative z-10 mt-2 flex items-center justify-between gap-2">
+                    <div className="inline-flex h-8 items-center rounded-full border border-navy/10 bg-white">
                       <button
                         type="button"
                         aria-label={t.deals.decrease}
@@ -116,6 +121,13 @@ export function CartDrawer() {
                 {money(total)} {t.deals.currency}
               </span>
             </p>
+            <Link
+              href={`/${lang}/checkout`}
+              onClick={() => setOpen(false)}
+              className="mt-4 inline-flex h-12 w-full items-center justify-center rounded-full bg-[#20C5D4] text-sm font-bold text-navy transition-colors hover:bg-brand-hover"
+            >
+              {CHECKOUT_COPY[lang].checkout}
+            </Link>
           </div>
         ) : null}
       </div>

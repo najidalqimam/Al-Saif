@@ -27,15 +27,15 @@ export function Inventory() {
     <div className="space-y-6">
       <PageHead
         title="المخزون"
-        lead="سجّل الكمية المتوفرة لكل منتج، واللوحة تنبهك لما تقل عن الحد اللي تحدده."
+        lead="الكمية المتوفرة لكل منتج، مع تنبيه لما تقل عن الحد."
         actions={
           <div className="w-44">
             <NumberField label="حد التنبيه (قطع)" value={ops.lowStock} onChange={(value) => setLowStock(value ?? 0)} />
           </div>
         }
       />
-      <DemoNote title="مخزون محلي">
-        الكميات تتحفظ على هذا الجهاز فقط وما تغيّر توفر المنتج في المتجر. ربط المخزون بالطلبات يتفعّل مع قاعدة البيانات.
+      <DemoNote title="تنبيه">
+        الكميات محفوظة في قاعدة البيانات. طلبات المتجر ما زالت تتحفظ في هذا المتصفح، فما تنقص الكمية ولا توقف البيع عند النفاد لحد ربط صفحة الدفع بالخادم.
       </DemoNote>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -65,9 +65,9 @@ export function Inventory() {
             {rows.map((item) => {
               const level = STOCK_LEVEL[levelOf(item.id)];
               return (
-                <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-3">
-                  <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-(--a-surface-2)">
-                    <ProductArt id={item.id} className="size-9" />
+                <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-2.5">
+                  <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-(--a-surface-2)">
+                    <ProductArt id={item.id} className="size-8" />
                   </span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium">{item.nameAr}</p>

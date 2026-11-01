@@ -1,8 +1,11 @@
 import { useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown } from "lucide-react";
+import { heroDefaultLink } from "@/components/site/Hero";
+import { categoryLabel, childCategories, rootDepartments } from "@/lib/catalog";
+import { translations } from "@/lib/i18n";
 import { useSiteContent } from "@/lib/site-content";
 import { cn, publicUrl } from "@/lib/utils";
-import { Badge, BilingualField, Button, Confirm, IconButton, Switch, num } from "./ui";
+import { Badge, BilingualField, Button, Confirm, IconButton, Select, Switch, num } from "./ui";
 
 // Same artwork order as the storefront hero.
 export const SLIDE_ART = ["/hero-visuals/console.png?v=4", "/hero-visuals/headset.png?v=6", "/hero-visuals/phone.png?v=4"];
@@ -14,6 +17,14 @@ export function SlidesEditor() {
   const [archiving, setArchiving] = useState<number | null>(null);
 
   const slides = content.hero.ar.map((slide, index) => ({ index, ar: slide, en: content.hero.en[index] }));
+  // Pages a slide's button can open: the offers page, then every department and the categories inside it.
+  const destinations: Array<[string, string]> = [["offers", "صفحة العروض"]];
+  for (const root of rootDepartments(content.categoryHidden)) {
+    destinations.push([`c/${root.slug}`, categoryLabel(root, "ar")]);
+    for (const child of childCategories(root.id, content.categoryHidden)) {
+      destinations.push([`c/${child.slug}`, `${categoryLabel(root, "ar")} ← ${categoryLabel(child, "ar")}`]);
+    }
+  }
   const active = slides.filter(({ index }) => !content.heroArchived.includes(index));
   const archived = slides.filter(({ index }) => content.heroArchived.includes(index));
 
@@ -71,6 +82,46 @@ export function SlidesEditor() {
                   onEn={(value) => updateHero("en", index, { lead: value })}
                   multiline
                 />
+
+                <div className="space-y-4 rounded-xl border border-(--a-line) bg-(--a-surface-2) p-3">
+                  <p className="text-xs font-medium text-(--a-muted)">الزرار</p>
+                  <BilingualField
+                    label="المكتوب على الزرار"
+                    ar={ar.primary ?? translations.ar.hero.slides[index]?.primary ?? ""}
+                    en={en.primary ?? translations.en.hero.slides[index]?.primary ?? ""}
+                    onAr={(value) => updateHero("ar", index, { primary: value })}
+                    onEn={(value) => updateHero("en", index, { primary: value })}
+                  />
+                  <Select
+                    label="الزرار يفتح"
+                    value={ar.link ?? heroDefaultLink(index)}
+                    options={destinations}
+                    onChange={(link) => {
+                      updateHero("ar", index, { link });
+                      updateHero("en", index, { link });
+                    }}
+                  />
+                </div>
+
+                <div className="space-y-4 rounded-xl border border-(--a-line) bg-(--a-surface-2) p-3">
+                  <p className="text-xs font-medium text-(--a-muted)">البطاقة تحت الزرار</p>
+                  <BilingualField
+                    label="عنوان البطاقة"
+                    ar={ar.offer ?? translations.ar.hero.slides[index]?.offer ?? ""}
+                    en={en.offer ?? translations.en.hero.slides[index]?.offer ?? ""}
+                    onAr={(value) => updateHero("ar", index, { offer: value })}
+                    onEn={(value) => updateHero("en", index, { offer: value })}
+                  />
+                  <BilingualField
+                    label="الجمل (كل جملة في سطر)"
+                    ar={(ar.points ?? translations.ar.hero.slides[index]?.points ?? []).join("\n")}
+                    en={(en.points ?? translations.en.hero.slides[index]?.points ?? []).join("\n")}
+                    onAr={(value) => updateHero("ar", index, { points: value.split("\n") })}
+                    onEn={(value) => updateHero("en", index, { points: value.split("\n") })}
+                    multiline
+                  />
+                  <p className="text-xs leading-6 text-(--a-muted)">لو فضّيت العنوان والجمل، البطاقة تختفي من الشريحة.</p>
+                </div>
               </div>
             ) : null}
           </article>

@@ -3,7 +3,7 @@ import { ProductArt } from "@/components/site/card-art";
 import { useSiteContent } from "@/lib/site-content";
 import { PAYMENT_LABELS, useOps } from "./ops";
 import { ORDER_STATUS, type OrderStatus } from "./orders";
-import { Badge, DemoNote, Empty, PageHead, Panel, StatCard, num, sar } from "./ui";
+import { Badge, Empty, PageHead, Panel, StatCard, num, sar } from "./ui";
 
 export function Reports() {
   const { content } = useSiteContent();
@@ -30,17 +30,16 @@ export function Reports() {
   return (
     <div className="space-y-6">
       <PageHead title="التقارير" lead="ملخص المبيعات حسب المنتج وطريقة الدفع والمنطقة." />
-      <DemoNote>كل الأرقام هنا محسوبة من الطلبات النموذجية. التقارير الحقيقية تظهر بعد ربط الطلبات بقاعدة البيانات.</DemoNote>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="صافي المبيعات" value={sar.format(sales)} note="بدون الطلبات الملغية" icon={Wallet} tone="accent" demo />
-        <StatCard label="متوسط قيمة الطلب" value={sar.format(average)} note={`من ${num.format(kept.length)} طلب`} icon={ReceiptText} tone="blue" demo />
-        <StatCard label="القطع المباعة" value={num.format(units)} note="مجموع الكميات" icon={BarChart3} tone="ok" demo />
-        <StatCard label="الطلبات الملغية" value={num.format(orders.length - kept.length)} note="غير محسوبة في المبيعات" icon={LineChart} tone="warn" demo />
+        <StatCard label="صافي المبيعات" value={sar.format(sales)} note="بدون الطلبات الملغية" icon={Wallet} tone="blue" />
+        <StatCard label="متوسط قيمة الطلب" value={sar.format(average)} note={`من ${num.format(kept.length)} طلب`} icon={ReceiptText} tone="blue" />
+        <StatCard label="القطع المباعة" value={num.format(units)} note="مجموع الكميات" icon={BarChart3} tone="ok" />
+        <StatCard label="الطلبات الملغية" value={num.format(orders.length - kept.length)} note="غير محسوبة في المبيعات" icon={LineChart} tone="warn" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">
-        <Panel className="xl:col-span-2" title="الأكثر مبيعًا" lead="حسب قيمة المبيعات" actions={<Badge tone="blue">تجريبي</Badge>}>
+        <Panel className="xl:col-span-2" title="الأكثر مبيعًا" lead="حسب قيمة المبيعات">
           {byProduct.length ? (
             <ul className="space-y-4 p-5">
               {byProduct.map(([id, row]) => (
@@ -54,7 +53,7 @@ export function Reports() {
                       <span className="shrink-0 tabular-nums">{sar.format(row.total)}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-(--a-surface-2)">
-                      <div className="h-full rounded-full bg-(--a-accent)" style={{ width: `${(row.total / topTotal) * 100}%` }} />
+                      <div className="h-full rounded-full bg-(--a-blue)" style={{ width: `${(row.total / topTotal) * 100}%` }} />
                     </div>
                     <p className="mt-1 text-xs text-(--a-muted)">{num.format(row.units)} قطعة</p>
                   </div>
@@ -67,7 +66,7 @@ export function Reports() {
         </Panel>
 
         <div className="space-y-6">
-          <Panel title="حسب طريقة الدفع" actions={<Badge tone="blue">تجريبي</Badge>}>
+          <Panel title="حسب طريقة الدفع">
             <ul className="divide-y divide-(--a-line)">
               {byMethod.map((row) => (
                 <li key={row.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
@@ -77,7 +76,7 @@ export function Reports() {
               ))}
             </ul>
           </Panel>
-          <Panel title="حسب المنطقة" actions={<Badge tone="blue">تجريبي</Badge>}>
+          <Panel title="حسب المنطقة">
             <ul className="divide-y divide-(--a-line)">
               {byZone.map((zone) => (
                 <li key={zone.id} className="flex items-center justify-between px-5 py-3.5 text-sm">
@@ -90,7 +89,7 @@ export function Reports() {
         </div>
       </div>
 
-      <Panel title="الطلبات حسب الحالة" actions={<Badge tone="blue">تجريبي</Badge>}>
+      <Panel title="الطلبات حسب الحالة">
         <div className="grid grid-cols-2 gap-px bg-(--a-line) sm:grid-cols-5">
           {(Object.keys(ORDER_STATUS) as OrderStatus[]).map((id) => (
             <div key={id} className="bg-(--a-surface) px-5 py-4">

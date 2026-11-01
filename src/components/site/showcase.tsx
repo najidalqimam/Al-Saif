@@ -5,7 +5,7 @@ import { Link } from "wouter";
 import { useCart } from "@/lib/cart";
 import { publicUrl } from "@/lib/utils";
 import { useLang } from "@/lib/i18n";
-import type { OfferProduct } from "@/lib/products";
+import { productPhoto, type OfferProduct } from "@/lib/products";
 
 type StageSize = "sm" | "md" | "lg" | "icon";
 
@@ -64,18 +64,20 @@ export function ProductCard({
   /** A visual copy (e.g. for a looping rail): hidden from assistive tech and skipped by Tab. */
   duplicate?: boolean;
 }) {
-  const { t } = useLang();
+  const { t, lang } = useLang();
   const { add } = useCart();
   const percent = Math.round((1 - product.price / product.compareAt) * 100);
 
-  const photo = publicUrl(product.id === "case" ? `/card-photos/product-${product.id}.png` : `/showcase/${product.id}.png`);
+  const photo = productPhoto(product);
 
   return (
     <article aria-hidden={duplicate || undefined} className="showcase-card offer-card product-card flex h-full flex-col rounded-[1.25rem] bg-white p-3 text-start text-navy">
       <div className="relative">
-        <span className="absolute start-2.5 top-2.5 z-10 rounded-lg bg-burgundy px-2 py-1 text-[11px] font-bold leading-none text-white">
-          {t.deals.discount.replace("{percent}", String(percent))}
-        </span>
+        {percent > 0 ? (
+          <span className="absolute start-2.5 top-2.5 z-10 rounded-lg bg-burgundy px-2 py-1 text-[11px] font-bold leading-none text-white">
+            {t.deals.discount.replace("{percent}", String(percent))}
+          </span>
+        ) : null}
         <div className="absolute end-2.5 top-2.5 z-20 flex flex-col gap-2">
           <button
             type="button"
@@ -118,14 +120,14 @@ export function ProductCard({
       <div className="mt-4 flex flex-1 flex-col px-1">
         <p className="line-clamp-1 text-xs font-medium text-ink-mute">{category}</p>
         <h3 className="mt-1 line-clamp-2 min-h-12 text-[0.9375rem] font-bold leading-6 text-navy">
-          <button
-            type="button"
+          {/* The whole card opens the product page; the eye button keeps the quick view. */}
+          <Link
+            href={`/${lang}/p/${encodeURIComponent(product.id)}`}
             tabIndex={duplicate ? -1 : undefined}
-            onClick={onOpen}
             className="card-open cursor-pointer text-start after:absolute after:inset-0 after:content-['']"
           >
             {name}
-          </button>
+          </Link>
         </h3>
 
         {product.rating > 0 ? (

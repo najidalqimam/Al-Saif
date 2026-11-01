@@ -6,13 +6,20 @@ import { Toaster } from "@/components/ui/sonner";
 import { LangProvider, type Lang } from "@/lib/i18n";
 import { queryClient } from "@/lib/query";
 import { CartProvider } from "@/lib/cart";
+import { CustomerProvider } from "@/lib/customer";
 import { FavoritesProvider } from "@/lib/favorites";
 import { SiteContentProvider } from "@/lib/site-content";
 import { AdminPage } from "@/pages/AdminPage";
 import { HomePage } from "@/pages/HomePage";
 import { CategoryPage } from "@/pages/CategoryPage";
+import { CheckoutPage } from "@/pages/CheckoutPage";
+import { OrderPage, TrackPage } from "@/pages/OrderPage";
 import { FavoritesPage } from "@/pages/FavoritesPage";
 import { OffersPage } from "@/pages/OffersPage";
+import { SearchPage } from "@/pages/SearchPage";
+import { AccountPage } from "@/pages/AccountPage";
+import { AuthPage } from "@/pages/AuthPage";
+import { ProductPage } from "@/pages/ProductPage";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -38,6 +45,7 @@ export default function App() {
       <ThemeProvider attribute="class" defaultTheme="dark" storageKey="al-saif-theme" enableSystem={false} enableColorScheme={false} disableTransitionOnChange>
         <ScrollToTop />
         <SiteContentProvider>
+        <CustomerProvider>
         <CartProvider>
         <FavoritesProvider>
         <Switch>
@@ -60,6 +68,36 @@ export default function App() {
               <OffersPage />
             </LangProvider>
           </Route>
+          <Route path="/ar/login">
+            <LangProvider lang="ar">
+              <AuthPage />
+            </LangProvider>
+          </Route>
+          <Route path="/ar/account">
+            <LangProvider lang="ar">
+              <AccountPage />
+            </LangProvider>
+          </Route>
+          <Route path="/en/login">
+            <LangProvider lang="en">
+              <AuthPage />
+            </LangProvider>
+          </Route>
+          <Route path="/en/account">
+            <LangProvider lang="en">
+              <AccountPage />
+            </LangProvider>
+          </Route>
+          <Route path="/ar/search">
+            <LangProvider lang="ar">
+              <SearchPage />
+            </LangProvider>
+          </Route>
+          <Route path="/en/search">
+            <LangProvider lang="en">
+              <SearchPage />
+            </LangProvider>
+          </Route>
           <Route path="/ar/favorites">
             <LangProvider lang="ar">
               <FavoritesPage />
@@ -69,6 +107,54 @@ export default function App() {
             <LangProvider lang="en">
               <FavoritesPage />
             </LangProvider>
+          </Route>
+          <Route path="/ar/checkout">
+            <LangProvider lang="ar">
+              <CheckoutPage />
+            </LangProvider>
+          </Route>
+          <Route path="/ar/track">
+            <LangProvider lang="ar">
+              <TrackPage />
+            </LangProvider>
+          </Route>
+          <Route path="/ar/order/:id">
+            {(params) => (
+              <LangProvider lang="ar">
+                <OrderPage id={params.id} />
+              </LangProvider>
+            )}
+          </Route>
+          <Route path="/en/checkout">
+            <LangProvider lang="en">
+              <CheckoutPage />
+            </LangProvider>
+          </Route>
+          <Route path="/en/track">
+            <LangProvider lang="en">
+              <TrackPage />
+            </LangProvider>
+          </Route>
+          <Route path="/en/order/:id">
+            {(params) => (
+              <LangProvider lang="en">
+                <OrderPage id={params.id} />
+              </LangProvider>
+            )}
+          </Route>
+          <Route path="/ar/p/:id">
+            {(params) => (
+              <LangProvider lang="ar">
+                <ProductPage id={params.id} />
+              </LangProvider>
+            )}
+          </Route>
+          <Route path="/en/p/:id">
+            {(params) => (
+              <LangProvider lang="en">
+                <ProductPage id={params.id} />
+              </LangProvider>
+            )}
           </Route>
           <Route path="/ar/c/:id">
             {(params) => (
@@ -96,6 +182,7 @@ export default function App() {
         </Switch>
         </FavoritesProvider>
         </CartProvider>
+        </CustomerProvider>
         </SiteContentProvider>
         <Toaster />
       </ThemeProvider>

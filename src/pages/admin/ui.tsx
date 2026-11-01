@@ -7,15 +7,19 @@ import { cn } from "@/lib/utils";
 
 export type IconType = ComponentType<{ className?: string }>;
 
-export const sar = new Intl.NumberFormat("ar-SA", { style: "currency", currency: "SAR", maximumFractionDigits: 0 });
-export const num = new Intl.NumberFormat("ar-SA");
+// Western digits everywhere in the dashboard, matching the storefront ("1,649 ر.س").
+const western = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+export const sar = { format: (value: number) => `${western.format(value)} ر.س` };
+export const num = new Intl.NumberFormat("en-US");
+/** Gregorian dates in Arabic with Western digits, e.g. "28 أكتوبر". */
+export const AR_DATE = "ar-SA-u-nu-latn-ca-gregory";
 
 export function PageHead({ title, lead, actions }: { title: string; lead?: string; actions?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        {lead ? <p className="mt-1 max-w-2xl text-sm leading-7 text-(--a-muted)">{lead}</p> : null}
+        {lead ? <p className="mt-1 max-w-3xl text-sm text-(--a-muted)">{lead}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
@@ -56,42 +60,41 @@ export function StatCard({
   value,
   note,
   icon: Icon,
-  tone = "accent",
-  demo,
+  tone = "blue",
   onClick,
 }: {
   label: string;
   value: string;
   note: string;
   icon: IconType;
+  /** ok = good, warn = needs attention, danger = problem, blue/accent = plain information. */
   tone?: "accent" | "blue" | "ok" | "warn" | "danger";
-  /** Marks numbers that come from sample data. */
+  /** Accepted for older call sites; the dashboard shows one demo notice at the top instead. */
   demo?: boolean;
   onClick?: () => void;
 }) {
   const tones = {
-    accent: "bg-(--a-accent-soft) text-(--a-accent-ink)",
+    accent: "bg-(--a-blue-soft) text-(--a-blue)",
     blue: "bg-(--a-blue-soft) text-(--a-blue)",
     ok: "bg-(--a-ok-soft) text-(--a-ok)",
     warn: "bg-(--a-warn-soft) text-(--a-warn)",
     danger: "bg-(--a-danger-soft) text-(--a-danger)",
   };
   const body = (
-    <>
-      <div className="flex items-center justify-between gap-3">
-        <span className={cn("grid size-11 shrink-0 place-items-center rounded-xl", tones[tone])}>
-          <Icon className="size-5" />
-        </span>
-        {demo ? <Badge tone="blue">تجريبي</Badge> : null}
+    <div className="flex items-start gap-3.5">
+      <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", tones[tone])}>
+        <Icon className="size-5" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[13px] text-(--a-muted)">{label}</p>
+        <p className="mt-0.5 text-2xl leading-8 font-bold tracking-tight tabular-nums">{value}</p>
+        <p className="mt-0.5 text-xs leading-5 text-(--a-muted)">{note}</p>
       </div>
-      <p className="mt-4 text-sm text-(--a-muted)">{label}</p>
-      <p className="mt-1 text-[1.65rem] leading-9 font-bold tracking-tight tabular-nums">{value}</p>
-      <p className="mt-1 text-xs leading-5 text-(--a-muted)">{note}</p>
-    </>
+    </div>
   );
-  const shell = "block w-full rounded-2xl border border-(--a-line) bg-(--a-surface) p-5 text-start shadow-(--a-shadow) transition duration-200";
+  const shell = "block w-full rounded-2xl border border-(--a-line) bg-(--a-surface) p-4 text-start shadow-(--a-shadow) transition duration-200";
   return onClick ? (
-    <button type="button" onClick={onClick} className={cn(shell, "hover:-translate-y-0.5 hover:border-(--a-accent)/40")}>
+    <button type="button" onClick={onClick} className={cn(shell, "hover:border-(--a-blue)/40")}>
       {body}
     </button>
   ) : (
@@ -191,7 +194,7 @@ export function NumberField({
 export function Badge({ tone = "muted", children }: { tone?: "muted" | "accent" | "blue" | "ok" | "warn" | "danger"; children: ReactNode }) {
   const tones = {
     muted: "bg-(--a-surface-2) text-(--a-muted)",
-    accent: "bg-(--a-accent-soft) text-(--a-accent-ink)",
+    accent: "bg-(--a-blue-soft) text-(--a-blue)",
     blue: "bg-(--a-blue-soft) text-(--a-blue)",
     ok: "bg-(--a-ok-soft) text-(--a-ok)",
     warn: "bg-(--a-warn-soft) text-(--a-warn)",
@@ -205,12 +208,16 @@ export function Switch({
   onChange,
   label,
   disabled,
+  size = "md",
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   label: string;
   disabled?: boolean;
+  /** sm for rows in tables and lists, so the switches stay quieter than the names and prices. */
+  size?: "sm" | "md";
 }) {
+  const small = size === "sm";
   return (
     <SwitchPrimitive.Root
       checked={checked}
@@ -219,9 +226,17 @@ export function Switch({
       aria-label={label}
       title={label}
       dir="ltr"
-      className="relative inline-flex h-6 w-11 shrink-0 items-center rounded-full bg-(--a-surface-2) ring-1 ring-(--a-line) transition-colors data-[state=checked]:bg-(--a-accent) data-[state=checked]:ring-transparent disabled:cursor-not-allowed disabled:opacity-40"
+      className={cn(
+        "relative inline-flex shrink-0 items-center rounded-full bg-(--a-surface-2) ring-1 ring-(--a-line) transition-colors data-[state=checked]:bg-(--a-blue) data-[state=checked]:ring-transparent disabled:cursor-not-allowed disabled:opacity-40",
+        small ? "h-5 w-9" : "h-6 w-11",
+      )}
     >
-      <SwitchPrimitive.Thumb className="block size-5 translate-x-0.5 rounded-full bg-white shadow transition-transform data-[state=checked]:translate-x-[22px]" />
+      <SwitchPrimitive.Thumb
+        className={cn(
+          "block translate-x-0.5 rounded-full bg-white shadow transition-transform",
+          small ? "size-4 data-[state=checked]:translate-x-[18px]" : "size-5 data-[state=checked]:translate-x-[22px]",
+        )}
+      />
     </SwitchPrimitive.Root>
   );
 }
@@ -274,7 +289,7 @@ export function IconButton({ icon: Icon, label, onClick, tone = "muted" }: { ico
       title={label}
       className={cn(
         "grid size-9 place-items-center rounded-lg transition",
-        tone === "danger" ? "text-(--a-danger) hover:bg-(--a-danger-soft)" : "text-(--a-muted) hover:bg-(--a-surface-2) hover:text-(--a-text)",
+        tone === "danger" ? "text-(--a-muted) hover:bg-(--a-danger-soft) hover:text-(--a-danger)" : "text-(--a-muted) hover:bg-(--a-surface-2) hover:text-(--a-text)",
       )}
     >
       <Icon className="size-4" />
@@ -419,7 +434,7 @@ export function Confirm({
   );
 }
 
-const control =
+export const control =
   "w-full rounded-xl border border-(--a-line) bg-(--a-bg) px-3 text-sm outline-none placeholder:text-(--a-muted) focus:border-(--a-accent) disabled:opacity-60";
 
 export function Field({

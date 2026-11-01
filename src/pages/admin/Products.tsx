@@ -1,8 +1,14 @@
-import { useState } from "react";
-import { Archive, ArchiveRestore, PackageSearch, Pencil, Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Archive, ArchiveRestore, ArrowRight, ChevronDown, ExternalLink, ImagePlus, PackageSearch, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
-import { useSiteContent, type ProductRow } from "@/lib/site-content";
-import { Badge, BilingualField, Button, Confirm, Drawer, Empty, Field, IconButton, PageHead, Panel, PendingNote, SearchBox, Switch, Tabs, num, sar } from "./ui";
+import { categoryById, categoryTrail } from "@/lib/catalog";
+import { apiMessage } from "@/lib/api";
+import { offerDetail } from "@/lib/offer-details";
+import { useSiteContent, type NewProduct, type ProductRow, type ProductSpec } from "@/lib/site-content";
+import { cn } from "@/lib/utils";
+import { departmentTree, productCategoryOf, productInCategory } from "@/lib/product-categories";
+import { onHashMove, pushHash, readHash, replaceHash } from "./nav";
+import { Badge, BilingualField, Button, Confirm, Drawer, Empty, Field, IconButton, PageHead, Panel, SearchBox, Select, Switch, Tabs, control, num, sar } from "./ui";
 
 type Filter = "all" | "live" | "hidden" | "archived";
 
@@ -10,11 +16,38 @@ export function Products() {
   const { content, updateProduct } = useSiteContent();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
-  const [editing, setEditing] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  // The departments page links here as #products/<category>, optionally with /add or /edit-<id>.
+  const [link] = useState(() => {
+    const [linked = "", action = ""] = (readHash().view === "products" ? (readHash().sub ?? "") : "").split("/");
+    return { category: linked && categoryById(linked) ? linked : "all", action };
+  });
+  const [category, setCategory] = useState(link.category);
+  const [editing, setEditing] = useState<string | null>(link.action.startsWith("edit-") ? link.action.slice(5) : null);
+  // Editing a product is its own page (#products/<category>/edit-<id>), so the back gesture returns to the list.
+  useEffect(
+    () =>
+      onHashMove(() => {
+        const { view, sub } = readHash();
+        if (view !== "products") return;
+        const action = (sub ?? "").split("/")[1] ?? "";
+        setEditing(action.startsWith("edit-") ? action.slice(5) : null);
+      }),
+    [],
+  );
+  const openEditor = (id: string) => {
+    setEditing(id);
+    pushHash("products", `${category}/edit-${id}`);
+    window.scrollTo(0, 0);
+  };
+  const closeEditor = () => {
+    setEditing(null);
+    pushHash("products", category === "all" ? null : category);
+  };
+  const [adding, setAdding] = useState(link.action === "add");
   const [archiving, setArchiving] = useState<ProductRow | null>(null);
 
-  const products = content.products;
+  const inCategory = (item: ProductRow) => category === "all" || productInCategory(item, category);
+  const products = content.products.filter(inCategory);
   const counts = {
     all: products.filter((item) => !item.archived).length,
     live: products.filter((item) => !item.archived && !item.hidden).length,
@@ -29,13 +62,15 @@ export function Products() {
     if (needle && ![item.nameAr, item.nameEn, item.categoryAr, item.categoryEn, item.id].some((text) => text.toLowerCase().includes(needle))) return false;
     return true;
   });
-  const current = products.find((item) => item.id === editing) ?? null;
+  const current = content.products.find((item) => item.id === editing) ?? null;
+
+  if (current) return <ProductEditor product={current} onBack={closeEditor} />;
 
   return (
     <div className="space-y-6">
       <PageHead
         title="المنتجات"
-        lead="الأسعار والأسماء والظهور في المتجر. أي تعديل يتحفظ مباشرة ويظهر على الموقع."
+        lead="الأسعار والأسماء والظهور في المتجر، والتعديل يظهر على الموقع مباشرة."
         actions={
           <Button variant="primary" icon={Plus} onClick={() => setAdding(true)}>
             إضافة منتج
@@ -55,7 +90,22 @@ export function Products() {
           ]}
         />
         <SearchBox value={query} onChange={setQuery} placeholder="ابحث باسم المنتج أو القسم" />
+        <CategoryFilter products={content.products} hidden={content.categoryHidden} added={content.addedCategories.map((item) => item.id)} value={category} onChange={setCategory} />
       </div>
+      {category !== "all" ? (
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-(--a-muted)">القسم:</span>
+          <span className="inline-flex items-center gap-1 rounded-full border border-(--a-blue)/40 bg-(--a-blue-soft) py-1 ps-3 pe-1 font-medium text-(--a-blue)">
+            {categoryTrail(category)
+              .map((item) => item.nameAr)
+              .join(" › ")}
+            <button type="button" onClick={() => setCategory("all")} aria-label="عرض كل الأقسام" className="grid size-6 place-items-center rounded-full hover:bg-(--a-blue-soft)">
+              <X className="size-3.5" />
+            </button>
+          </span>
+          <span className="text-xs text-(--a-muted)">{num.format(rows.length)} منتج</span>
+        </div>
+      ) : null}
 
       <Panel>
         {rows.length ? (
@@ -63,12 +113,12 @@ export function Products() {
             <table className="w-full min-w-[760px] text-sm">
               <thead>
                 <tr className="text-xs text-(--a-muted)">
-                  <th className="px-5 py-3 text-start font-medium">المنتج</th>
-                  <th className="px-5 py-3 text-start font-medium">السعر</th>
-                  <th className="px-5 py-3 text-start font-medium">التقييم</th>
-                  <th className="px-5 py-3 text-start font-medium">معروض</th>
-                  <th className="px-5 py-3 text-start font-medium">عروض الرئيسية</th>
-                  <th className="px-5 py-3 text-end font-medium">إجراءات</th>
+                  <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">المنتج</th>
+                  <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">السعر</th>
+                  <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">التقييم</th>
+                  <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">معروض</th>
+                  <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">عروض الرئيسية</th>
+                  <th className="px-4 py-2 first:ps-5 last:pe-5 text-end font-medium">إجراءات</th>
                 </tr>
               </thead>
               <tbody>
@@ -76,39 +126,43 @@ export function Products() {
                   const off = item.compareAt > item.price ? Math.round((1 - item.price / item.compareAt) * 100) : 0;
                   return (
                     <tr key={item.id} className="border-t border-(--a-line) transition hover:bg-(--a-surface-2)/50">
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-2 first:ps-5 last:pe-5">
                         <div className="flex items-center gap-3">
-                          <span className="grid size-12 shrink-0 place-items-center rounded-xl bg-(--a-surface-2)">
-                            <ProductArt id={item.id} className="size-10" />
+                          <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-(--a-surface-2)">
+                            <ProductArt id={item.id} className="size-8" />
                           </span>
                           <div className="min-w-0">
-                            <p className="line-clamp-1 font-medium">{item.nameAr}</p>
+                            <p className="flex items-center gap-1.5">
+                              <span className="line-clamp-1 font-medium">{item.nameAr}</span>
+                              {item.source === "demo" ? <Badge tone="blue">تجريبي</Badge> : item.source === "added" ? <Badge tone="accent">مضاف</Badge> : null}
+                            </p>
                             <p className="line-clamp-1 text-xs text-(--a-muted)">{item.categoryAr}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-2 first:ps-5 last:pe-5">
                         <p className="font-medium tabular-nums">{sar.format(item.price)}</p>
                         <div className="mt-0.5 flex items-center gap-1.5">
                           {item.compareAt > item.price ? <s className="text-xs text-(--a-muted) tabular-nums">{sar.format(item.compareAt)}</s> : null}
                           {off ? <Badge tone="accent">-{num.format(off)}٪</Badge> : null}
                         </div>
                       </td>
-                      <td className="px-5 py-3 tabular-nums text-(--a-muted)">
-                        ★ {item.rating.toLocaleString("ar-SA")} · {num.format(item.reviews)}
+                      <td className="px-4 py-2 first:ps-5 last:pe-5 tabular-nums text-(--a-muted)">
+                        {item.rating > 0 ? `★ ${item.rating.toFixed(1)} · ${num.format(item.reviews)}` : "—"}
                       </td>
-                      <td className="px-5 py-3">
-                        <Switch checked={!item.hidden} disabled={item.archived} label={`إظهار ${item.nameAr} في المتجر`} onChange={(next) => updateProduct(item.id, { hidden: !next })} />
+                      <td className="px-4 py-2 first:ps-5 last:pe-5">
+                        <Switch size="sm" checked={!item.hidden} disabled={item.archived} label={`إظهار ${item.nameAr} في المتجر`} onChange={(next) => updateProduct(item.id, { hidden: !next })} />
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-2 first:ps-5 last:pe-5">
                         <Switch
+                          size="sm"
                           checked={item.onHome}
                           disabled={item.archived || item.hidden}
                           label={`إظهار ${item.nameAr} في عروض الرئيسية`}
                           onChange={(next) => updateProduct(item.id, { onHome: next })}
                         />
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-2 first:ps-5 last:pe-5">
                         <div className="flex justify-end gap-1">
                           {item.archived ? (
                             <Button icon={ArchiveRestore} onClick={() => updateProduct(item.id, { archived: false })}>
@@ -116,7 +170,7 @@ export function Products() {
                             </Button>
                           ) : (
                             <>
-                              <IconButton icon={Pencil} label={`تعديل ${item.nameAr}`} onClick={() => setEditing(item.id)} />
+                              <IconButton icon={Pencil} label={`تعديل ${item.nameAr}`} onClick={() => openEditor(item.id)} />
                               <IconButton icon={Archive} label={`حذف ${item.nameAr}`} tone="danger" onClick={() => setArchiving(item)} />
                             </>
                           )}
@@ -129,72 +183,24 @@ export function Products() {
             </table>
           </div>
         ) : (
-          <Empty icon={PackageSearch} title="ما فيه منتجات هنا" lead={filter === "archived" ? "المنتجات المحذوفة تنتقل للأرشيف وتقدر تسترجعها." : "جرّب كلمة بحث ثانية أو غيّر الفلتر."} />
+          <Empty icon={PackageSearch} title="ما فيه منتجات هنا" lead={category !== "all" && !needle ? "ما فيه منتجات بهذي الحالة في هذا القسم. غيّر التبويب أو اختر قسم ثاني." : filter === "archived" ? "المنتجات المحذوفة تنتقل للأرشيف وتقدر تسترجعها." : "جرّب كلمة بحث ثانية أو غيّر الفلتر."} />
         )}
       </Panel>
 
-      <Drawer
-        open={current !== null}
-        onClose={() => setEditing(null)}
-        title={current ? `تعديل: ${current.nameAr}` : ""}
-        lead="التعديل يتحفظ تلقائيًا ويظهر على الموقع."
-        footer={<Button variant="primary" onClick={() => setEditing(null)}>تم</Button>}
-      >
-        {current ? (
-          <div className="space-y-5">
-            <div className="grid place-items-center rounded-2xl bg-(--a-surface-2) py-6">
-              <ProductArt id={current.id} className="size-32" />
-            </div>
-            <BilingualField
-              label="اسم المنتج"
-              ar={current.nameAr}
-              en={current.nameEn}
-              onAr={(value) => updateProduct(current.id, { nameAr: value })}
-              onEn={(value) => updateProduct(current.id, { nameEn: value })}
-            />
-            <BilingualField
-              label="القسم"
-              ar={current.categoryAr}
-              en={current.categoryEn}
-              onAr={(value) => updateProduct(current.id, { categoryAr: value })}
-              onEn={(value) => updateProduct(current.id, { categoryEn: value })}
-            />
-            <div className="grid gap-3 sm:grid-cols-2">
-              <PriceField label="السعر (ر.س)" value={current.price} onChange={(value) => updateProduct(current.id, { price: value })} />
-              <PriceField label="السعر قبل الخصم (ر.س)" value={current.compareAt} onChange={(value) => updateProduct(current.id, { compareAt: value })} />
-            </div>
-            <div className="space-y-3 rounded-xl border border-(--a-line) p-4">
-              <ToggleRow label="معروض في المتجر" checked={!current.hidden} onChange={(next) => updateProduct(current.id, { hidden: !next })} />
-              <ToggleRow label="في عروض الصفحة الرئيسية" checked={current.onHome} disabled={current.hidden} onChange={(next) => updateProduct(current.id, { onHome: next })} />
-            </div>
-          </div>
-        ) : null}
-      </Drawer>
 
-      <Drawer
+      <AddProduct
         open={adding}
-        onClose={() => setAdding(false)}
-        title="إضافة منتج"
-        footer={
-          <>
-            <Button onClick={() => setAdding(false)}>إلغاء</Button>
-            <Button variant="primary" disabled>
-              حفظ المنتج
-            </Button>
-          </>
-        }
-      >
-        <PendingNote />
-        <div className="space-y-5">
-          <BilingualField label="اسم المنتج" ar="" en="" onAr={() => {}} onEn={() => {}} disabled />
-          <BilingualField label="القسم" ar="" en="" onAr={() => {}} onEn={() => {}} disabled />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Field label="السعر (ر.س)" value="" onChange={() => {}} disabled />
-            <Field label="السعر قبل الخصم (ر.س)" value="" onChange={() => {}} disabled />
-          </div>
-          <Field label="صورة المنتج" value="" onChange={() => {}} placeholder="رفع الصورة إلى Supabase Storage" disabled />
-        </div>
-      </Drawer>
+        onClose={() => {
+          setAdding(false);
+          // Drop the one-off /add or /edit from a link so a refresh doesn't reopen the form.
+          if (link.action) replaceHash("products", category === "all" ? null : category);
+        }}
+        defaultCategory={category === "all" ? null : category}
+        onAdded={() => {
+          setFilter("all");
+          setQuery("");
+        }}
+      />
 
       <Confirm
         open={archiving !== null}
@@ -228,6 +234,378 @@ export function ToggleRow({ label, checked, onChange, disabled }: { label: strin
     <div className="flex items-center justify-between gap-3">
       <span className="text-sm">{label}</span>
       <Switch checked={checked} onChange={onChange} label={label} disabled={disabled} />
+    </div>
+  );
+}
+
+/** Store departments in the same order as the storefront menu; subcategories that hold products or were added from the dashboard sit under their department. */
+function CategoryFilter({
+  products,
+  hidden,
+  added,
+  value,
+  onChange,
+}: {
+  products: ProductRow[];
+  hidden: string[];
+  added: string[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  const count = (id: string) => products.filter((item) => !item.archived && productInCategory(item, id)).length;
+  const shown = (id: string) => added.includes(id) || products.some((item) => productInCategory(item, id));
+  const options = departmentTree(hidden).filter((item) => item.level === 1 || shown(item.id));
+  const active = value !== "all" && categoryById(value) !== null;
+
+  return (
+    <label className="relative block w-full sm:w-64">
+      <span className="sr-only">القسم</span>
+      <select
+        value={active ? value : "all"}
+        onChange={(event) => onChange(event.target.value)}
+        className={cn(
+          "h-10 w-full appearance-none rounded-xl border bg-(--a-surface) ps-3 pe-9 text-sm outline-none focus:border-(--a-accent)",
+          active ? "border-(--a-blue) font-medium text-(--a-blue)" : "border-(--a-line)",
+        )}
+      >
+        <option value="all">كل الأقسام ({num.format(products.filter((item) => !item.archived).length)})</option>
+        {options.map((item) => (
+          <option key={item.id} value={item.id}>
+            {"\u00a0\u00a0\u00a0".repeat(item.level - 1)}
+            {item.nameAr} ({num.format(count(item.id))})
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute inset-y-0 end-3 my-auto size-4 text-(--a-muted)" />
+    </label>
+  );
+}
+
+/** Reads an image file and shrinks it to at most 600px so it stays small enough to save in the browser. */
+function ImagePicker({ label, onPick }: { label: string; onPick: (dataUrl: string) => void }) {
+  const [error, setError] = useState("");
+
+  function read(file: File | undefined) {
+    setError("");
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("اختر ملف صورة (PNG أو JPG أو WebP).");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const image = new Image();
+      image.onload = () => {
+        const scale = Math.min(1, 600 / Math.max(image.width, image.height));
+        const canvas = document.createElement("canvas");
+        canvas.width = Math.max(1, Math.round(image.width * scale));
+        canvas.height = Math.max(1, Math.round(image.height * scale));
+        canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+        onPick(canvas.toDataURL("image/webp", 0.85));
+      };
+      image.onerror = () => setError("ما قدرنا نقرأ الصورة. جرّب ملف ثاني.");
+      image.src = String(reader.result);
+    };
+    reader.readAsDataURL(file);
+  }
+
+  return (
+    <div className="text-center">
+      <label className="inline-flex h-9 cursor-pointer items-center gap-2 rounded-xl border border-(--a-line) bg-(--a-surface) px-3 text-sm font-medium hover:bg-(--a-surface-2)">
+        <ImagePlus className="size-4" />
+        {label}
+        <input type="file" accept="image/*" className="sr-only" onChange={(event) => read(event.target.files?.[0])} />
+      </label>
+      {error ? <p className="mt-2 text-xs text-(--a-danger)">{error}</p> : null}
+    </div>
+  );
+}
+
+const EMPTY_PRODUCT: NewProduct = { nameAr: "", nameEn: "", categoryAr: "", categoryEn: "", categoryId: undefined, price: 0, compareAt: 0, image: undefined, hidden: false, onHome: false };
+
+/** New product form; the product is saved with the site content and shows in its department right away. */
+function AddProduct({ open, onClose, onAdded, defaultCategory }: { open: boolean; onClose: () => void; onAdded: () => void; defaultCategory: string | null }) {
+  const { content, addProduct } = useSiteContent();
+  const [form, setForm] = useState<NewProduct>(EMPTY_PRODUCT);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const set = (patch: Partial<NewProduct>) => setForm((current) => ({ ...current, ...patch }));
+  const tree = departmentTree(content.categoryHidden);
+  const ready = form.nameAr.trim() !== "" && form.nameEn.trim() !== "" && form.price > 0 && Boolean(form.categoryId);
+
+  useEffect(() => {
+    if (open) {
+      setForm({ ...EMPTY_PRODUCT, categoryId: defaultCategory ?? undefined, ...labelsFor(defaultCategory) });
+      setError("");
+    }
+  }, [open, defaultCategory]);
+
+  function labelsFor(id: string | null | undefined) {
+    const found = id ? categoryById(id) : null;
+    return found ? { categoryAr: found.nameAr, categoryEn: found.nameEn } : {};
+  }
+
+  async function save() {
+    if (!ready || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await addProduct({
+        ...form,
+        nameAr: form.nameAr.trim(),
+        nameEn: form.nameEn.trim(),
+        compareAt: form.compareAt > form.price ? form.compareAt : form.price,
+      });
+      onAdded();
+      onClose();
+    } catch (failure) {
+      setError(apiMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Drawer
+      open={open}
+      onClose={onClose}
+      title="إضافة منتج"
+      lead="المنتج يظهر في قسمه في الموقع أول ما تحفظه."
+      footer={
+        <>
+          <Button onClick={onClose}>إلغاء</Button>
+          <Button variant="primary" icon={Plus} onClick={save} disabled={!ready || saving}>
+            {saving ? "جاري الحفظ…" : "حفظ المنتج"}
+          </Button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <div className="grid place-items-center gap-3 rounded-2xl bg-(--a-surface-2) py-6">
+          {form.image ? <img src={form.image} alt="" className="size-32 object-contain" /> : <span className="grid size-32 place-items-center rounded-2xl border border-dashed border-(--a-line) text-xs text-(--a-muted)">بدون صورة</span>}
+          <ImagePicker label={form.image ? "تغيير الصورة" : "رفع صورة المنتج"} onPick={(image) => set({ image })} />
+        </div>
+        <BilingualField label="اسم المنتج" ar={form.nameAr} en={form.nameEn} onAr={(nameAr) => set({ nameAr })} onEn={(nameEn) => set({ nameEn })} />
+        <Select
+          label="القسم في المتجر"
+          value={form.categoryId ?? ""}
+          onChange={(categoryId) => set({ categoryId: categoryId || undefined, ...labelsFor(categoryId) })}
+          options={[["", "اختر القسم"], ...tree.map((item): [string, string] => [item.id, `${"\u00a0\u00a0\u00a0".repeat(item.level - 1)}${item.nameAr}`])]}
+        />
+        <BilingualField
+          label="اسم القسم الظاهر على المنتج"
+          ar={form.categoryAr}
+          en={form.categoryEn}
+          onAr={(categoryAr) => set({ categoryAr })}
+          onEn={(categoryEn) => set({ categoryEn })}
+        />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <PriceField label="السعر (ر.س)" value={form.price} onChange={(price) => set({ price })} />
+          <PriceField label="السعر قبل الخصم (ر.س، اختياري)" value={form.compareAt} onChange={(compareAt) => set({ compareAt })} />
+        </div>
+        <div className="space-y-3 rounded-xl border border-(--a-line) p-4">
+          <ToggleRow label="معروض في المتجر" checked={!form.hidden} onChange={(next) => set({ hidden: !next })} />
+          <ToggleRow label="في عروض الصفحة الرئيسية" checked={form.onHome} disabled={form.hidden} onChange={(onHome) => set({ onHome })} />
+        </div>
+        {error ? (
+          <p role="alert" className="text-sm text-(--a-danger)">
+            {error}
+          </p>
+        ) : null}
+        <p className="text-xs leading-6 text-(--a-muted)">المنتج يتحفظ في قاعدة بيانات المتجر. الحقول المطلوبة: الاسم بالعربي والإنجليزي، القسم، والسعر.</p>
+      </div>
+    </Drawer>
+  );
+}
+
+type Lang = "ar" | "en";
+const LANGS: Lang[] = ["ar", "en"];
+
+/** Product page copy: description, highlights and the spec table, in both languages. */
+function ProductPageFields({ product }: { product: ProductRow }) {
+  const { updateProduct } = useSiteContent();
+  // The lists are drafts kept here, so a half-typed row survives the server's answer; only complete rows are saved.
+  const [features, setFeatures] = useState<Record<Lang, string[]>>(() => ({
+    ar: product.featuresAr ?? offerDetail("ar", product.id)?.features ?? [],
+    en: product.featuresEn ?? offerDetail("en", product.id)?.features ?? [],
+  }));
+  const [specs, setSpecs] = useState<Record<Lang, ProductSpec[]>>(() => ({
+    ar: product.specsAr ?? offerDetail("ar", product.id)?.specs.map(([label, value]) => ({ label, value })) ?? [],
+    en: product.specsEn ?? offerDetail("en", product.id)?.specs.map(([label, value]) => ({ label, value })) ?? [],
+  }));
+
+  function saveFeatures(lang: Lang, list: string[]) {
+    setFeatures((current) => ({ ...current, [lang]: list }));
+    const clean = list.map((item) => item.trim()).filter(Boolean);
+    updateProduct(product.id, lang === "ar" ? { featuresAr: clean } : { featuresEn: clean });
+  }
+
+  function saveSpecs(lang: Lang, list: ProductSpec[]) {
+    setSpecs((current) => ({ ...current, [lang]: list }));
+    const clean = list.map((row) => ({ label: row.label.trim(), value: row.value.trim() })).filter((row) => row.label && row.value);
+    updateProduct(product.id, lang === "ar" ? { specsAr: clean } : { specsEn: clean });
+  }
+
+  return (
+    <div className="space-y-5">
+
+      <BilingualField
+        label="وصف المنتج (اختياري)"
+        ar={product.descriptionAr ?? ""}
+        en={product.descriptionEn ?? ""}
+        onAr={(value) => updateProduct(product.id, { descriptionAr: value })}
+        onEn={(value) => updateProduct(product.id, { descriptionEn: value })}
+        multiline
+      />
+
+      <div>
+        <p className="mb-2 text-xs font-medium text-(--a-muted)">أبرز التفاصيل</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {LANGS.map((lang) => (
+            <div key={lang} dir={lang === "ar" ? "rtl" : "ltr"} className="space-y-2">
+              <LangTag lang={lang} />
+              {features[lang].map((item, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    value={item}
+                    onChange={(event) => saveFeatures(lang, features[lang].map((old, at) => (at === index ? event.target.value : old)))}
+                    placeholder={lang === "ar" ? "مثال: ضمان محلي لمدة سنتين" : "e.g. Two-year local warranty"}
+                    className={cn(control, "h-10")}
+                  />
+                  <IconButton icon={Trash2} tone="danger" label="حذف السطر" onClick={() => saveFeatures(lang, features[lang].filter((_, at) => at !== index))} />
+                </div>
+              ))}
+              <Button icon={Plus} onClick={() => setFeatures((current) => ({ ...current, [lang]: [...current[lang], ""] }))}>
+                إضافة سطر
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <p className="mb-2 text-xs font-medium text-(--a-muted)">بيانات المنتج (جدول المواصفات)</p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {LANGS.map((lang) => (
+            <div key={lang} dir={lang === "ar" ? "rtl" : "ltr"} className="space-y-2">
+              <LangTag lang={lang} />
+              {specs[lang].map((row, index) => (
+                <div key={index} className="flex items-center gap-2">
+                  <input
+                    value={row.label}
+                    onChange={(event) => saveSpecs(lang, specs[lang].map((old, at) => (at === index ? { ...old, label: event.target.value } : old)))}
+                    placeholder={lang === "ar" ? "البند" : "Label"}
+                    aria-label={lang === "ar" ? "البند" : "Label"}
+                    className={cn(control, "h-10 w-2/5")}
+                  />
+                  <input
+                    value={row.value}
+                    onChange={(event) => saveSpecs(lang, specs[lang].map((old, at) => (at === index ? { ...old, value: event.target.value } : old)))}
+                    placeholder={lang === "ar" ? "القيمة" : "Value"}
+                    aria-label={lang === "ar" ? "القيمة" : "Value"}
+                    className={cn(control, "h-10 flex-1")}
+                  />
+                  <IconButton icon={Trash2} tone="danger" label="حذف الصف" onClick={() => saveSpecs(lang, specs[lang].filter((_, at) => at !== index))} />
+                </div>
+              ))}
+              <Button icon={Plus} onClick={() => setSpecs((current) => ({ ...current, [lang]: [...current[lang], { label: "", value: "" }] }))}>
+                إضافة صف
+              </Button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LangTag({ lang }: { lang: Lang }) {
+  return (
+    <span className={cn("inline-block rounded px-1.5 py-px text-[10px] font-semibold", lang === "en" ? "bg-(--a-blue-soft) text-(--a-blue)" : "bg-(--a-accent-soft) text-(--a-accent-ink)")}>
+      {lang === "en" ? "EN" : "AR"}
+    </span>
+  );
+}
+
+/** Full-page product editor: basic details and visibility, the photo, and the product page copy. */
+function ProductEditor({ product, onBack }: { product: ProductRow; onBack: () => void }) {
+  const { content, updateProduct } = useSiteContent();
+  const update = (patch: Partial<ProductRow>) => updateProduct(product.id, patch);
+
+  return (
+    <div className="space-y-6">
+      <Button icon={ArrowRight} onClick={onBack}>
+        رجوع للمنتجات
+      </Button>
+      <PageHead
+        title={`تعديل: ${product.nameAr}`}
+        lead="التعديل يتحفظ تلقائيًا ويظهر على الموقع."
+        actions={
+          <a
+            href={`/ar/p/${encodeURIComponent(product.id)}`}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex h-10 items-center gap-2 rounded-xl border border-(--a-line) bg-(--a-surface) px-4 text-sm font-medium hover:bg-(--a-surface-2)"
+          >
+            <ExternalLink className="size-4" />
+            عرض صفحة المنتج
+          </a>
+        }
+      />
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-6">
+          <Panel title="البيانات الأساسية">
+            <div className="space-y-5 p-5">
+              <BilingualField label="اسم المنتج" ar={product.nameAr} en={product.nameEn} onAr={(nameAr) => update({ nameAr })} onEn={(nameEn) => update({ nameEn })} />
+              <Select
+                label="القسم في المتجر"
+                value={productCategoryOf(product) ?? ""}
+                onChange={(categoryId) => update({ categoryId })}
+                options={[
+                  ...(productCategoryOf(product) ? [] : ([["", "بدون قسم"]] as Array<[string, string]>)),
+                  ...departmentTree(content.categoryHidden).map((item): [string, string] => [item.id, `${"\u00a0\u00a0\u00a0".repeat(item.level - 1)}${item.nameAr}`]),
+                ]}
+              />
+              <BilingualField
+                label="اسم القسم الظاهر على المنتج"
+                ar={product.categoryAr}
+                en={product.categoryEn}
+                onAr={(categoryAr) => update({ categoryAr })}
+                onEn={(categoryEn) => update({ categoryEn })}
+              />
+              <div className="grid gap-3 sm:grid-cols-2">
+                <PriceField label="السعر (ر.س)" value={product.price} onChange={(price) => update({ price })} />
+                <PriceField label="السعر قبل الخصم (ر.س)" value={product.compareAt} onChange={(compareAt) => update({ compareAt })} />
+              </div>
+            </div>
+          </Panel>
+
+          <Panel title="صفحة المنتج" lead="اللي يظهر للعميل لما يفتح صفحة المنتج. الأسطر الفاضية ما تتحفظ.">
+            <div className="p-5">
+              <ProductPageFields key={product.id} product={product} />
+            </div>
+          </Panel>
+        </div>
+
+        <div className="space-y-6 lg:sticky lg:top-24">
+          <Panel title="الصورة">
+            <div className="grid place-items-center gap-3 p-5">
+              <div className="grid w-full place-items-center rounded-2xl bg-(--a-surface-2) py-6">
+                <ProductArt id={product.id} className="size-40" />
+              </div>
+              <ImagePicker label={product.image || !product.source ? "تغيير الصورة" : "إضافة صورة"} onPick={(image) => update({ image })} />
+              <p className="text-center text-xs leading-6 text-(--a-muted)">PNG أو JPG أو WebP. الصورة تتصغّر تلقائيًا، وأفضل تكون بخلفية بيضاء أو شفافة.</p>
+            </div>
+          </Panel>
+          <Panel title="الظهور">
+            <div className="space-y-3 p-5">
+              <ToggleRow label="معروض في المتجر" checked={!product.hidden} onChange={(next) => update({ hidden: !next })} />
+              <ToggleRow label="في عروض الصفحة الرئيسية" checked={product.onHome} disabled={product.hidden} onChange={(onHome) => update({ onHome })} />
+            </div>
+          </Panel>
+        </div>
+      </div>
     </div>
   );
 }

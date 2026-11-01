@@ -1,3 +1,5 @@
+import { publicUrl } from "@/lib/utils";
+
 export const OFFER_PRODUCTS = [
   { id: "phone", mark: "phone", price: 999, compareAt: 2499, rating: 4.8, reviews: 86 },
   { id: "console", mark: "console", price: 1649, compareAt: 2199, rating: 4.9, reviews: 54 },
@@ -22,10 +24,21 @@ export const OFFER_PRODUCTS = [
 ] as const;
 
 export type OfferProduct = {
-  id: (typeof OFFER_PRODUCTS)[number]["id"];
-  mark: (typeof OFFER_PRODUCTS)[number]["mark"];
+  id: string;
+  mark: string;
   price: number;
   compareAt: number;
   rating: number;
   reviews: number;
+  /** Photo for products added from the dashboard or the demo set; built-in products use their own photo files. */
+  image?: string;
 };
+
+/** Ids of the products that ship with the store; their photos live in /showcase and /card-photos. */
+export type BuiltInProductId = (typeof OFFER_PRODUCTS)[number]["id"];
+
+/** Card photo for a product: its own image when it has one, else the built-in photo file. */
+export function productPhoto(product: { id: string; image?: string }) {
+  if (product.image) return product.image.startsWith("data:") ? product.image : publicUrl(product.image);
+  return publicUrl(product.id === "case" ? `/card-photos/product-${product.id}.png` : `/showcase/${product.id}.png`);
+}

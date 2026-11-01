@@ -22,14 +22,14 @@ export function Payments() {
     <div className="space-y-6">
       <PageHead title="المدفوعات" lead="طرق الدفع المتاحة للعميل وحالة دفع الطلبات." />
       <DemoNote title="ما فيه بوابة دفع مربوطة">
-        الدفع الإلكتروني موقوف حتى نربط مزود دفع حقيقي. الإعدادات هنا محلية على هذا الجهاز، واللوحة ما تطلب ولا تحفظ أرقام بطاقات أو كلمات سر أو مفاتيح سرية.
+        الدفع الإلكتروني موقوف حتى نربط مزود دفع حقيقي، واللوحة ما تطلب ولا تحفظ أرقام بطاقات أو مفاتيح سرية.
       </DemoNote>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="بانتظار الدفع" value={num.format(byStatus("pending").length)} note={sar.format(total(byStatus("pending")))} icon={CircleDollarSign} tone="warn" demo onClick={() => setStatus("pending")} />
-        <StatCard label="مدفوع" value={num.format(byStatus("paid").length)} note={sar.format(total(byStatus("paid")))} icon={ShieldCheck} tone="ok" demo onClick={() => setStatus("paid")} />
-        <StatCard label="فشل الدفع" value={num.format(byStatus("failed").length)} note={sar.format(total(byStatus("failed")))} icon={XCircle} tone="danger" demo onClick={() => setStatus("failed")} />
-        <StatCard label="مسترجع" value={num.format(byStatus("refunded").length)} note={sar.format(total(byStatus("refunded")))} icon={Undo2} tone="blue" demo onClick={() => setStatus("refunded")} />
+        <StatCard label="بانتظار الدفع" value={num.format(byStatus("pending").length)} note={sar.format(total(byStatus("pending")))} icon={CircleDollarSign} tone="warn" onClick={() => setStatus("pending")} />
+        <StatCard label="مدفوع" value={num.format(byStatus("paid").length)} note={sar.format(total(byStatus("paid")))} icon={ShieldCheck} tone="ok" onClick={() => setStatus("paid")} />
+        <StatCard label="فشل الدفع" value={num.format(byStatus("failed").length)} note={sar.format(total(byStatus("failed")))} icon={XCircle} tone="danger" onClick={() => setStatus("failed")} />
+        <StatCard label="مسترجع" value={num.format(byStatus("refunded").length)} note={sar.format(total(byStatus("refunded")))} icon={Undo2} tone="blue" onClick={() => setStatus("refunded")} />
       </div>
 
       <section className="space-y-4">
@@ -53,7 +53,7 @@ export function Payments() {
         </div>
       </section>
 
-      <Panel title="حالة دفع الطلبات" lead="طلبات تجريبية. افتح الطلب لتغيير حالة الدفع." actions={<Badge tone="blue">تجريبي</Badge>}>
+      <Panel title="حالة دفع الطلبات" lead="افتح الطلب لتغيير حالة الدفع.">
         <div className="flex flex-wrap items-center gap-3 border-b border-(--a-line) px-5 py-3">
           <Tabs<"all" | PaymentStatus>
             value={status}
@@ -91,7 +91,7 @@ function MethodCard({ method, orders, onChange, children }: { method: PaymentMet
     <article className={cn("flex flex-col overflow-hidden rounded-2xl border bg-(--a-surface) transition hover:shadow-(--a-shadow)", on ? "border-(--a-line)" : "border-dashed border-(--a-line)")}>
       <div className="flex items-center justify-between gap-3 border-b border-(--a-line) bg-(--a-surface-2)/40 px-5 py-3.5">
         <div className="flex min-w-0 items-center gap-3">
-          <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", on ? "bg-(--a-accent-soft) text-(--a-accent-ink)" : "bg-(--a-surface-2) text-(--a-muted)")}>
+          <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", on ? "bg-(--a-blue-soft) text-(--a-blue)" : "bg-(--a-surface-2) text-(--a-muted)")}>
             <Icon className="size-5" />
           </span>
           <div className="min-w-0">
@@ -111,7 +111,7 @@ function MethodCard({ method, orders, onChange, children }: { method: PaymentMet
         {locked ? null : <NumberField label="رسوم إضافية على العميل" suffix="ر.س" value={method.fee} onChange={(value) => onChange({ fee: value ?? 0 })} />}
         {children}
       </div>
-      <div className="border-t border-(--a-line) px-5 py-3 text-xs text-(--a-muted)">{locked ? "ما فيه طلبات، الطريقة غير متاحة" : `${num.format(orders)} طلب تجريبي بهذي الطريقة`}</div>
+      <div className="border-t border-(--a-line) px-5 py-3 text-xs text-(--a-muted)">{locked ? "ما فيه طلبات، الطريقة غير متاحة" : `${num.format(orders)} طلب بهذي الطريقة`}</div>
     </article>
   );
 }

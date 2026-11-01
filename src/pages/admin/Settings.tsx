@@ -27,8 +27,8 @@ export function Settings({ adminTheme, onAdminTheme }: { adminTheme: AdminTheme;
       </Group>
 
       <Group title="بيانات المتجر">
-        <SettingCard icon={Store} title="اسم المتجر والشعار" lead="سوق الالكترونيات. تعديل الاسم والشعار من اللوحة يتفعّل مع قاعدة البيانات.">
-          <Badge tone="blue">قريبًا</Badge>
+        <SettingCard icon={Store} title="اسم المتجر والشعار" lead="سوق الكمبيوترات. الاسم والشعار يتعدّلوا من صفحة المحتوى والوسائط، تبويب الشعار.">
+          <Badge tone="ok">متاح</Badge>
         </SettingCard>
         <SettingCard icon={Phone} title="بيانات التواصل" lead="رقم الجوال والواتساب والبريد في الفوتر. تتفعّل مع قاعدة البيانات في المرحلة الثالثة.">
           <Badge tone="blue">قريبًا</Badge>

@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="70 100 430 390" width="662" height="600">
+<defs>
+  <linearGradient id="dTop" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4a4f57"/><stop offset="0.55" stop-color="#2b2f35"/><stop offset="1" stop-color="#1c1f24"/></linearGradient>
+  <linearGradient id="dFront" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a2d33"/><stop offset="1" stop-color="#111316"/></linearGradient>
+  <linearGradient id="dSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#1a1c20"/><stop offset="1" stop-color="#0c0d0f"/></linearGradient>
+  <linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#f1f3f6"/><stop offset="0.45" stop-color="#c3c9d2"/><stop offset="0.7" stop-color="#e3e7ec"/><stop offset="1" stop-color="#9aa2ad"/></linearGradient>
+  <linearGradient id="metalSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9aa2ad"/><stop offset="1" stop-color="#6b737e"/></linearGradient>
+  <linearGradient id="light" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="0.6" stop-color="#e7ebf1"/><stop offset="1" stop-color="#cfd6df"/></linearGradient>
+  <linearGradient id="lightSide" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c3cad4"/><stop offset="1" stop-color="#a6aeb9"/></linearGradient>
+  <linearGradient id="sheen" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="0.35" stop-color="#fff" stop-opacity="0.13"/><stop offset="0.6" stop-color="#fff" stop-opacity="0"/></linearGradient>
+  <radialGradient id="shadow" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#0b1220" stop-opacity="0.32"/><stop offset="1" stop-color="#0b1220" stop-opacity="0"/></radialGradient>
+  <radialGradient id="ledB" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#dbeafe"/><stop offset="0.4" stop-color="#3b82f6"/><stop offset="1" stop-color="#3b82f6" stop-opacity="0"/></radialGradient>
+  <radialGradient id="ledG" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#c8ffd9"/><stop offset="0.4" stop-color="#22c55e"/><stop offset="1" stop-color="#22c55e" stop-opacity="0"/></radialGradient>
+  <radialGradient id="ledR" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#ffd4d4"/><stop offset="0.4" stop-color="#ef4444"/><stop offset="1" stop-color="#ef4444" stop-opacity="0"/></radialGradient>
+</defs>
+<ellipse cx="290" cy="470" rx="200" ry="22" fill="url(#shadow)"/>
+<rect x="96" y="120" width="80" height="300" rx="10" fill="url(#dFront)"/><rect x="96" y="120" width="80" height="300" rx="10" fill="url(#sheen)"/>
+<circle cx="136" cy="150" r="9" fill="#0b0c0e" stroke="#4a4f57" stroke-width="2"/>
+<circle cx="136" cy="390" r="9" fill="#0b0c0e" stroke="#4a4f57" stroke-width="2"/>
+<path d="M170 230 L300 180 L312 206 L182 258 Z" fill="url(#dTop)"/><path d="M170 300 L300 250 L312 276 L182 328 Z" fill="url(#dTop)"/>
+<path d="M300 186 L380 236 L368 260 L290 210 Z" fill="url(#dSide)"/><path d="M300 256 L380 306 L368 330 L290 280 Z" fill="url(#dSide)"/>
+<circle cx="176" cy="244" r="11" fill="#2b2f35" stroke="#5b616b" stroke-width="2"/><circle cx="176" cy="244" r="4" fill="#0b0c0e"/>
+<circle cx="176" cy="314" r="11" fill="#2b2f35" stroke="#5b616b" stroke-width="2"/><circle cx="176" cy="314" r="4" fill="#0b0c0e"/>
+<circle cx="304" cy="194" r="11" fill="#2b2f35" stroke="#5b616b" stroke-width="2"/><circle cx="304" cy="194" r="4" fill="#0b0c0e"/>
+<circle cx="304" cy="264" r="11" fill="#2b2f35" stroke="#5b616b" stroke-width="2"/><circle cx="304" cy="264" r="4" fill="#0b0c0e"/>
+<circle cx="374" cy="248" r="11" fill="#2b2f35" stroke="#5b616b" stroke-width="2"/><circle cx="374" cy="248" r="4" fill="#0b0c0e"/>
+<circle cx="374" cy="318" r="11" fill="#2b2f35" stroke="#5b616b" stroke-width="2"/><circle cx="374" cy="318" r="4" fill="#0b0c0e"/>
+<path d="M372 170 L470 130 L470 410 L372 380 Z" fill="url(#dFront)"/><path d="M372 170 L470 130 L470 410 L372 380 Z" fill="url(#sheen)"/>
+<path d="M372 170 L470 130" stroke="#6b717b" stroke-width="1.5"/>
+<ellipse cx="396" cy="186" rx="6" ry="8" fill="#0b0c0e"/>
+<ellipse cx="448" cy="166" rx="6" ry="8" fill="#0b0c0e"/>
+<ellipse cx="396" cy="362" rx="6" ry="8" fill="#0b0c0e"/>
+<ellipse cx="448" cy="380" rx="6" ry="8" fill="#0b0c0e"/>
+</svg>

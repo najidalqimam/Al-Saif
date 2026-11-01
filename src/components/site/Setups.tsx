@@ -19,7 +19,7 @@ export function Setups() {
 
   return (
     <section className="on-dark tone-a tone-swap-light section-y relative isolate overflow-hidden" aria-labelledby="solutions-title">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-24 -z-10 h-80 bg-[radial-gradient(50%_100%_at_50%_0%,rgba(37,217,230,0.14),transparent)]" />
+      <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-24 -z-10 h-80 bg-[radial-gradient(50%_100%_at_50%_0%,rgb(var(--accent-rgb)/0.14),transparent)]" />
       <div aria-hidden className="pointer-events-none absolute -bottom-32 -end-24 -z-10 size-96 rounded-full bg-blue/10 blur-3xl" />
       <div className="page-shell">
         <div className="reveal flex flex-col gap-5 md:flex-row md:items-end md:justify-between">

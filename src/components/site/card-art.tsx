@@ -1,4 +1,5 @@
 import { STORE_CATEGORIES } from "@/data/categories";
+import { useSiteContent } from "@/lib/site-content";
 import { publicUrl } from "@/lib/utils";
 
 const PRODUCT_ALT: Record<string, string> = {
@@ -30,5 +31,8 @@ export function CategoryArt({ id, className = "h-14 w-full" }: { id: string; cla
 }
 
 export function ProductArt({ id, className = "h-24 w-24" }: { id: string; className?: string }) {
-  return <img src={publicUrl(`/card-photos/product-${id}.png`)} alt={PRODUCT_ALT[id] ?? "منتج"} className={`${className} object-contain`} />;
+  // Products added from the dashboard or the demo set carry their own image.
+  const row = useSiteContent().content.products.find((item) => item.id === id);
+  const src = row?.image ? (row.image.startsWith("data:") ? row.image : publicUrl(row.image)) : publicUrl(`/card-photos/product-${id}.png`);
+  return <img src={src} alt={PRODUCT_ALT[id] ?? row?.nameAr ?? "منتج"} className={`${className} object-contain`} />;
 }

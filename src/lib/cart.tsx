@@ -15,6 +15,7 @@ type CartApi = {
   add: (id: string, amount?: number) => void;
   setQty: (id: string, qty: number) => void;
   remove: (id: string) => void;
+  clear: () => void;
 };
 
 const CartContext = createContext<CartApi | null>(null);
@@ -70,6 +71,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       },
       remove(id) {
         setLines((current) => current.filter((line) => line.id !== id));
+      },
+      clear() {
+        setLines([]);
       },
     };
   }, [lines, open]);

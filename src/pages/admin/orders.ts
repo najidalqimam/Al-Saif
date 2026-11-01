@@ -1,26 +1,13 @@
 // Placeholder orders for the dashboard until the orders table exists in Supabase (stage 3).
 
-export type OrderStatus = "new" | "processing" | "shipped" | "delivered" | "cancelled";
-export type PaymentStatus = "pending" | "paid" | "failed" | "refunded";
+import type { Order, OrderStatus } from "@/lib/orders-store";
 
-export type Order = {
-  id: string;
-  customer: string;
-  city: string;
-  zone: string;
-  productId: string;
-  items: number;
-  total: number;
-  status: OrderStatus;
-  date: string;
-  shippingMethod: string;
-  paymentMethod: "cod" | "bank";
-  paymentStatus: PaymentStatus;
-};
+export type { Order, OrderLine, OrderStatus, PaymentStatus } from "@/lib/orders-store";
 
 export const ORDER_STATUS: Record<OrderStatus, { label: string; tone: "accent" | "blue" | "ok" | "warn" | "danger" }> = {
-  new: { label: "جديد", tone: "accent" },
-  processing: { label: "قيد التجهيز", tone: "warn" },
+  // Orange = waiting for someone to act, blue = moving along, green = done, red = stopped.
+  new: { label: "جديد", tone: "warn" },
+  processing: { label: "قيد التجهيز", tone: "blue" },
   shipped: { label: "تم الشحن", tone: "blue" },
   delivered: { label: "تم التسليم", tone: "ok" },
   cancelled: { label: "ملغي", tone: "danger" },

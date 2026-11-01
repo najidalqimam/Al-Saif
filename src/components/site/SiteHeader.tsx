@@ -1,22 +1,30 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Flame, Heart, Moon, Search, ShoppingCart, Sun, Truck } from "lucide-react";
+import { ArrowLeft, Flame, Heart, Moon, ShoppingCart, Sun, Truck, UserRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Link, useLocation } from "wouter";
 import { CartDrawer } from "@/components/site/CartDrawer";
 import { CategoryMenu } from "@/components/site/CategoryMenu";
+import { SearchBox } from "@/components/site/SearchBox";
 import { useCart } from "@/lib/cart";
+import { ACCOUNT_COPY } from "@/lib/account-copy";
+import { Avatar } from "@/lib/avatars";
+import { useCustomer } from "@/lib/customer";
 import { useFavorites } from "@/lib/favorites";
 import { categoryLabel, categoryTrail, rootDepartments } from "@/lib/catalog";
+import { BrandMark, useBrandText } from "@/components/site/Brand";
 import { useLang } from "@/lib/i18n";
 import { useSiteContent } from "@/lib/site-content";
 import { useIsLight } from "@/lib/theme";
 
 export function SiteHeader() {
   const { t, lang, dir, otherHref } = useLang();
+  const brand = useBrandText();
   const { content } = useSiteContent();
   const [location] = useLocation();
   const { count, setOpen } = useCart();
   const { count: favoritesCount } = useFavorites();
+  const { customer } = useCustomer();
+  const accountCopy = ACCOUNT_COPY[lang];
   const departments = rootDepartments(content.categoryHidden);
   const currentSlug = location.split("/c/")[1]?.split("/")[0];
   const activeRoot = currentSlug ? categoryTrail(currentSlug)[0]?.slug : undefined;
@@ -62,7 +70,9 @@ export function SiteHeader() {
           </p>
           <div className="hidden items-center gap-5 sm:flex">
             <span>{t.top.warranty}</span>
-            <span>{t.top.track}</span>
+            <Link href={`/${lang}/track`} className={`transition ${overHero ? "hover:text-mint" : "hover:text-brand-ink"}`}>
+              {t.top.track}
+            </Link>
             <Link
               href={otherHref}
               className={`transition ${overHero ? "text-white hover:text-mint" : "text-ink-soft hover:text-brand-ink"}`}
@@ -90,44 +100,18 @@ export function SiteHeader() {
       >
       <div className="page-shell flex flex-wrap items-center gap-3 py-2.5">
         <Link href={`/${lang}`} className="flex items-center gap-3">
-          <span className="grid size-11 place-items-center rounded-2xl bg-brand text-lg font-bold text-navy">
-            {lang === "ar" ? "س" : "E"}
-          </span>
+          <BrandMark />
           <span className="leading-tight">
             <span className={`block whitespace-nowrap text-base font-semibold sm:text-lg ${overHero ? "text-white" : "text-navy"}`}>
-              {t.brand}
+              {brand.name}
             </span>
-            {t.tagline ? (
-              <span className={`block text-xs ${overHero ? "text-white/70" : "text-ink-mute"}`}>{t.tagline}</span>
+            {brand.tagline ? (
+              <span className={`block text-xs ${overHero ? "text-white/70" : "text-ink-mute"}`}>{brand.tagline}</span>
             ) : null}
           </span>
         </Link>
 
-        <form
-          className="order-last w-full md:order-none md:min-w-0 md:flex-1"
-          role="search"
-          onSubmit={(event) => event.preventDefault()}
-        >
-          <label className="relative block">
-            <span className="sr-only">{t.searchLabel}</span>
-            <Search
-              className={`pointer-events-none absolute start-4 top-1/2 size-4 -translate-y-1/2 ${
-                overHero ? "text-white/60" : "text-ink-mute"
-              }`}
-            />
-            <input
-              type="search"
-              placeholder={t.searchPlaceholder}
-              className={`h-11 w-full rounded-full border ps-11 pe-4 text-sm outline-none transition duration-300 placeholder:transition-colors focus:border-brand ${
-                overHero
-                  ? "border-white/20 bg-white/10 text-white placeholder:text-white/65 focus:bg-white/15"
-                  : light
-                    ? "border-navy/15 bg-white/70 text-navy placeholder:text-ink-mute focus:bg-white"
-                    : "border-navy/15 bg-[#f4f7fb] text-navy placeholder:text-ink-mute focus:bg-white"
-              }`}
-            />
-          </label>
-        </form>
+        <SearchBox overHero={overHero} light={light} />
 
         <div className="ms-auto flex items-center gap-2 md:ms-0">
           <button
@@ -154,6 +138,24 @@ export function SiteHeader() {
             }`}
           >
             {lang === "ar" ? "EN" : "ع"}
+          </Link>
+          {/* Signed in: the account page. Signed out: sign in or register. */}
+          <Link
+            href={customer ? `/${lang}/account` : `/${lang}/login`}
+            aria-label={customer ? accountCopy.myAccount : accountCopy.signIn}
+            aria-current={location.startsWith(`/${lang}/account`) || location === `/${lang}/login` ? "page" : undefined}
+            className={`flex h-11 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm font-semibold transition duration-300 ${
+              overHero
+                ? "border-white/25 text-white hover:border-mint hover:text-mint"
+                : "border-navy/15 text-ink-soft hover:border-brand hover:text-brand-ink"
+            }`}
+          >
+            {customer ? (
+              <Avatar avatar={customer.avatar} firstName={customer.firstName} lastName={customer.lastName} className="-ms-1.5 size-8 text-xs" />
+            ) : (
+              <UserRound className="size-5" />
+            )}
+            <span className="hidden max-w-28 truncate lg:inline">{customer ? customer.firstName : accountCopy.signIn}</span>
           </Link>
           <Link
             href={`/${lang}/favorites`}

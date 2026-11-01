@@ -1,0 +1,3 @@
+# Catalogue snapshots, manifests and import reports stay on this machine. Never commit them.
+*
+!.gitignore

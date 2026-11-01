@@ -17,5 +17,11 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5174,
+    // The backend API (server/) runs separately; forwarding /api keeps the admin cookie same-origin.
+    proxy: {
+      "/api": { target: process.env.API_PROXY_TARGET || "http://127.0.0.1:4000", changeOrigin: false },
+      // Dashboard uploads come from the API too: Vite only notices files added to public/ a moment later.
+      "/uploads": { target: process.env.API_PROXY_TARGET || "http://127.0.0.1:4000", changeOrigin: false },
+    },
   },
 });
