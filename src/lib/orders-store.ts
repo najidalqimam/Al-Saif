@@ -30,7 +30,7 @@ export type Order = {
   subtotal?: number;
   shippingFee?: number;
   paymentFee?: number;
-  lang?: "ar" | "en";
+  lang?: "ar" | "en" | "ur";
   /** Database orders: placed by a signed-in customer (true) or as a guest (false). */
   account?: boolean;
 };

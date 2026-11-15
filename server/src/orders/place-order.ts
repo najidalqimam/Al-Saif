@@ -13,7 +13,7 @@ export type PlaceOrderInput = {
   shippingMethodCode: string;
   paymentMethod: Exclude<PaymentMethodCode, "ONLINE">;
   items: Array<{ productId: string; quantity: number }>;
-  locale?: "ar" | "en";
+  locale?: "ar" | "en" | "ur";
 };
 
 export class OrderError extends Error {
@@ -110,8 +110,8 @@ function placeOrderOnce(input: PlaceOrderInput, quantities: Map<string, number>)
         if (taken.count === 0) throw new OrderError("OUT_OF_STOCK", `Not enough stock for ${line.product.nameEn}.`);
       }
 
-      // The contact details are copied onto the order. A guest order has no customer link, so creating an
-      // account later with the same phone number never exposes it.
+      // Contact details are copied onto the order. Guest orders leave customerId null; registration/sign-in
+      // later claims them by matching customerPhone to the account phone.
       const phone = input.customer.phone.replace(/\D/g, "");
       const locale = input.locale ?? "ar";
       const order = await tx.order.create({

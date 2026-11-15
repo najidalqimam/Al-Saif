@@ -147,6 +147,7 @@ function defaults(): SiteContent {
   const both = <T,>(pick: (lang: Lang) => T): Record<Lang, T> => ({
     ar: pick("ar"),
     en: pick("en"),
+    ur: pick("ur"),
   });
 
   return {
@@ -203,7 +204,7 @@ function defaults(): SiteContent {
     brand: {
       name: both((lang) => translations[lang].brand),
       tagline: both((lang) => translations[lang].tagline ?? ""),
-      mark: { ar: "س", en: "E" },
+      mark: { ar: "س", en: "E", ur: "ا" },
       logo: "",
     },
   };
@@ -235,13 +236,22 @@ function load(): SiteContent {
     if (!Array.isArray(parsed.addedCategories)) parsed.addedCategories = [];
     if (!Array.isArray(parsed.customSections)) parsed.customSections = [];
     parsed.homeOrder = normalOrder(parsed.homeOrder, parsed.customSections);
-    const base = defaults().brand;
+    const fresh = defaults();
+    const base = fresh.brand;
     parsed.brand = {
       name: { ...base.name, ...parsed.brand?.name },
       tagline: { ...base.tagline, ...parsed.brand?.tagline },
       mark: { ...base.mark, ...parsed.brand?.mark },
       logo: typeof parsed.brand?.logo === "string" ? parsed.brand.logo : "",
     };
+    // Older saves only have ar/en; fill Urdu from code defaults without wiping edits.
+    parsed.hero = { ...fresh.hero, ...parsed.hero, ur: parsed.hero?.ur ?? fresh.hero.ur };
+    parsed.catalog = { ...fresh.catalog, ...parsed.catalog, ur: parsed.catalog?.ur ?? fresh.catalog.ur };
+    parsed.deals = { ...fresh.deals, ...parsed.deals, ur: parsed.deals?.ur ?? fresh.deals.ur };
+    parsed.bestsellers = { ...fresh.bestsellers, ...parsed.bestsellers, ur: parsed.bestsellers?.ur ?? fresh.bestsellers.ur };
+    parsed.addons = { ...fresh.addons, ...parsed.addons, ur: parsed.addons?.ur ?? fresh.addons.ur };
+    parsed.setups = { ...fresh.setups, ...parsed.setups, ur: parsed.setups?.ur ?? fresh.setups.ur };
+    parsed.footer = { ...fresh.footer, ...parsed.footer, ur: parsed.footer?.ur ?? fresh.footer.ur };
     const previous = {
       ar: "تصفح الجوالات، وأجهزة البلايستيشن، وإكسسواراتها.",
       en: "Browse phones, PlayStation consoles, and their accessories.",
@@ -485,7 +495,7 @@ type ContentApi = {
   moveSection: (id: HomeBlock, step: -1 | 1) => void;
   addCustomSection: (kind: CustomSection["kind"]) => CustomSection["id"];
   updateCustomSection: (id: string, patch: Partial<Omit<CustomSection, "id" | "ar" | "en">>) => void;
-  updateCustomCopy: (id: string, lang: Lang, patch: Partial<CustomCopy>) => void;
+  updateCustomCopy: (id: string, lang: "ar" | "en", patch: Partial<CustomCopy>) => void;
   removeCustomSection: (id: string) => void;
   updateBrand: (patch: { name?: Partial<Record<Lang, string>>; tagline?: Partial<Record<Lang, string>>; mark?: Partial<Record<Lang, string>>; logo?: string }) => void;
   /** Loads the full catalogue for the dashboard (needs an admin session). */
@@ -826,7 +836,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
     updateCustomSection(id, patch) {
       setContent((current) => ({ ...current, customSections: current.customSections.map((item) => (item.id === id ? { ...item, ...patch } : item)) }));
     },
-    updateCustomCopy(id, lang, patch) {
+    updateCustomCopy(id, lang: "ar" | "en", patch) {
       setContent((current) => ({
         ...current,
         customSections: current.customSections.map((item) => (item.id === id ? { ...item, [lang]: { ...item[lang], ...patch } } : item)),
@@ -858,9 +868,9 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
     copyOf(lang, id) {
       const row = content.products.find((item) => item.id === id);
       if (!row) return undefined;
-      return lang === "ar"
-        ? { name: row.nameAr, category: row.categoryAr }
-        : { name: row.nameEn, category: row.categoryEn };
+      // Catalogue fields are bilingual (ar/en); Urdu uses Arabic names until *Ur columns exist.
+      if (lang === "en") return { name: row.nameEn, category: row.categoryEn };
+      return { name: row.nameAr, category: row.categoryAr };
     },
     visibleProducts(mode) {
       return content.products

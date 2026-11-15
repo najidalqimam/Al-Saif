@@ -15,7 +15,7 @@ export type Customer = {
   createdAt: string;
   welcomeEmail: WelcomeEmail;
 };
-export type Registration = { firstName: string; lastName: string; phone: string; email: string; password: string; locale: "ar" | "en" };
+export type Registration = { firstName: string; lastName: string; phone: string; email: string; password: string; locale: "ar" | "en" | "ur" };
 
 type CustomerApi = {
   customer: Customer | null;

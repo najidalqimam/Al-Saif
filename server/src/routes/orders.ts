@@ -38,7 +38,7 @@ const OrderBody = z
       .array(z.object({ productId: z.string().refine(isCatalogueId, "Unknown product id"), quantity: z.number().int().min(1).max(99) }).strict())
       .min(1)
       .max(50),
-    locale: z.enum(["ar", "en"]).optional(),
+    locale: z.enum(["ar", "en", "ur"]).optional(),
     /** Signed-in customers only: also keep this delivery address in the account. */
     saveAddress: z.object({ label: text(0, 60).optional(), makeDefault: z.boolean().optional() }).strict().optional(),
   })

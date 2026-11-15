@@ -24,11 +24,12 @@ export function allCategories() {
 }
 
 export function categoryLabel(category: CatalogCategory, lang: Lang) {
-  return lang === "ar" ? category.nameAr : category.nameEn;
+  // Urdu UI uses Arabic catalogue names until dedicated Urdu fields exist.
+  return lang === "en" ? category.nameEn : category.nameAr;
 }
 
 export function categoryBlurb(category: CatalogCategory, lang: Lang) {
-  return lang === "ar" ? category.descriptionAr : category.descriptionEn;
+  return lang === "en" ? category.descriptionEn : category.descriptionAr;
 }
 
 export function isListed(category: CatalogCategory, hidden: readonly string[]) {

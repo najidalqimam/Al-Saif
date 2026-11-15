@@ -298,5 +298,6 @@ const en: Record<string, Detail> = {
 };
 
 export function offerDetail(lang: Lang, id: string) {
-  return (lang === "ar" ? ar : en)[id];
+  // Urdu falls back to Arabic product feature copy (same RTL script).
+  return (lang === "en" ? en : ar)[id];
 }

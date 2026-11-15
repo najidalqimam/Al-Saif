@@ -16,6 +16,15 @@ export function welcomeMessage(to: string, firstName: string, locale: string): M
       html: `<div style="font-family:Arial,sans-serif;font-size:15px;line-height:1.7;color:#111d32"><p>Hello ${escape(firstName)},</p><p>Your account on <strong>Al-Saif Store</strong> was created successfully. You can sign in with your mobile number and password to follow your orders and keep your addresses.</p><p><a href="${account}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none">Open my account</a></p><p style="color:#64748b;font-size:13px">If you did not create this account, reply to this email and let us know.</p><p>Al-Saif Store</p></div>`,
     };
   }
+  if (locale === "ur") {
+    const account = `${store}/ur/account`;
+    return {
+      to,
+      subject: "آپ کا الیکٹرانکس مارکیٹ اکاؤنٹ تیار ہے",
+      text: `سلام ${firstName}،\n\nآپ کا اکاؤنٹ کامیابی سے بن گیا۔ موبائل نمبر اور پاس ورڈ سے سائن ان کر کے آرڈرز دیکھیں اور پتے محفوظ رکھیں۔\n\nآپ کا اکاؤنٹ: ${account}\n\nاگر آپ نے یہ اکاؤنٹ نہیں بنایا، اس ای میل کا جواب دیں۔\n\nالیکٹرانکس مارکیٹ`,
+      html: `<div dir="rtl" style="font-family:Tahoma,Arial,sans-serif;font-size:15px;line-height:1.9;color:#111d32;text-align:right"><p>سلام ${escape(firstName)}،</p><p>آپ کا اکاؤنٹ <strong>الیکٹرانکس مارکیٹ</strong> پر کامیابی سے بن گیا۔ موبائل نمبر اور پاس ورڈ سے سائن ان کریں۔</p><p><a href="${account}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:999px;text-decoration:none">میرا اکاؤنٹ کھولیں</a></p><p style="color:#64748b;font-size:13px">اگر آپ نے یہ اکاؤنٹ نہیں بنایا، اس ای میل کا جواب دیں۔</p><p>الیکٹرانکس مارکیٹ</p></div>`,
+    };
+  }
   const account = `${store}/ar/account`;
   return {
     to,

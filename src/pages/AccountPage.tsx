@@ -160,7 +160,11 @@ function Orders() {
   }, [copy]);
 
   const money = (value: string) => `${Number(value).toLocaleString("en-US")} ${t.deals.currency}`;
-  const date = (value: string) => new Date(value).toLocaleDateString(lang === "ar" ? "ar-SA-u-nu-latn-ca-gregory" : "en-GB", { day: "numeric", month: "long", year: "numeric" });
+  const date = (value: string) =>
+    new Date(value).toLocaleDateString(
+      lang === "en" ? "en-GB" : lang === "ur" ? "ur-PK" : "ar-SA-u-nu-latn-ca-gregory",
+      { day: "numeric", month: "long", year: "numeric" },
+    );
 
   if (error) return <Notice tone="error" text={error} />;
   if (!orders) return <LoaderCircle className="mx-auto size-6 animate-spin text-navy/40" />;

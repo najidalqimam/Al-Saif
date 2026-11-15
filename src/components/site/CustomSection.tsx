@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { Link } from "wouter";
 import { OfferGrid, type OfferProduct } from "@/components/site/Offers";
 import { useLang } from "@/lib/i18n";
+import { contentLang } from "@/lib/locale";
 import { useSiteContent, type CustomSection as Section } from "@/lib/site-content";
 import { useIsLight } from "@/lib/theme";
 
@@ -10,7 +11,8 @@ export function CustomSection({ section }: { section: Section }) {
   const { lang, dir } = useLang();
   const { productById } = useSiteContent();
   const light = useIsLight();
-  const copy = section[lang];
+  // Custom sections are edited in ar/en only; Urdu falls back to Arabic.
+  const copy = section[contentLang(lang)];
   const Arrow = dir === "rtl" ? ArrowLeft : ArrowRight;
   const href = `/${lang}${section.link.startsWith("/") ? section.link : `/${section.link}`}`;
   const products = section.productIds.map((id) => productById(id)).filter((item): item is OfferProduct => item !== undefined);

@@ -1,7 +1,9 @@
 import { createContext, useContext, useEffect, type ReactNode } from "react";
 import { useLocation, useSearch } from "wouter";
+import { ur } from "@/lib/i18n-ur";
+import { isRtl, LANG_META, localePath } from "@/lib/locale";
 
-export type Lang = "ar" | "en";
+export type Lang = "ar" | "en" | "ur";
 
 export interface Translations {
   brand: string;
@@ -121,6 +123,20 @@ export interface Translations {
     bannerTitle: string;
     bannerLead: string;
     bannerAction: string;
+    inquiry: {
+      title: string;
+      lead: string;
+      name: string;
+      phone: string;
+      phoneHint: string;
+      note: string;
+      noteHint: string;
+      submit: string;
+      close: string;
+      success: string;
+      phoneError: string;
+      required: string;
+    };
     badges: Record<string, string>;
   };
   addons: {
@@ -174,7 +190,7 @@ const ar: Translations = {
   brand: "سوق الكمبيوترات",
   tagline: "",
   documentTitle: "سوق الكمبيوترات",
-  switchTo: "English",
+  switchTo: "زبان / Language",
   skipToContent: "تخطَّ إلى المحتوى الرئيسي",
   railPrev: "السابق",
   railNext: "التالي",
@@ -350,6 +366,20 @@ const ar: Translations = {
     bannerTitle: "تجهيز أكثر من جهاز في طلب واحد",
     bannerLead: "لو بتجهز جوالات أو بلايستيشن مع الإكسسوارات، نرتب القطع والضمان المحلي معاك.",
     bannerAction: "اسأل عن التجهيز",
+    inquiry: {
+      title: "اطلب تجهيز طلبك",
+      lead: "اكتب اسمك ورقم جوالك، وقولنا إيه الأجهزة أو الإكسسوارات اللي عايز تجهّزها في طلب واحد.",
+      name: "الاسم",
+      phone: "رقم الجوال",
+      phoneHint: "مثال: 0512345678",
+      note: "تفاصيل التجهيز",
+      noteHint: "مثال: جوالين + بلايستيشن مع يد تحكم وسماعات",
+      submit: "إرسال الطلب",
+      close: "إغلاق",
+      success: "وصلنا طلبك، وهنتواصل معاك قريب على رقم الجوال.",
+      phoneError: "أدخل رقم جوال سعودي يبدأ بـ 05 ومكوّن من 10 أرقام.",
+      required: "هذا الحقل مطلوب.",
+    },
     badges: {
       phone: "ضمان محلي سنتين",
       "phone-mini": "ضمان محلي سنتين",
@@ -474,7 +504,7 @@ const en: Translations = {
   brand: "Electronics Market",
   tagline: "",
   documentTitle: "Electronics Market",
-  switchTo: "العربية",
+  switchTo: "Language / لغة",
   skipToContent: "Skip to main content",
   railPrev: "Previous",
   railNext: "Next",
@@ -650,6 +680,20 @@ const en: Translations = {
     bannerTitle: "Set up more than one device in a single order",
     bannerLead: "If you are getting phones or PlayStation gear with accessories, we line up the pieces and the local warranty with you.",
     bannerAction: "Ask about a group order",
+    inquiry: {
+      title: "Ask us to prepare your order",
+      lead: "Leave your name and mobile number, and tell us which devices or accessories you want prepared in one order.",
+      name: "Name",
+      phone: "Mobile number",
+      phoneHint: "e.g. 0512345678",
+      note: "What to prepare",
+      noteHint: "e.g. two phones + PlayStation with a controller and headset",
+      submit: "Send request",
+      close: "Close",
+      success: "We received your request and will contact you soon on this number.",
+      phoneError: "Enter a Saudi mobile number starting with 05 (10 digits).",
+      required: "This field is required.",
+    },
     badges: {
       phone: "Two-year local warranty",
       "phone-mini": "Two-year local warranty",
@@ -770,13 +814,15 @@ const en: Translations = {
   },
 };
 
-export const translations: Record<Lang, Translations> = { ar, en };
+export const translations: Record<Lang, Translations> = { ar, en, ur };
 
 interface LangContextType {
   lang: Lang;
   t: Translations;
   dir: "rtl" | "ltr";
+  /** Legacy toggle target (next language in the cycle). Prefer `localeHref` for menus. */
   otherHref: string;
+  localeHref: (next: Lang) => string;
 }
 
 const LangContext = createContext<LangContextType>({
@@ -784,29 +830,31 @@ const LangContext = createContext<LangContextType>({
   t: ar,
   dir: "rtl",
   otherHref: "/en",
+  localeHref: (next) => `/${next}`,
 });
 
 export function LangProvider({ lang, children }: { lang: Lang; children: ReactNode }) {
   const [location] = useLocation();
   const search = useSearch();
-  const dir = lang === "ar" ? "rtl" : "ltr";
+  const dir = isRtl(lang) ? "rtl" : "ltr";
   const t = translations[lang];
-  const other = lang === "ar" ? "en" : "ar";
+  const cycle: Lang[] = ["ar", "en", "ur"];
+  const other = cycle[(cycle.indexOf(lang) + 1) % cycle.length]!;
   // Keeps the query string, so switching language on the search page keeps the search.
-  const otherHref = location.replace(/^\/(ar|en)/, `/${other}`) + (search ? `?${search}` : "");
+  const otherHref = localePath(location, other, search ? `?${search}` : "");
+  const localeHref = (next: Lang) => localePath(location, next, search ? `?${search}` : "");
 
   useEffect(() => {
     document.documentElement.dir = dir;
-    document.documentElement.lang = lang;
+    document.documentElement.lang = LANG_META[lang].htmlLang;
     document.title = t.documentTitle;
-    document.documentElement.style.fontFamily =
-      lang === "ar"
-        ? "'IBM Plex Sans Arabic', 'IBM Plex Sans', sans-serif"
-        : "'IBM Plex Sans', sans-serif";
+    document.documentElement.style.fontFamily = isRtl(lang)
+      ? "'IBM Plex Sans Arabic', 'Noto Nastaliq Urdu', 'IBM Plex Sans', sans-serif"
+      : "'IBM Plex Sans', sans-serif";
   }, [lang, dir, t.documentTitle]);
 
   return (
-    <LangContext.Provider value={{ lang, t, dir, otherHref }}>
+    <LangContext.Provider value={{ lang, t, dir, otherHref, localeHref }}>
       {children}
     </LangContext.Provider>
   );

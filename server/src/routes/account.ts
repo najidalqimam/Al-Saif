@@ -44,7 +44,7 @@ export const AVATARS = [
 ] as const;
 
 const RegisterBody = z
-  .object({ firstName: personName, lastName: personName, phone, email, password, locale: z.enum(["ar", "en"]).optional() })
+  .object({ firstName: personName, lastName: personName, phone, email, password, locale: z.enum(["ar", "en", "ur"]).optional() })
   .strict();
 /** Sign in with the mobile number or the email address, whichever the customer types. */
 const LoginBody = z
@@ -108,6 +108,16 @@ async function profile(customerId: string) {
   };
 }
 
+/** Attach guest checkout orders to this account when the phone matches (same number they ordered with). */
+async function claimGuestOrders(customerId: string, phone: string) {
+  const mobile = phone.replace(/\D/g, "");
+  if (!/^05\d{8}$/.test(mobile)) return;
+  await prisma.order.updateMany({
+    where: { customerId: null, customerPhone: mobile },
+    data: { customerId },
+  });
+}
+
 function address(row: Prisma.AddressGetPayload<{ include: { zone: true } }>) {
   return {
     id: row.id,
@@ -168,6 +178,7 @@ accountRouter.post(
       throw error;
     }
 
+    await claimGuestOrders(created.customerId, mobile);
     const { token, expiresAt } = await createCustomerSession(created.customerId, { userAgent: req.get("user-agent"), ip: req.ip });
     res.setHeader("Set-Cookie", customerCookie(token, expiresAt));
     res.status(201).json({ customer: await profile(created.customerId) });
@@ -193,6 +204,7 @@ accountRouter.post(
       res.status(401).json({ error: "INVALID_CREDENTIALS" });
       return;
     }
+    await claimGuestOrders(customer.id, customer.phone);
     const { token, expiresAt } = await createCustomerSession(customer.id, { userAgent: req.get("user-agent"), ip: req.ip });
     res.setHeader("Set-Cookie", customerCookie(token, expiresAt));
     res.json({ customer: await profile(customer.id) });
@@ -381,6 +393,8 @@ accountRouter.get(
   "/orders",
   requireCustomer(),
   handle(async (req, res) => {
+    // Pick up any earlier guest orders placed with this mobile number (e.g. ordered, then registered).
+    await claimGuestOrders(req.customer!.id, req.customer!.phone);
     const orders = await prisma.order.findMany({
       where: { customerId: req.customer!.id },
       orderBy: { placedAt: "desc" },

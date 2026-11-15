@@ -268,7 +268,7 @@ export function CheckoutPage() {
                       return (
                         <Choice key={method.code} name="shipping" checked={shippingId === method.code} onChange={() => setShippingId(method.code)} icon={Truck}>
                           <span className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-semibold">{lang === "ar" ? method.nameAr : method.nameEn}</span>
+                            <span className="font-semibold">{lang === "en" ? method.nameEn : method.nameAr}</span>
                             <span className="font-bold text-brand-ink">{fee ? money(fee) : copy.free}</span>
                           </span>
                           <span className="mt-1 block text-xs text-navy/60">

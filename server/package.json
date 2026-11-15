@@ -8,7 +8,7 @@
     "node": ">=20.17"
   },
   "scripts": {
-    "dev": "node --env-file=.env --watch --import tsx src/index.ts",
+    "dev": "node --env-file=.env --watch --watch-path=src --import tsx src/index.ts",
     "start": "node --env-file=.env --import tsx src/index.ts",
     "admin:create": "node --env-file=.env --import tsx src/scripts/create-admin.ts",
     "db:up": "docker compose up -d --wait",

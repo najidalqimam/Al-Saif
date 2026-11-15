@@ -183,7 +183,7 @@ function CategoryVisual({ name, image, icon: Icon }: { name: string; image?: str
     <CardStand>
       {showImage ? (
         <img
-          src={publicUrl(image)}
+          src={publicUrl(image!)}
           alt=""
           loading="lazy"
           decoding="async"

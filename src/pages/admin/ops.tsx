@@ -172,7 +172,7 @@ function orderFromApi(order: ApiOrder): Order {
     subtotal: Number(order.subtotal),
     shippingFee: Number(order.shippingFee),
     paymentFee: Number(order.paymentFee),
-    lang: order.locale === "en" ? "en" : "ar",
+    lang: order.locale === "en" ? "en" : order.locale === "ur" ? "ur" : "ar",
     account: order.customerId !== null,
   };
 }

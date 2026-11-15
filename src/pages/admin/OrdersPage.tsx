@@ -46,8 +46,10 @@ export function OrdersTable({ orders, onView, compact }: { orders: Order[]; onVi
                   </p>
                   <p className="text-xs text-(--a-muted)">{shortDate(order.date)}</p>
                   {order.source === "store" ? (
-                    <span className="mt-1 inline-block">
+                    <span className="mt-1 flex flex-wrap gap-1">
                       <Badge tone="ok">من المتجر</Badge>
+                      {order.account === false ? <Badge tone="accent">بدون حساب</Badge> : null}
+                      {order.account === true ? <Badge tone="blue">بحساب</Badge> : null}
                     </span>
                   ) : null}
                 </td>
@@ -113,7 +115,9 @@ export function OrderDrawer({ order, onClose }: { order: Order | null; onClose: 
       title={current ? `الطلب #${current.id}` : ""}
       lead={
         current?.source === "store"
-          ? "طلب من المتجر. تغيير الحالة يظهر للعميل في صفحة تتبع الطلب على هذا المتصفح."
+          ? current.account
+            ? "طلب من المتجر بحساب عميل. تغيير الحالة يتحفظ ويظهر للعميل في حسابه وصفحة التتبع."
+            : "طلب من المتجر بدون حساب. بيانات العميل محفوظة هنا، ويقدر يتابع برقم الطلب والجوال من صفحة التتبع."
           : "طلب تجريبي. التعديلات تتحفظ على هذا الجهاز فقط وما توصل للعميل."
       }
       footer={
@@ -178,7 +182,19 @@ export function OrderDrawer({ order, onClose }: { order: Order | null; onClose: 
 
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 rounded-2xl bg-(--a-surface-2)/60 p-4 text-sm">
             <dt className="text-(--a-muted)">العميل</dt>
-            <dd className="font-medium">{current.customer}</dd>
+            <dd className="font-medium">
+              {current.customer}
+              {current.source === "store" && current.account === false ? (
+                <span className="ms-2 inline-block align-middle">
+                  <Badge tone="accent">بدون حساب</Badge>
+                </span>
+              ) : null}
+              {current.source === "store" && current.account === true ? (
+                <span className="ms-2 inline-block align-middle">
+                  <Badge tone="blue">بحساب</Badge>
+                </span>
+              ) : null}
+            </dd>
             <dt className="text-(--a-muted)">المدينة</dt>
             <dd>
               {current.city} · {zone?.nameAr ?? "—"}

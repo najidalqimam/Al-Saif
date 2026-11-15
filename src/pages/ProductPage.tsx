@@ -40,13 +40,13 @@ export function ProductPage({ id }: { id: string }) {
   const row = content.products.find((item) => item.id === product.id);
   // Copy saved from the dashboard wins; until then the built-in highlights and specs show.
   const builtIn = offerDetail(lang, product.id);
-  const savedFeatures = lang === "ar" ? row?.featuresAr : row?.featuresEn;
-  const savedSpecs = lang === "ar" ? row?.specsAr : row?.specsEn;
+  const savedFeatures = lang === "en" ? row?.featuresEn : row?.featuresAr;
+  const savedSpecs = lang === "en" ? row?.specsEn : row?.specsAr;
   const detail = {
     features: savedFeatures ?? builtIn?.features ?? [],
     specs: savedSpecs ? savedSpecs.map(({ label, value }): [string, string] => [label, value]) : (builtIn?.specs ?? []),
   };
-  const description = ((lang === "ar" ? row?.descriptionAr : row?.descriptionEn) ?? "").trim();
+  const description = ((lang === "en" ? row?.descriptionEn : row?.descriptionAr) ?? "").trim();
   const categoryId = row ? productCategoryOf(row) : null;
   const trail = categoryId ? categoryTrail(categoryId) : [];
   const saved = product.compareAt - product.price;

@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { ArrowLeft, Flame, Heart, Moon, ShoppingCart, Sun, Truck, UserRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Link, useLocation } from "wouter";
@@ -12,12 +13,17 @@ import { useCustomer } from "@/lib/customer";
 import { useFavorites } from "@/lib/favorites";
 import { categoryLabel, categoryTrail, rootDepartments } from "@/lib/catalog";
 import { BrandMark, useBrandText } from "@/components/site/Brand";
-import { useLang } from "@/lib/i18n";
+import { useLang, type Lang } from "@/lib/i18n";
+import { LANG_META, LANGS } from "@/lib/locale";
 import { useSiteContent } from "@/lib/site-content";
 import { useIsLight } from "@/lib/theme";
 
 export function SiteHeader() {
-  const { t, lang, dir, otherHref } = useLang();
+  const { t, lang, dir, localeHref } = useLang();
+  const [langOpen, setLangOpen] = useState(false);
+  const [langPos, setLangPos] = useState<{ top: number; left: number } | null>(null);
+  const langBtnRef = useRef<HTMLButtonElement>(null);
+  const langMenuRef = useRef<HTMLUListElement>(null);
   const brand = useBrandText();
   const { content } = useSiteContent();
   const [location] = useLocation();
@@ -44,6 +50,47 @@ export function SiteHeader() {
     }
     previousCount.current = count;
   }, [count]);
+
+  // Portal the menu to <body>: a dropdown inside a blurred sticky header paints a ghost copy in some browsers.
+  useLayoutEffect(() => {
+    if (!langOpen) {
+      setLangPos(null);
+      return;
+    }
+    function place() {
+      const btn = langBtnRef.current;
+      if (!btn) return;
+      const rect = btn.getBoundingClientRect();
+      const width = 144;
+      const left = dir === "rtl" ? Math.max(8, rect.right - width) : Math.min(window.innerWidth - width - 8, rect.left);
+      setLangPos({ top: rect.bottom + 8, left });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [langOpen, dir]);
+
+  useEffect(() => {
+    if (!langOpen) return;
+    function onPointer(event: MouseEvent) {
+      const target = event.target as Node;
+      if (langBtnRef.current?.contains(target) || langMenuRef.current?.contains(target)) return;
+      setLangOpen(false);
+    }
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setLangOpen(false);
+    }
+    document.addEventListener("mousedown", onPointer);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onPointer);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [langOpen]);
 
   return (
     <>
@@ -73,19 +120,7 @@ export function SiteHeader() {
             <Link href={`/${lang}/track`} className={`transition ${overHero ? "hover:text-mint" : "hover:text-brand-ink"}`}>
               {t.top.track}
             </Link>
-            <Link
-              href={otherHref}
-              className={`transition ${overHero ? "text-white hover:text-mint" : "text-ink-soft hover:text-brand-ink"}`}
-            >
-              {t.switchTo}
-            </Link>
           </div>
-          <Link
-            href={otherHref}
-            className={`inline-flex min-h-8 items-center sm:hidden ${overHero ? "text-white" : "text-ink-soft"}`}
-          >
-            {t.switchTo}
-          </Link>
         </div>
       </div>
 
@@ -127,18 +162,47 @@ export function SiteHeader() {
           >
             {light ? <Moon className="size-5" aria-hidden /> : <Sun className="size-5" aria-hidden />}
           </button>
-          <Link
-            href={otherHref}
-            aria-label={t.switchTo}
-            lang={lang === "ar" ? "en" : "ar"}
-            className={`hidden size-11 sm:grid cursor-pointer place-items-center rounded-full border text-sm font-bold transition duration-300 ${
-              overHero
-                ? "border-white/25 text-white hover:border-mint hover:text-mint"
-                : "border-navy/15 text-ink-soft hover:border-brand hover:text-brand-ink"
-            }`}
-          >
-            {lang === "ar" ? "EN" : "ع"}
-          </Link>
+          <div className="relative">
+            <button
+              ref={langBtnRef}
+              type="button"
+              onClick={() => setLangOpen((open) => !open)}
+              aria-label={t.switchTo}
+              aria-expanded={langOpen}
+              aria-haspopup="listbox"
+              className={`grid size-11 cursor-pointer place-items-center rounded-full border text-[11px] font-bold transition duration-300 ${
+                overHero
+                  ? "border-white/25 text-white hover:border-mint hover:text-mint"
+                  : "border-navy/15 text-ink-soft hover:border-brand hover:text-brand-ink"
+              }`}
+            >
+              {LANG_META[lang].short}
+            </button>
+            {langOpen && langPos
+              ? createPortal(
+                  <ul
+                    ref={langMenuRef}
+                    role="listbox"
+                    dir={dir}
+                    style={{ top: langPos.top, left: langPos.left }}
+                    className="fixed z-[200] min-w-36 overflow-hidden rounded-xl border border-navy/10 bg-white py-1 text-navy shadow-lg"
+                  >
+                    {LANGS.map((code: Lang) => (
+                      <li key={code} role="option" aria-selected={code === lang}>
+                        <Link
+                          href={localeHref(code)}
+                          onClick={() => setLangOpen(false)}
+                          className={`block px-3 py-2 text-sm transition hover:bg-navy/5 ${code === lang ? "font-bold text-brand-ink" : ""}`}
+                        >
+                          {LANG_META[code].native}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>,
+                  document.body,
+                )
+              : null}
+          </div>
           {/* Signed in: the account page. Signed out: sign in or register. */}
           <Link
             href={customer ? `/${lang}/account` : `/${lang}/login`}
