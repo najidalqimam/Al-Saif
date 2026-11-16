@@ -196,7 +196,8 @@ function SlidePanel({
       className={`hero-panel ${active ? "is-active" : ""}`}
     >
       <div className="page-shell grid items-center gap-4 lg:grid-cols-2 lg:gap-10">
-      <div className="flex flex-col items-start">
+      {/* lg:ps-10: a little more room on the text side of the hero, which moves the copy inward on desktop. */}
+      <div className="flex flex-col items-start lg:ps-10">
         <div className="hero-copy">
           <p
             className={`flex items-center gap-3 text-sm font-semibold ltr:text-xs ltr:uppercase ltr:tracking-[0.16em] ${
@@ -210,7 +211,8 @@ function SlidePanel({
             {slide.title}
             <span className={`relative mt-2 block ${light ? "text-[#0a8a9b]" : "text-mint"}`}>
               {slide.titleRest}
-              <span className="absolute -bottom-2 start-0 h-[3px] w-20 rounded-full bg-cyan shadow-[0_0_12px_rgb(var(--accent-rgb)/0.7)]" />
+              {/* The accent underline shows in the dark theme only. */}
+              {light ? null : <span className="absolute -bottom-2 start-0 h-[3px] w-20 rounded-full bg-cyan shadow-[0_0_12px_rgb(var(--accent-rgb)/0.7)]" />}
             </span>
           </h1>
           <p className={`mt-4 max-w-md text-base leading-8 ${light ? "text-navy/70" : "text-white/80"}`}>{slide.lead}</p>

@@ -1,27 +1,35 @@
 import { useEffect, useState } from "react";
-import { Archive, ArchiveRestore, ArrowRight, ChevronDown, ExternalLink, ImagePlus, PackageSearch, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronDown, ExternalLink, ImagePlus, PackageSearch, Pencil, Plus, Trash2, X } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
 import { categoryById, categoryTrail } from "@/lib/catalog";
 import { apiMessage } from "@/lib/api";
 import { offerDetail } from "@/lib/offer-details";
-import { useSiteContent, type NewProduct, type ProductRow, type ProductSpec } from "@/lib/site-content";
+import { useSiteContent, type NewProduct, type ProductRow, type ProductSpec, type Shop } from "@/lib/site-content";
 import { cn } from "@/lib/utils";
+import { validWholesale } from "@/lib/wholesale";
 import { departmentTree, productCategoryOf, productInCategory } from "@/lib/product-categories";
 import { onHashMove, pushHash, readHash, replaceHash } from "./nav";
-import { Badge, BilingualField, Button, Confirm, Drawer, Empty, Field, IconButton, PageHead, Panel, SearchBox, Select, Switch, Tabs, control, num, sar } from "./ui";
+import { Badge, BilingualField, Button, Confirm, control, Drawer, Empty, Field, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, SearchBox, Select, Switch, Tabs, usePager } from "./ui";
 
 type Filter = "all" | "live" | "hidden" | "archived";
 
 export function Products() {
-  const { content, updateProduct } = useSiteContent();
+  const { content, updateProduct, shops, catalogue } = useSiteContent();
+  const connected = catalogue.source === "admin";
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   // The departments page links here as #products/<category>, optionally with /add or /edit-<id>.
+  // The shops page links as #products/shop-<shopId>: the same list, filtered to that shop's products.
   const [link] = useState(() => {
     const [linked = "", action = ""] = (readHash().view === "products" ? (readHash().sub ?? "") : "").split("/");
-    return { category: linked && categoryById(linked) ? linked : "all", action };
+    const shop = linked.startsWith("shop-") ? linked.slice(5) : null;
+    return { category: !shop && linked && categoryById(linked) ? linked : "all", shopId: shop, action };
   });
   const [category, setCategory] = useState(link.category);
+  const [shopId, setShopId] = useState<string | null>(link.shopId);
+  const shop = shopId ? shops.find((item) => item.id === shopId) : undefined;
+  // What the hash carries for the current filter, so editing a product and coming back keeps the shop or department.
+  const scope = shopId ? `shop-${shopId}` : category;
   const [editing, setEditing] = useState<string | null>(link.action.startsWith("edit-") ? link.action.slice(5) : null);
   // Editing a product is its own page (#products/<category>/edit-<id>), so the back gesture returns to the list.
   useEffect(
@@ -29,24 +37,22 @@ export function Products() {
       onHashMove(() => {
         const { view, sub } = readHash();
         if (view !== "products") return;
-        const action = (sub ?? "").split("/")[1] ?? "";
+        const [linked = "", action = ""] = (sub ?? "").split("/");
         setEditing(action.startsWith("edit-") ? action.slice(5) : null);
+        // Back and forward also restore or drop the shop filter.
+        setShopId(linked.startsWith("shop-") ? linked.slice(5) : null);
       }),
     [],
   );
   const openEditor = (id: string) => {
     setEditing(id);
-    pushHash("products", `${category}/edit-${id}`);
+    pushHash("products", `${scope}/edit-${id}`);
     window.scrollTo(0, 0);
-  };
-  const closeEditor = () => {
-    setEditing(null);
-    pushHash("products", category === "all" ? null : category);
   };
   const [adding, setAdding] = useState(link.action === "add");
   const [archiving, setArchiving] = useState<ProductRow | null>(null);
 
-  const inCategory = (item: ProductRow) => category === "all" || productInCategory(item, category);
+  const inCategory = (item: ProductRow) => (!shopId || item.shopId === shopId) && (category === "all" || productInCategory(item, category));
   const products = content.products.filter(inCategory);
   const counts = {
     all: products.filter((item) => !item.archived).length,
@@ -64,7 +70,9 @@ export function Products() {
   });
   const current = content.products.find((item) => item.id === editing) ?? null;
 
-  if (current) return <ProductEditor product={current} onBack={closeEditor} />;
+  const pager = usePager(rows, `${filter}|${query}|${category}|${shopId ?? ""}`);
+
+  if (current) return <ProductEditor product={current} />;
 
   return (
     <div className="space-y-6">
@@ -77,6 +85,22 @@ export function Products() {
           </Button>
         }
       />
+
+      {shopId ? (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+          <button
+            type="button"
+            onClick={() => {
+              setShopId(null);
+              pushHash("products", category === "all" ? null : category);
+            }}
+            className="text-sm text-(--a-blue) hover:underline"
+          >
+            عرض كل المنتجات
+          </button>
+          <span className="text-xs text-(--a-muted)">{num.format(rows.length)} منتج</span>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <Tabs
@@ -115,6 +139,7 @@ export function Products() {
                 <tr className="text-xs text-(--a-muted)">
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">المنتج</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">السعر</th>
+                  <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">سعر الجملة</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">التقييم</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">معروض</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">عروض الرئيسية</th>
@@ -122,10 +147,11 @@ export function Products() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((item) => {
+                {pager.rows.map((item) => {
                   const off = item.compareAt > item.price ? Math.round((1 - item.price / item.compareAt) * 100) : 0;
+                  const open = item.archived ? null : rowOpen(() => openEditor(item.id));
                   return (
-                    <tr key={item.id} className="border-t border-(--a-line) transition hover:bg-(--a-surface-2)/50">
+                    <tr key={item.id} {...open} className={`${open ? "cursor-pointer " : ""}border-t border-(--a-line) transition hover:bg-(--a-surface-2)/50`}>
                       <td className="px-4 py-2 first:ps-5 last:pe-5">
                         <div className="flex items-center gap-3">
                           <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-(--a-surface-2)">
@@ -146,6 +172,24 @@ export function Products() {
                           {item.compareAt > item.price ? <s className="text-xs text-(--a-muted) tabular-nums">{sar.format(item.compareAt)}</s> : null}
                           {off ? <Badge tone="accent">-{num.format(off)}٪</Badge> : null}
                         </div>
+                      </td>
+                      <td className="px-4 py-2 first:ps-5 last:pe-5 tabular-nums">
+                        {item.wholesalePrice == null ? (
+                          <span className="text-(--a-muted)">غير محدد</span>
+                        ) : validWholesale(item) === null ? (
+                          <span className="text-xs text-(--a-danger)" title="سعر الجملة المحفوظ ما عاد أقل من السعر الحالي، فلا يُطبَّق">
+                            غير صالح ({num.format(item.wholesalePrice)})
+                          </span>
+                        ) : (
+                          <span className="font-medium">
+                            {sar.format(item.wholesalePrice)}
+                            {item.shopId ? null : (
+                              <span className="ms-1.5 align-middle" title="المنتج غير مربوط بمحل، فسعر الجملة لا يظهر للعملاء ولا يُطبَّق">
+                                <Badge tone="warn">بدون محل</Badge>
+                              </span>
+                            )}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2 first:ps-5 last:pe-5 tabular-nums text-(--a-muted)">
                         {item.rating > 0 ? `★ ${item.rating.toFixed(1)} · ${num.format(item.reviews)}` : "—"}
@@ -183,8 +227,13 @@ export function Products() {
             </table>
           </div>
         ) : (
-          <Empty icon={PackageSearch} title="ما فيه منتجات هنا" lead={category !== "all" && !needle ? "ما فيه منتجات بهذي الحالة في هذا القسم. غيّر التبويب أو اختر قسم ثاني." : filter === "archived" ? "المنتجات المحذوفة تنتقل للأرشيف وتقدر تسترجعها." : "جرّب كلمة بحث ثانية أو غيّر الفلتر."} />
+          <Empty
+            icon={PackageSearch}
+            title={shopId ? "ما فيه منتجات لهذا المحل" : "ما فيه منتجات هنا"}
+            lead={shopId && !needle ? `ما فيه منتجات مربوطة بـ«${shop?.name ?? "هذا المحل"}» بهذي الحالة. تربط أي منتج بالمحل من صفحة تعديل المنتج.` : category !== "all" && !needle ? "ما فيه منتجات بهذي الحالة في هذا القسم. غيّر التبويب أو اختر قسم ثاني." : filter === "archived" ? "المنتجات المحذوفة تنتقل للأرشيف وتقدر تسترجعها." : "جرّب كلمة بحث ثانية أو غيّر الفلتر."}
+          />
         )}
+        <Pager pager={pager} />
       </Panel>
 
 
@@ -193,7 +242,7 @@ export function Products() {
         onClose={() => {
           setAdding(false);
           // Drop the one-off /add or /edit from a link so a refresh doesn't reopen the form.
-          if (link.action) replaceHash("products", category === "all" ? null : category);
+          if (link.action) replaceHash("products", scope === "all" ? null : scope);
         }}
         defaultCategory={category === "all" ? null : category}
         onAdded={() => {
@@ -210,6 +259,60 @@ export function Products() {
         lead="المنتج يختفي من المتجر وينتقل للأرشيف. بياناته تبقى محفوظة وتقدر تسترجعه في أي وقت."
         action="نقل للأرشيف"
       />
+    </div>
+  );
+}
+
+/**
+ * Optional wholesale price per piece, entered once per product. Only a positive number below the current selling price is
+ * saved; an invalid entry is refused with a message beside the field and the saved value stays as it was. An empty field
+ * clears it (it is never read as zero). Connected to the store's database the server saves and re-checks it; in the local
+ * preview it stays in this browser only.
+ */
+function WholesaleField({ value, price, hasShop, connected, onChange }: { value: number | null | undefined; price: number; hasShop: boolean; connected: boolean; onChange: (value: number | null) => void }) {
+  const [text, setText] = useState(value == null ? "" : String(value));
+  const [error, setError] = useState("");
+  // The saved value can stop being valid when the selling price changes afterwards.
+  const stale = value != null && !(value > 0 && value < price);
+  const note = error || (stale ? `سعر الجملة المحفوظ (${num.format(value)} ر.س) لم يعد أقل من سعر البيع الحالي، فلا يُطبَّق. عدّله أو امسحه.` : "");
+
+  function change(raw: string) {
+    setText(raw);
+    if (raw.trim() === "") {
+      setError("");
+      onChange(null);
+      return;
+    }
+    const next = Number(raw);
+    if (!Number.isFinite(next) || next <= 0) {
+      setError("اكتب رقمًا أكبر من صفر.");
+      return;
+    }
+    if (next >= price) {
+      setError(`سعر الجملة لازم يكون أقل من سعر البيع الحالي (${num.format(price)} ر.س).`);
+      return;
+    }
+    setError("");
+    onChange(next);
+  }
+
+  return (
+    <div>
+      <Field label="سعر الجملة للقطعة (ر.س)" type="number" dir="ltr" value={text} placeholder="غير محدد" onChange={change} />
+      {note ? (
+        <p role="alert" className="mt-1.5 text-xs text-(--a-danger)">
+          {note}
+        </p>
+      ) : (
+        <p className="mt-1.5 text-xs text-(--a-muted)">
+          اختياري. يُطبَّق من 5 قطع لنفس المنتج عند نفس المحل، للعميل المسجّل.{connected ? "" : " محفوظ في هذا المتصفح فقط (معاينة)."}
+        </p>
+      )}
+      {value != null && !note && !hasShop ? (
+        <p role="status" className="mt-1.5 text-xs text-(--a-warn)">
+          المنتج غير مربوط بمحل، فسعر الجملة لا يظهر للعملاء ولا يُطبَّق. اربطه بمحل من حقل «المحل» ليشتغل.
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -321,11 +424,12 @@ function ImagePicker({ label, onPick }: { label: string; onPick: (dataUrl: strin
   );
 }
 
-const EMPTY_PRODUCT: NewProduct = { nameAr: "", nameEn: "", categoryAr: "", categoryEn: "", categoryId: undefined, price: 0, compareAt: 0, image: undefined, hidden: false, onHome: false };
+const EMPTY_PRODUCT: NewProduct = { nameAr: "", nameEn: "", categoryAr: "", categoryEn: "", categoryId: undefined, shopId: null, price: 0, compareAt: 0, image: undefined, hidden: false, onHome: false };
 
 /** New product form; the product is saved with the site content and shows in its department right away. */
 function AddProduct({ open, onClose, onAdded, defaultCategory }: { open: boolean; onClose: () => void; onAdded: () => void; defaultCategory: string | null }) {
-  const { content, addProduct } = useSiteContent();
+  const { content, addProduct, shops, catalogue } = useSiteContent();
+  const connected = catalogue.source === "admin";
   const [form, setForm] = useState<NewProduct>(EMPTY_PRODUCT);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -355,6 +459,8 @@ function AddProduct({ open, onClose, onAdded, defaultCategory }: { open: boolean
         nameAr: form.nameAr.trim(),
         nameEn: form.nameEn.trim(),
         compareAt: form.compareAt > form.price ? form.compareAt : form.price,
+        // Only a still-valid wholesale price is kept (the server checks it again).
+        wholesalePrice: validWholesale({ price: form.price, wholesalePrice: form.wholesalePrice }),
       });
       onAdded();
       onClose();
@@ -392,6 +498,7 @@ function AddProduct({ open, onClose, onAdded, defaultCategory }: { open: boolean
           onChange={(categoryId) => set({ categoryId: categoryId || undefined, ...labelsFor(categoryId) })}
           options={[["", "اختر القسم"], ...tree.map((item): [string, string] => [item.id, `${"\u00a0\u00a0\u00a0".repeat(item.level - 1)}${item.nameAr}`])]}
         />
+        <Select label="المحل" value={form.shopId ?? ""} onChange={(shopId) => set({ shopId: shopId || null })} options={shopOptions(shops)} />
         <BilingualField
           label="اسم القسم الظاهر على المنتج"
           ar={form.categoryAr}
@@ -401,6 +508,7 @@ function AddProduct({ open, onClose, onAdded, defaultCategory }: { open: boolean
         />
         <div className="grid gap-3 sm:grid-cols-2">
           <PriceField label="السعر (ر.س)" value={form.price} onChange={(price) => set({ price })} />
+          <WholesaleField key={open ? "open" : "closed"} value={form.wholesalePrice} price={form.price} hasShop={Boolean(form.shopId)} connected={connected} onChange={(wholesalePrice) => set({ wholesalePrice })} />
           <PriceField label="السعر قبل الخصم (ر.س، اختياري)" value={form.compareAt} onChange={(compareAt) => set({ compareAt })} />
         </div>
         <div className="space-y-3 rounded-xl border border-(--a-line) p-4">
@@ -519,6 +627,12 @@ function ProductPageFields({ product }: { product: ProductRow }) {
   );
 }
 
+/** "بدون محل" first; a linked shop missing from the list (not loaded yet) is kept so the choice is not lost. */
+function shopOptions(shops: Shop[], linked?: string | null): Array<[string, string]> {
+  const known = linked && !shops.some((shop) => shop.id === linked);
+  return [["", "بدون محل"], ...(known ? ([[linked, "محل غير معروف"]] as Array<[string, string]>) : []), ...shops.map((shop): [string, string] => [shop.id, shop.name])];
+}
+
 function LangTag({ lang }: { lang: Lang }) {
   return (
     <span className={cn("inline-block rounded px-1.5 py-px text-[10px] font-semibold", lang === "en" ? "bg-(--a-blue-soft) text-(--a-blue)" : "bg-(--a-accent-soft) text-(--a-accent-ink)")}>
@@ -528,15 +642,13 @@ function LangTag({ lang }: { lang: Lang }) {
 }
 
 /** Full-page product editor: basic details and visibility, the photo, and the product page copy. */
-function ProductEditor({ product, onBack }: { product: ProductRow; onBack: () => void }) {
-  const { content, updateProduct } = useSiteContent();
+function ProductEditor({ product }: { product: ProductRow }) {
+  const { content, updateProduct, shops, catalogue } = useSiteContent();
+  const connected = catalogue.source === "admin";
   const update = (patch: Partial<ProductRow>) => updateProduct(product.id, patch);
 
   return (
     <div className="space-y-6">
-      <Button icon={ArrowRight} onClick={onBack}>
-        رجوع للمنتجات
-      </Button>
       <PageHead
         title={`تعديل: ${product.nameAr}`}
         lead="التعديل يتحفظ تلقائيًا ويظهر على الموقع."
@@ -567,6 +679,7 @@ function ProductEditor({ product, onBack }: { product: ProductRow; onBack: () =>
                   ...departmentTree(content.categoryHidden).map((item): [string, string] => [item.id, `${"\u00a0\u00a0\u00a0".repeat(item.level - 1)}${item.nameAr}`]),
                 ]}
               />
+              <Select label="المحل" value={product.shopId ?? ""} onChange={(shopId) => update({ shopId: shopId || null })} options={shopOptions(shops, product.shopId)} />
               <BilingualField
                 label="اسم القسم الظاهر على المنتج"
                 ar={product.categoryAr}
@@ -576,6 +689,7 @@ function ProductEditor({ product, onBack }: { product: ProductRow; onBack: () =>
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 <PriceField label="السعر (ر.س)" value={product.price} onChange={(price) => update({ price })} />
+                <WholesaleField value={product.wholesalePrice} price={product.price} hasShop={Boolean(product.shopId)} connected={connected} onChange={(wholesalePrice) => update({ wholesalePrice })} />
                 <PriceField label="السعر قبل الخصم (ر.س)" value={product.compareAt} onChange={(compareAt) => update({ compareAt })} />
               </div>
             </div>

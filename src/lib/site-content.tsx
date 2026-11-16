@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ApiError, api, apiMessage } from "@/lib/api";
+import { ApiError, PREVIEW, api, apiMessage } from "@/lib/api";
 import { CATALOG, allCategories, registerAddedCategories, registerCatalogue, type CatalogCategory } from "@/lib/catalog";
 import { translations, type Lang } from "@/lib/i18n";
 import { DEMO_PRODUCTS, type DemoProduct } from "@/data/demo-products";
@@ -31,6 +31,14 @@ export type ProductRow = {
   source?: "demo" | "added";
   /** Recorded stock from the database (dashboard only); null means not tracked. */
   stock?: number | null;
+  /** Explicit match key shared by the same product listed by different shops (preview data only for now). */
+  matchKey?: string;
+  /** Optional wholesale price per piece for this listing (from 5 pieces); local to this browser, not sent to the server. */
+  wholesalePrice?: number | null;
+  /** The shop that owns this product listing; missing or null: not linked to any shop. */
+  shopId?: string | null;
+  /** The shop's name as sent with the product by the API (the dashboard reads the current name from its shop list). */
+  shop?: Shop | null;
   /** Product page copy from the dashboard. Null or missing: the built-in highlights and specs show instead. */
   descriptionAr?: string;
   descriptionEn?: string;
@@ -42,10 +50,129 @@ export type ProductRow = {
 
 export type ProductSpec = { label: string; value: string };
 
-export type NewProduct = Pick<ProductRow, "nameAr" | "nameEn" | "categoryAr" | "categoryEn" | "categoryId" | "price" | "compareAt" | "image" | "hidden" | "onHome">;
+export type Shop = { id: string; name: string };
+
+export type NewProduct = Pick<ProductRow, "nameAr" | "nameEn" | "categoryAr" | "categoryEn" | "categoryId" | "price" | "compareAt" | "image" | "hidden" | "onHome"> & { shopId?: string | null; wholesalePrice?: number | null };
+
+// Preview data for the shop price comparison: 3 demo shops, each listing the same tablet (same model, storage,
+// colour and condition) at a different price. The offers share an explicit matchKey; nothing is matched by name.
+// Added only in preview (`VITE_ADMIN_PREVIEW=1`), once per id, and never replaces anything already saved.
+const COMPARE_DEMO_KEY = "demo:tablet-11in-256gb-gray-new";
+const COMPARE_DEMO_SHOPS: Shop[] = [
+  { id: "demo-shop-1", name: "محل تجريبي: الرياض للإلكترونيات" },
+  { id: "demo-shop-2", name: "محل تجريبي: النور للحاسبات" },
+  { id: "demo-shop-3", name: "محل تجريبي: الواحة للتقنية" },
+];
+const COMPARE_DEMO_SPECS: Record<Lang, ProductSpec[]> = {
+  ar: [
+    { label: "الشاشة", value: "11 بوصة" },
+    { label: "السعة", value: "256 جيجا" },
+    { label: "اللون", value: "رمادي" },
+    { label: "الحالة", value: "جديد" },
+  ],
+  en: [
+    { label: "Display", value: "11 inch" },
+    { label: "Storage", value: "256 GB" },
+    { label: "Colour", value: "Gray" },
+    { label: "Condition", value: "New" },
+  ],
+};
+// Urdu copy for the demo rows. Used only while a row still holds the untouched Arabic demo text, so edits made in
+// the dashboard always win. Shop names are brand names and stay as they are.
+const COMPARE_DEMO_AR_NAME = "[بيانات تجريبية] جهاز لوحي 11 بوصة · 256 جيجا · رمادي · جديد";
+const COMPARE_DEMO_UR = {
+  name: "[آزمائشی ڈیٹا] 11 انچ ٹیبلٹ · 256 جی بی · سرمئی · نیا",
+  category: "ٹیبلٹس",
+};
+// A second demo device listed by two different shops (the Riyadh and Oasis demo shops), same model and configuration.
+const LAPTOP_DEMO_KEY = "demo:laptop-servo-15-16gb-512gb-gray-new";
+const LAPTOP_DEMO_AR_NAME = "[بيانات تجريبية] لابتوب سيرفو 15 · 16 جيجا · 512 جيجا · رمادي · جديد";
+const LAPTOP_DEMO_SPECS: Record<Lang, ProductSpec[]> = {
+  ar: [
+    { label: "الشاشة", value: "15.6 بوصة" },
+    { label: "الذاكرة", value: "16 جيجا" },
+    { label: "التخزين", value: "512 جيجا" },
+    { label: "اللون", value: "رمادي" },
+    { label: "الحالة", value: "جديد" },
+  ],
+  en: [
+    { label: "Display", value: "15.6 inch" },
+    { label: "Memory", value: "16 GB" },
+    { label: "Storage", value: "512 GB" },
+    { label: "Colour", value: "Gray" },
+    { label: "Condition", value: "New" },
+  ],
+};
+const LAPTOP_DEMO_OFFERS: Array<{ shopId: string; price: number }> = [
+  { shopId: "demo-shop-1", price: 4449 },
+  { shopId: "demo-shop-3", price: 4299 },
+];
+const COMPARE_DEMO_PRICES = [1749, 1689, 1799];
+const COMPARE_DEMO_PRODUCTS: ProductRow[] = COMPARE_DEMO_SHOPS.map((shop, index) => ({
+  id: `demo-compare-${index + 1}`,
+  mark: "",
+  price: COMPARE_DEMO_PRICES[index],
+  compareAt: COMPARE_DEMO_PRICES[index],
+  rating: 0,
+  reviews: 0,
+  hidden: false,
+  onHome: false,
+  nameAr: COMPARE_DEMO_AR_NAME,
+  nameEn: "[Demo data] 11-inch tablet · 256 GB · Gray · New",
+  categoryAr: "أجهزة لوحية",
+  categoryEn: "Tablets",
+  categoryId: "tablets",
+  image: "/departments/tablets.png",
+  source: "demo",
+  matchKey: COMPARE_DEMO_KEY,
+  shopId: shop.id,
+  specsAr: COMPARE_DEMO_SPECS.ar,
+  specsEn: COMPARE_DEMO_SPECS.en,
+}));
+
+const LAPTOP_DEMO_PRODUCTS: ProductRow[] = LAPTOP_DEMO_OFFERS.map((offer, index) => ({
+  id: `demo-compare-laptop-${index + 1}`,
+  mark: "",
+  price: offer.price,
+  compareAt: offer.price,
+  rating: 0,
+  reviews: 0,
+  hidden: false,
+  onHome: false,
+  nameAr: LAPTOP_DEMO_AR_NAME,
+  nameEn: "[Demo data] Servo 15 laptop · 16 GB · 512 GB · Gray · New",
+  categoryAr: "لابتوبات دراسة",
+  categoryEn: "Student laptops",
+  categoryId: "student-laptops",
+  image: "/departments/student-laptops.png",
+  source: "demo",
+  matchKey: LAPTOP_DEMO_KEY,
+  shopId: offer.shopId,
+  specsAr: LAPTOP_DEMO_SPECS.ar,
+  specsEn: LAPTOP_DEMO_SPECS.en,
+}));
+const ALL_DEMO_PRODUCTS = [...COMPARE_DEMO_PRODUCTS, ...LAPTOP_DEMO_PRODUCTS];
+
+function withCompareDemo(content: SiteContent): SiteContent {
+  if (!PREVIEW) return content;
+  const missing = ALL_DEMO_PRODUCTS.filter((item) => !content.products.some((row) => row.id === item.id));
+  // Demo rows saved before their specs existed get them filled in; specs that are already set are never touched.
+  const known = new Map(ALL_DEMO_PRODUCTS.map((item) => [item.id, item]));
+  const needSpecs = content.products.some((row) => known.has(row.id) && !row.specsAr);
+  if (!missing.length && !needSpecs) return content;
+  const filled = content.products.map((row) => {
+    const demo = known.get(row.id);
+    return demo ? { ...row, specsAr: row.specsAr ?? demo.specsAr, specsEn: row.specsEn ?? demo.specsEn } : row;
+  });
+  return { ...content, products: [...filled, ...missing] };
+}
+
+// Old local demo products that stay in src/data/demo-products.ts but no longer show in the store: the 11-inch tablet is
+// replaced by the shop-comparison offers (demo-compare-1..3). Hidden, not deleted, so it stays in the dashboard's hidden list.
+const RETIRED_DEMO_IDS: ReadonlySet<string> = new Set(["demo-tablet"]);
 
 function demoRow(item: DemoProduct): ProductRow {
-  return { ...item, mark: "", rating: 0, reviews: 0, hidden: false, onHome: false, source: "demo" };
+  return { ...item, mark: "", rating: 0, reviews: 0, hidden: RETIRED_DEMO_IDS.has(item.id), onHome: false, source: "demo" };
 }
 
 /** Home page sections the dashboard can switch off. The footer always shows. */
@@ -219,6 +346,10 @@ function normalOrder(order: readonly string[] | undefined, custom: readonly Cust
 }
 
 function load(): SiteContent {
+  return withCompareDemo(loadSaved());
+}
+
+function loadSaved(): SiteContent {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return defaults();
@@ -227,6 +358,8 @@ function load(): SiteContent {
     if (!Array.isArray(parsed.products) || OFFER_PRODUCTS.some((item) => !parsed.products.some((row) => row.id === item.id))) return defaults();
     // Demo products ship with the code, so older saved content picks up any it is missing.
     parsed.products = [...parsed.products, ...DEMO_PRODUCTS.filter((item) => !parsed.products.some((row) => row.id === item.id)).map(demoRow)];
+    // A retired demo product that was saved earlier in this browser is hidden too (only that exact id).
+    parsed.products = parsed.products.map((row) => (RETIRED_DEMO_IDS.has(row.id) && row.source === "demo" && !row.hidden ? { ...row, hidden: true } : row));
     if (!parsed.hero?.ar?.length || !parsed.deals?.en || !parsed.footer?.ar) return defaults();
     if (!Array.isArray(parsed.categoryHidden)) parsed.categoryHidden = [];
     if (!Array.isArray(parsed.categoryArchived)) parsed.categoryArchived = [];
@@ -286,6 +419,19 @@ function load(): SiteContent {
     }
     if (parsed.deals?.ar?.eyebrow === "أقوى عروض السيف") parsed.deals.ar.eyebrow = translations.ar.deals.eyebrow;
     if (parsed.deals?.en?.eyebrow === "Al-Saif's strongest offers") parsed.deals.en.eyebrow = translations.en.deals.eyebrow;
+    // The offers banner's title and description moved to new wording: a copy that still holds the previous built-in text
+    // is updated; anything edited in the dashboard is left as it is.
+    const previousDeals = {
+      ar: { title: "أقوى العروض الحصرية", lead: "أسعار واضحة على جوالات، وأجهزة بلايستيشن، وإكسسوارات مختارة." },
+      en: { title: "Exclusive offers", lead: "Clear prices on selected phones, PlayStation consoles, and accessories." },
+      ur: { title: "خصوصی آفرز", lead: "موبائل، پلے اسٹیشن اور منتخب لوازمات پر صاف قیمتیں۔" },
+    } as const;
+    for (const l of ["ar", "en", "ur"] as const) {
+      const saved = parsed.deals?.[l];
+      if (!saved) continue;
+      if (saved.title === previousDeals[l].title) saved.title = translations[l].deals.title;
+      if (saved.lead === previousDeals[l].lead) saved.lead = translations[l].deals.lead;
+    }
     if (parsed.setups?.ar?.title === "جلسة البلايستيشن وشاشتها") {
       parsed.setups.ar = {
         eyebrow: translations.ar.setups.eyebrow,
@@ -356,6 +502,8 @@ type ApiProduct = {
   specsEn?: ProductSpec[] | null;
   price: string;
   compareAtPrice: string | null;
+  /** Optional per-piece wholesale price, set by the server; null when the listing has none. */
+  wholesalePrice?: string | null;
   categoryId: string | null;
   showInHomeOffers: boolean;
   ratingAverage: string | null;
@@ -364,7 +512,10 @@ type ApiProduct = {
   isVisible?: boolean;
   archivedAt?: string | null;
   stockQuantity?: number | null;
+  shop?: Shop | null;
 };
+
+type ApiShop = Shop & { products?: number };
 
 type ApiCategory = {
   id: string;
@@ -392,6 +543,8 @@ type Remote = {
   archived: string[];
   lowStock: number;
   canEdit: boolean;
+  /** Shops from the database (dashboard only). */
+  shops: Shop[];
 };
 
 const BUILT_IN_CATEGORIES = new Set(CATALOG.map((item) => item.id));
@@ -404,6 +557,7 @@ function productFromApi(item: ApiProduct): ProductRow {
     mark: builtIn?.mark ?? "",
     price,
     compareAt: item.compareAtPrice === null ? price : Number(item.compareAtPrice),
+    wholesalePrice: item.wholesalePrice == null ? null : Number(item.wholesalePrice),
     rating: item.ratingAverage === null ? 0 : Number(item.ratingAverage),
     reviews: item.reviewCount,
     hidden: item.isVisible === false,
@@ -419,6 +573,8 @@ function productFromApi(item: ApiProduct): ProductRow {
     image: builtIn ? (item.images[0]?.url.startsWith("/uploads/") ? item.images[0].url : undefined) : item.images[0]?.url,
     source: builtIn ? undefined : item.id.startsWith("demo-") ? "demo" : "added",
     stock: item.stockQuantity ?? null,
+    shopId: item.shop?.id ?? null,
+    shop: item.shop ?? null,
     descriptionAr: item.descriptionAr ?? "",
     descriptionEn: item.descriptionEn ?? "",
     featuresAr: item.featuresAr ?? null,
@@ -457,8 +613,17 @@ function withCategoryLists(remote: Remote, categories: Array<ReturnType<typeof c
   };
 }
 
-function remoteFromApi(mode: Remote["mode"], data: { categories: ApiCategory[]; products: ApiProduct[]; settings?: { lowStock: number }; canEdit?: boolean }): Remote {
-  const base: Remote = { mode, products: data.products.map(productFromApi), categories: [], hidden: [], archived: [], lowStock: data.settings?.lowStock ?? 5, canEdit: Boolean(data.canEdit) };
+function remoteFromApi(mode: Remote["mode"], data: { categories: ApiCategory[]; products: ApiProduct[]; shops?: ApiShop[]; settings?: { lowStock: number }; canEdit?: boolean }): Remote {
+  const base: Remote = {
+    mode,
+    products: data.products.map(productFromApi),
+    categories: [],
+    hidden: [],
+    archived: [],
+    lowStock: data.settings?.lowStock ?? 5,
+    canEdit: Boolean(data.canEdit),
+    shops: (data.shops ?? []).map(({ id, name }) => ({ id, name })),
+  };
   return withCategoryLists(base, data.categories.map(categoryFromApi));
 }
 
@@ -475,6 +640,15 @@ type ContentApi = {
   content: SiteContent;
   catalogue: CatalogueState;
   updateProduct: (id: string, patch: Partial<ProductRow>) => void;
+  /** Shops listed in the dashboard: from the database when connected, otherwise this browser's own list (preview). */
+  shops: Shop[];
+  /** Adds a shop and resolves with its id once it is saved. */
+  addShop: (name: string) => Promise<string>;
+  renameShop: (id: string, name: string) => Promise<void>;
+  /** The shop that owns a product, or null when the product is not linked to a shop. */
+  shopOf: (productId: string) => Shop | null;
+  /** Every visible listing of the same product (same explicit matchKey), with its shop; empty when it has no matchKey. */
+  offersOf: (productId: string) => Array<{ id: string; price: number; shop: Shop | null }>;
   /** Adds a product and resolves with its id once it is saved. */
   addProduct: (input: NewProduct) => Promise<string>;
   updateHero: (lang: Lang, index: number, patch: Partial<SlideCopy>) => void;
@@ -525,12 +699,27 @@ function toggled(list: number[], value: number, on: boolean) {
   return on ? [...new Set([...list, value])] : list.filter((item) => item !== value);
 }
 
+const SHOPS_KEY = "alsaif:shops:v1";
+
+function loadLocalShops(): Shop[] {
+  try {
+    const parsed: unknown = JSON.parse(localStorage.getItem(SHOPS_KEY) ?? "[]");
+    const saved = Array.isArray(parsed) ? parsed.filter((item): item is Shop => typeof item?.id === "string" && typeof item?.name === "string") : [];
+    // Preview: the demo shops are added once per id; renamed or existing shops are left as they are.
+    return PREVIEW ? [...saved, ...COMPARE_DEMO_SHOPS.filter((demo) => !saved.some((shop) => shop.id === demo.id))] : saved;
+  } catch {
+    return PREVIEW ? [...COMPARE_DEMO_SHOPS] : [];
+  }
+}
+
 const SiteContentContext = createContext<ContentApi | null>(null);
 
 export function SiteContentProvider({ children }: { children: ReactNode }) {
   // This browser's saved content. Catalogue fields here are only used when the database is not available.
   const [local, setContent] = useState<SiteContent>(load);
   const [remote, setRemote] = useState<Remote | null>(null);
+  // Shops made in this browser (preview, no database). Never sent to a server.
+  const [localShops, setLocalShops] = useState<Shop[]>(loadLocalShops);
   const [saving, setSaving] = useState(0);
   const [saveError, setSaveError] = useState<string | null>(null);
   // Edits waiting to be sent (typing is sent after a short pause), and the stock each product had on the server.
@@ -565,6 +754,14 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
     }
   }, [local]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(SHOPS_KEY, JSON.stringify(localShops));
+    } catch {
+      // Storage blocked: the shops stay for this visit.
+    }
+  }, [localShops]);
+
   // The storefront reads the catalogue from the database when the API answers.
   useEffect(() => {
     const controller = new AbortController();
@@ -581,7 +778,8 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
   };
 
   const loadAdminCatalogue = useCallback(async () => {
-    const data = await api<{ categories: ApiCategory[]; products: ApiProduct[]; settings: { lowStock: number }; canEdit: boolean }>("/admin/catalogue");
+    if (PREVIEW) return; // preview: stay on the browser's own catalogue, no database
+    const data = await api<{ categories: ApiCategory[]; products: ApiProduct[]; shops: ApiShop[]; settings: { lowStock: number }; canEdit: boolean }>("/admin/catalogue");
     const next = remoteFromApi("admin", data);
     remember(next.products);
     setRemote(next);
@@ -683,14 +881,17 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
       if (patch.categoryEn !== undefined) body.labelEn = patch.categoryEn;
       if (patch.price !== undefined && patch.price > 0) body.price = patch.price;
       if (patch.compareAt !== undefined) body.compareAtPrice = patch.compareAt;
+      // Saved by the server, which checks it against the selling price; an empty value is null, never zero.
+      if (patch.wholesalePrice !== undefined) body.wholesalePrice = patch.wholesalePrice;
       if (patch.hidden !== undefined) body.isVisible = !patch.hidden;
       if (patch.onHome !== undefined) body.showInHomeOffers = patch.onHome;
       if (patch.categoryId !== undefined) body.categoryId = patch.categoryId || null;
+      if (patch.shopId !== undefined) body.shopId = patch.shopId || null;
       if (patch.image?.startsWith("data:")) body.image = patch.image;
       for (const key of ["descriptionAr", "descriptionEn", "featuresAr", "featuresEn", "specsAr", "specsEn"] as const) {
         if (patch[key] !== undefined) body[key] = patch[key];
       }
-      const immediate = patch.hidden !== undefined || patch.onHome !== undefined || patch.categoryId !== undefined || body.image !== undefined;
+      const immediate = patch.hidden !== undefined || patch.onHome !== undefined || patch.categoryId !== undefined || patch.shopId !== undefined || body.image !== undefined;
       if (Object.keys(body).length) schedule(`product:${id}`, body, sendProduct(id), immediate ? 0 : 600);
       if (patch.archived !== undefined) {
         const action = patch.archived ? "archive" : "restore";
@@ -698,6 +899,43 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
           .then((result) => applyProduct(result.product))
           .catch(fail);
       }
+    },
+    shops: admin ? remote.shops : localShops,
+    async addShop(name) {
+      const clean = name.trim();
+      if (!clean) throw new ApiError(400, "INVALID_INPUT");
+      if (!admin) {
+        const shop = { id: `shop-${Date.now().toString(36)}`, name: clean };
+        setLocalShops((current) => [...current, shop]);
+        return shop.id;
+      }
+      const result = await track(api<{ shop: ApiShop }>("/admin/shops", { body: { name: clean } }));
+      setRemote((current) => current && { ...current, shops: [...current.shops, { id: result.shop.id, name: result.shop.name }] });
+      return result.shop.id;
+    },
+    async renameShop(id, name) {
+      const clean = name.trim();
+      if (!clean) throw new ApiError(400, "INVALID_INPUT");
+      if (!admin) {
+        setLocalShops((current) => current.map((shop) => (shop.id === id ? { ...shop, name: clean } : shop)));
+        return;
+      }
+      const result = await track(api<{ shop: ApiShop }>(`/admin/shops/${encodeURIComponent(id)}`, { method: "PATCH", body: { name: clean } }));
+      setRemote((current) => current && { ...current, shops: current.shops.map((shop) => (shop.id === id ? { id, name: result.shop.name } : shop)) });
+    },
+    shopOf(productId) {
+      const row = content.products.find((item) => item.id === productId);
+      if (!row?.shopId) return null;
+      const list = admin ? remote.shops : localShops;
+      return list.find((shop) => shop.id === row.shopId) ?? row.shop ?? null;
+    },
+    offersOf(productId) {
+      const key = content.products.find((item) => item.id === productId)?.matchKey;
+      if (!key) return [];
+      const list = admin ? remote.shops : localShops;
+      return content.products
+        .filter((item) => item.matchKey === key && !item.hidden && !item.archived)
+        .map((item) => ({ id: item.id, price: item.price, shop: (item.shopId && list.find((shop) => shop.id === item.shopId)) || item.shop || null }));
     },
     async addProduct(input) {
       if (!admin) {
@@ -714,8 +952,10 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
             labelAr: input.categoryAr,
             labelEn: input.categoryEn,
             categoryId: input.categoryId,
+            shopId: input.shopId || null,
             price: input.price,
             compareAtPrice: input.compareAt,
+            wholesalePrice: input.wholesalePrice ?? null,
             isVisible: !input.hidden,
             showInHomeOffers: input.onHome,
             image: input.image?.startsWith("data:") ? input.image : undefined,
@@ -870,6 +1110,8 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
       if (!row) return undefined;
       // Catalogue fields are bilingual (ar/en); Urdu uses Arabic names until *Ur columns exist.
       if (lang === "en") return { name: row.nameEn, category: row.categoryEn };
+      if (lang === "ur" && row.source === "demo" && row.nameAr === COMPARE_DEMO_AR_NAME) return { name: COMPARE_DEMO_UR.name, category: COMPARE_DEMO_UR.category };
+      if (lang === "ur" && row.source === "demo" && row.nameAr === LAPTOP_DEMO_AR_NAME) return { name: "[آزمائشی ڈیٹا] سروو 15 لیپ ٹاپ · 16 جی بی · 512 جی بی · سرمئی · نیا", category: "اسٹوڈنٹ لیپ ٹاپس" };
       return { name: row.nameAr, category: row.categoryAr };
     },
     visibleProducts(mode) {

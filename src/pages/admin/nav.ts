@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Boxes,
+  ClipboardList,
   CreditCard,
   LayoutDashboard,
   LayoutGrid,
@@ -8,6 +9,7 @@ import {
   Percent,
   Settings,
   ShoppingCart,
+  Store,
   Truck,
   Users,
   Images,
@@ -17,11 +19,13 @@ import type { IconType } from "./ui";
 export type View =
   | "overview"
   | "orders"
+  | "setupRequests"
   | "customers"
   | "shipping"
   | "payments"
   | "products"
   | "departments"
+  | "shops"
   | "inventory"
   | "offers"
   | "content"
@@ -39,6 +43,7 @@ export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     label: "المبيعات",
     items: [
       { id: "orders", label: "الطلبات", icon: ShoppingCart },
+      { id: "setupRequests", label: "طلبات التجهيز", icon: ClipboardList },
       { id: "customers", label: "العملاء", icon: Users },
       { id: "shipping", label: "الشحن والتوصيل", icon: Truck },
       { id: "payments", label: "المدفوعات", icon: CreditCard },
@@ -49,6 +54,7 @@ export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { id: "products", label: "المنتجات", icon: Package },
       { id: "departments", label: "الأقسام", icon: LayoutGrid },
+      { id: "shops", label: "المحلات", icon: Store },
       { id: "inventory", label: "المخزون", icon: Boxes },
       { id: "offers", label: "العروض والخصومات", icon: Percent },
     ],
@@ -78,12 +84,66 @@ export function readHash(): { view: View; sub: string | null } {
   return isView(view) ? { view, sub: sub ? decodeURIComponent(sub) : null } : { view: "overview", sub: null };
 }
 
-export function pushHash(view: View, sub: string | null = null) {
+// Leaving a page that holds unconfirmed edits: the page registers a guard, and the dashboard shell registers the
+// prompt that asks whether to leave. Every move to another dashboard section goes through pushHash (links, sidebar,
+// breadcrumbs) or the browser's back and forward gestures; both ask first while the guard reports unsaved edits.
+let leaveGuard: (() => boolean) | null = null;
+let leavePrompt: ((proceed: () => void) => void) | null = null;
+let committedUrl = typeof window === "undefined" ? "" : window.location.href;
+let passing = false;
+
+export function registerLeaveGuard(hasUnsaved: () => boolean) {
+  leaveGuard = hasUnsaved;
+  return () => {
+    if (leaveGuard === hasUnsaved) leaveGuard = null;
+  };
+}
+
+export function registerLeavePrompt(prompt: (proceed: () => void) => void) {
+  leavePrompt = prompt;
+  return () => {
+    if (leavePrompt === prompt) leavePrompt = null;
+  };
+}
+
+const viewOfHash = (hash: string): View => {
+  const [view = ""] = hash.replace(/^#/, "").split("/");
+  return isView(view) ? view : "overview";
+};
+const viewOfUrl = (url: string) => viewOfHash(new URL(url, "http://x").hash);
+
+function pushHashNow(view: View, sub: string | null) {
   const hash = view === "overview" && !sub ? "" : `#${view}${sub ? `/${encodeURIComponent(sub)}` : ""}`;
   if (window.location.hash === hash) return;
   window.history.pushState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
+  committedUrl = window.location.href;
   // pushState fires no event of its own; let listeners re-read the hash.
+  passing = true;
   window.dispatchEvent(new PopStateEvent("popstate"));
+  passing = false;
+}
+
+export function pushHash(view: View, sub: string | null = null) {
+  if (leaveGuard && leavePrompt && leaveGuard() && view !== readHash().view) {
+    leavePrompt(() => pushHashNow(view, sub));
+    return;
+  }
+  pushHashNow(view, sub);
+}
+
+// Back and forward: if the move would leave a page with unconfirmed edits, put the address back and ask first.
+// This listener is registered before any page's own, so pages never see the blocked move.
+if (typeof window !== "undefined") {
+  window.addEventListener("popstate", () => {
+    if (passing) return;
+    const next = readHash();
+    if (leaveGuard && leavePrompt && leaveGuard() && viewOfUrl(committedUrl) !== next.view) {
+      window.history.pushState(null, "", committedUrl);
+      leavePrompt(() => pushHashNow(next.view, next.sub));
+      return;
+    }
+    committedUrl = window.location.href;
+  });
 }
 
 /** Calls back whenever the dashboard location changes, including the browser back and forward gestures. */
@@ -100,4 +160,5 @@ export function onHashMove(listener: () => void) {
 export function replaceHash(view: View, sub: string | null = null) {
   const hash = view === "overview" && !sub ? "" : `#${view}${sub ? `/${encodeURIComponent(sub)}` : ""}`;
   window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}${hash}`);
+  committedUrl = window.location.href;
 }

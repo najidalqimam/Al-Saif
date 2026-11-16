@@ -20,7 +20,30 @@ export class ApiError extends Error {
 /** Fired when the server says the admin session is gone, so the dashboard can show the login again. */
 export const UNAUTHORIZED_EVENT = "alsaif:unauthorized";
 
+/** Local preview: no API or database; the dashboard runs on browser data. Only in `pnpm dev` with VITE_ADMIN_PREVIEW=1. */
+export const PREVIEW = import.meta.env.DEV && import.meta.env.VITE_ADMIN_PREVIEW === "1";
+
+const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
+const DEMO_CUSTOMERS = [
+  ["c1", "أحمد", "العتيبي", "0501234567", "ahmed@example.com", 3, 2, "2450.00", 2],
+  ["c2", "سارة", "القحطاني", "0559876543", "sara@example.com", 1, 1, "899.00", 5],
+  ["c3", "خالد", "الشمري", "0533344455", "khaled@example.com", 0, 0, "0.00", 9],
+].map(([id, firstName, lastName, phone, email, orders, addresses, spent, ago]) => ({
+  id, firstName, lastName, phone, email, avatar: null, createdAt: day(Number(ago) + 20), lastLoginAt: day(Number(ago)), orders, addresses, spent,
+  lastOrderAt: Number(orders) ? day(Number(ago)) : null, welcomeEmail: null,
+}));
+
+function previewApi(path: string): unknown {
+  if (path.startsWith("/admin/customers/")) {
+    const id = decodeURIComponent(path.split("/")[3].split("?")[0]);
+    return { customer: DEMO_CUSTOMERS.find((row) => row.id === id) ?? DEMO_CUSTOMERS[0], addresses: [], orders: [] };
+  }
+  if (path.startsWith("/admin/customers")) return { customers: DEMO_CUSTOMERS, total: DEMO_CUSTOMERS.length, guestOrders: 2 };
+  throw new ApiError(0, "NO_API");
+}
+
 export async function api<T>(path: string, init: { method?: string; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
+  if (PREVIEW) return previewApi(path) as T;
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
@@ -60,6 +83,8 @@ const MESSAGES: Record<string, string> = {
   INVALID_INPUT: "بعض القيم غير صحيحة. راجع الحقول وحاول مرة ثانية.",
   INVALID_IMAGE: "الصورة غير صالحة. اختر ملف PNG أو JPG أو WebP أصغر من 1 ميجا.",
   PRODUCT_NOT_FOUND: "المنتج غير موجود.",
+  SHOP_NOT_FOUND: "المحل غير موجود.",
+  INVALID_WHOLESALE_PRICE: "سعر الجملة لازم يكون رقمًا أكبر من صفر وأقل من سعر البيع الحالي.",
   CATEGORY_NOT_FOUND: "القسم غير موجود.",
   CATEGORY_ARCHIVED: "القسم مؤرشف. استرجعه أول أو اختر قسم ثاني.",
   CATEGORY_TOO_DEEP: "الأقسام الجديدة تكون قسم رئيسي أو قسم فرعي داخله فقط.",

@@ -53,6 +53,7 @@ export function ProductCard({
   onOpen,
   onToggleSave,
   duplicate = false,
+  extra,
 }: {
   product: OfferProduct;
   name: string;
@@ -63,6 +64,8 @@ export function ProductCard({
   onToggleSave: () => void;
   /** A visual copy (e.g. for a looping rail): hidden from assistive tech and skipped by Tab. */
   duplicate?: boolean;
+  /** Optional lines under the rating (the wholesale page shows the shop and the wholesale price here). */
+  extra?: ReactNode;
 }) {
   const { t, lang } = useLang();
   const { add } = useCart();
@@ -139,6 +142,8 @@ export function ProductCard({
             ) : null}
           </p>
         ) : null}
+
+        {extra}
 
         <div className="mt-auto pt-3">
           <div className="flex min-h-7 flex-wrap items-baseline gap-x-2">

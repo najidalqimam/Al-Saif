@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Eye, Mail, MapPin, Package, RefreshCw, UserCheck, Users, UserX } from "lucide-react";
-import { api, apiMessage } from "@/lib/api";
+import { ArchiveRestore, Mail, MapPin, Package, RefreshCw, Trash2, UserCheck, Users, UserX } from "lucide-react";
+import { PREVIEW, api, apiMessage } from "@/lib/api";
 import { Avatar } from "@/lib/avatars";
 import { pushHash } from "./nav";
-import { AR_DATE, Badge, Button, Drawer, Empty, IconButton, PageHead, Panel, SearchBox, StatCard, num, sar } from "./ui";
+import { AR_DATE, Badge, Button, Confirm, Drawer, Empty, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, SearchBox, StatCard, Tabs, usePager } from "./ui";
 
 // Registered store accounts (customers who signed up on the storefront). Read-only: staff can look up a
 // customer's details, saved addresses and orders, and send the welcome email again.
@@ -34,6 +34,18 @@ const ORDER_STATUS: Record<string, string> = { NEW: "جديد", PROCESSING: "ق�
 const PAYMENT_STATUS: Record<string, string> = { PENDING: "بانتظار الدفع", PAID: "مدفوع", FAILED: "فشل الدفع", REFUNDED: "مسترجع" };
 const PAYMENT_METHOD: Record<string, string> = { COD: "عند الاستلام", BANK_TRANSFER: "تحويل بنكي", ONLINE: "إلكتروني" };
 
+// Archived customers are hidden from the list on this browser only and can be restored. The accounts themselves are not
+// touched: the server has no archive yet, so the archive button is available only in the local preview.
+const ARCHIVED_KEY = "alsaif-admin-archived-customers";
+function readArchived(): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(ARCHIVED_KEY) ?? "[]") as unknown;
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 const date = (value: string | null) => (value ? new Date(value).toLocaleDateString(AR_DATE, { day: "numeric", month: "short", year: "numeric" }) : "—");
 
 function WelcomeBadge({ email }: { email: WelcomeEmail }) {
@@ -50,6 +62,18 @@ export function Customers() {
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
+  const [archived, setArchived] = useState<string[]>(readArchived);
+  const [tab, setTab] = useState<"all" | "archived">("all");
+  const [archiving, setArchiving] = useState<CustomerRow | null>(null);
+  const canArchive = PREVIEW;
+  const setArchivedIds = (next: string[]) => {
+    try {
+      localStorage.setItem(ARCHIVED_KEY, JSON.stringify(next));
+    } catch {
+      return;
+    }
+    setArchived(next);
+  };
 
   // Searching is done by the server so it covers every account, not only the first page.
   useEffect(() => {
@@ -72,19 +96,28 @@ export function Customers() {
     };
   }, [query]);
 
-  const withOrders = rows?.filter((row) => row.orders > 0).length ?? 0;
-  const pendingEmails = rows?.filter((row) => row.welcomeEmail && row.welcomeEmail.status !== "SENT").length ?? 0;
+  const inArchive = canArchive && tab === "archived";
+  const archivedRows = rows?.filter((row) => archived.includes(row.id)) ?? [];
+  const activeRows = rows === null ? null : canArchive ? rows.filter((row) => !archived.includes(row.id)) : rows;
+  const shown = inArchive ? archivedRows : activeRows;
+  const pager = usePager(shown ?? [], `${tab}|${query}`);
+  const withOrders = activeRows?.filter((row) => row.orders > 0).length ?? 0;
+  const pendingEmails = activeRows?.filter((row) => row.welcomeEmail && row.welcomeEmail.status !== "SENT").length ?? 0;
 
   return (
     <div className="space-y-6">
       <PageHead title="العملاء" lead="الحسابات المسجّلة في المتجر، وطلباتهم وعناوينهم." />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="العملاء المسجّلين" value={num.format(total)} note="كل الحسابات" icon={Users} tone="blue" />
+        <StatCard label="العملاء المسجّلين" value={num.format(canArchive ? total - archivedRows.length : total)} note="كل الحسابات" icon={Users} tone="blue" />
         <StatCard label="عملاء طلبوا" value={num.format(withOrders)} note="من القائمة الحالية" icon={UserCheck} tone="ok" />
         <StatCard label="طلبات بدون حساب" value={num.format(guestOrders)} note="طلبات الضيوف" icon={UserX} tone="accent" onClick={() => pushHash("orders")} />
         <StatCard label="إيميلات الترحيب المعلّقة" value={num.format(pendingEmails)} note="ما وصلت لسه" icon={Mail} tone={pendingEmails ? "warn" : "ok"} />
       </div>
+
+      {canArchive ? (
+        <Tabs value={tab} onChange={setTab} items={[["all", "الكل", activeRows?.length], ["archived", "الأرشيف", archivedRows.length]]} />
+      ) : null}
 
       <Panel>
         <div className="border-b border-(--a-line) p-4">
@@ -94,8 +127,12 @@ export function Customers() {
           <p className="p-5 text-sm text-(--a-danger)">{error}</p>
         ) : rows === null ? (
           <p className="p-5 text-sm text-(--a-muted)">جاري التحميل…</p>
-        ) : rows.length === 0 ? (
-          <Empty icon={Users} title={query ? "ما فيه نتائج" : "ما فيه عملاء مسجّلين لسه"} lead={query ? "جرّب كلمة بحث ثانية." : "يظهر هنا كل عميل يسجّل حساب من المتجر."} />
+        ) : shown === null || shown.length === 0 ? (
+          <Empty
+            icon={Users}
+            title={inArchive ? "الأرشيف فاضي" : query ? "ما فيه نتائج" : "ما فيه عملاء مسجّلين لسه"}
+            lead={inArchive ? "العملاء اللي تحذفهم من القائمة ينتقلون هنا وتقدر تسترجعهم." : query ? "جرّب كلمة بحث ثانية." : "يظهر هنا كل عميل يسجّل حساب من المتجر."}
+          />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
@@ -111,8 +148,8 @@ export function Customers() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.id} className="border-t border-(--a-line) transition-colors hover:bg-(--a-surface-2)/40">
+                {pager.rows.map((row) => (
+                  <tr key={row.id} {...rowOpen(() => setOpenId(row.id))} className="cursor-pointer border-t border-(--a-line) transition-colors hover:bg-(--a-surface-2)/40">
                     <td className="px-5 py-3">
                       <button type="button" onClick={() => setOpenId(row.id)} className="flex cursor-pointer items-center gap-3 text-start">
                         <Avatar avatar={row.avatar} firstName={row.firstName} lastName={row.lastName} className="size-9 bg-(--a-surface-2) text-xs text-(--a-muted)" />
@@ -135,7 +172,17 @@ export function Customers() {
                       <WelcomeBadge email={row.welcomeEmail} />
                     </td>
                     <td className="px-5 py-3 text-end">
-                      <IconButton icon={Eye} label={`عرض ${row.firstName} ${row.lastName}`} onClick={() => setOpenId(row.id)} />
+                      {inArchive ? (
+                        <IconButton icon={ArchiveRestore} label={`استرجاع ${row.firstName} ${row.lastName}`} onClick={() => setArchivedIds(archived.filter((id) => id !== row.id))} />
+                      ) : (
+                        <IconButton
+                          icon={Trash2}
+                          tone="danger"
+                          label={canArchive ? `حذف ${row.firstName} ${row.lastName}` : "حذف العملاء غير متاح أثناء الاتصال بقاعدة البيانات"}
+                          disabled={!canArchive}
+                          onClick={() => setArchiving(row)}
+                        />
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -143,9 +190,19 @@ export function Customers() {
             </table>
           </div>
         )}
+        <Pager pager={pager} />
       </Panel>
 
       <CustomerDrawer id={openId} onClose={() => setOpenId(null)} />
+
+      <Confirm
+        open={archiving !== null}
+        onClose={() => setArchiving(null)}
+        onConfirm={() => archiving && setArchivedIds([...archived, archiving.id])}
+        title={`حذف ${archiving ? `${archiving.firstName} ${archiving.lastName}` : ""}؟`}
+        lead="العميل يختفي من قائمة العملاء وينتقل لتبويب الأرشيف. حسابه وطلباته وعناوينه ما تتأثر، وتقدر تسترجعه في أي وقت. الأرشفة على هذا المتصفح فقط."
+        action="نقل للأرشيف"
+      />
     </div>
   );
 }

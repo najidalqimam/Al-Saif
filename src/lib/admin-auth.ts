@@ -15,6 +15,10 @@ export const ROLE_LABELS: Record<AdminRole, string> = {
 
 /** The signed-in admin, or null when there is no valid session. Network problems are thrown. */
 export async function currentAdmin(signal?: AbortSignal) {
+  // Local preview without the API/database: only in `pnpm dev` and only when .env.local sets VITE_ADMIN_PREVIEW=1.
+  if (import.meta.env.DEV && import.meta.env.VITE_ADMIN_PREVIEW === "1") {
+    return { email: "preview@localhost", fullName: "معاينة محلية", role: "OWNER" } as AdminUser;
+  }
   try {
     return (await api<{ admin: AdminUser }>("/admin/auth/me", { signal })).admin;
   } catch (error) {

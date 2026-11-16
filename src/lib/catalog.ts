@@ -1,5 +1,6 @@
 import { CATALOG, type CatalogCategory } from "@/data/catalog-tree";
 import type { Lang } from "@/lib/i18n";
+import { urCategoryBlurbs, urCategoryNames } from "@/lib/i18n-ur";
 
 export { CATALOG };
 export type { CatalogCategory };
@@ -23,12 +24,22 @@ export function allCategories() {
   return added.length ? [...base, ...added] : base;
 }
 
+const BUILT_IN = new Map(CATALOG.map((item) => [item.slug, item]));
+
 export function categoryLabel(category: CatalogCategory, lang: Lang) {
-  // Urdu UI uses Arabic catalogue names until dedicated Urdu fields exist.
+  // Urdu names cover the built-in tree; a category the admin renamed (or that has no Urdu name) keeps its Arabic name.
+  if (lang === "ur") {
+    const urdu = urCategoryNames[category.slug];
+    return urdu && BUILT_IN.get(category.slug)?.nameAr === category.nameAr ? urdu : category.nameAr;
+  }
   return lang === "en" ? category.nameEn : category.nameAr;
 }
 
 export function categoryBlurb(category: CatalogCategory, lang: Lang) {
+  if (lang === "ur") {
+    const urdu = urCategoryBlurbs[category.slug];
+    return urdu && BUILT_IN.get(category.slug)?.descriptionAr === category.descriptionAr ? urdu : category.descriptionAr;
+  }
   return lang === "en" ? category.descriptionEn : category.descriptionAr;
 }
 

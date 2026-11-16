@@ -3,13 +3,14 @@ import { Banknote, Check, CreditCard, Landmark, LoaderCircle, ShieldCheck, Truck
 import { Link, useLocation } from "wouter";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
-import { api } from "@/lib/api";
+import { ApiError, api } from "@/lib/api";
 import { useCart } from "@/lib/cart";
 import { CHECKOUT_COPY } from "@/lib/checkout-copy";
 import { errorCode, useCustomer } from "@/lib/customer";
 import { useLang } from "@/lib/i18n";
 import { productPhoto } from "@/lib/products";
 import { useSiteContent } from "@/lib/site-content";
+import { unitPrice } from "@/lib/wholesale";
 import type { SavedAddress } from "@/pages/AccountPage";
 
 type Form = { name: string; phone: string; email: string; zone: string; city: string; street: string; notes: string };
@@ -37,7 +38,7 @@ export function CheckoutPage() {
   const { lang, t } = useLang();
   const copy = CHECKOUT_COPY[lang];
   const { lines, clear } = useCart();
-  const { productById, copyOf } = useSiteContent();
+  const { productById, copyOf, content } = useSiteContent();
   const { customer } = useCustomer();
   const [, navigate] = useLocation();
   const [options, setOptions] = useState<Options | null>(null);
@@ -48,6 +49,8 @@ export function CheckoutPage() {
   const [tried, setTried] = useState(false);
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  // Set when the server found different prices than the ones shown: nothing was placed, and the customer must confirm them.
+  const [priceChange, setPriceChange] = useState<{ subtotal: number; total: number; lines: Record<string, { unit: number; line: number }> } | null>(null);
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
   const [addressId, setAddressId] = useState<string>("new");
   const [saveAddress, setSaveAddress] = useState(true);
@@ -94,12 +97,18 @@ export function CheckoutPage() {
   const money = (value: number) => `${value.toLocaleString("en-US")} ${t.deals.currency}`;
   const set = (patch: Partial<Form>) => setForm((current) => ({ ...current, ...patch }));
 
+  // Unit prices follow the server's rules (wholesale from 5 pieces of one listing for a signed-in customer), read from the
+  // product data, never from the cart. The server prices the order itself and asks for confirmation if its prices differ.
   const rows = lines.flatMap((line) => {
     const product = productById(line.id);
     if (!product) return [];
-    return [{ line, product, name: copyOf(lang, line.id)?.name ?? line.id }];
+    const source = content.products.find((item) => item.id === line.id);
+    const priced = source ? unitPrice(source, line.qty, customer !== null) : { unit: product.price, wholesale: false };
+    const server = priceChange?.lines[line.id];
+    const unit = server?.unit ?? priced.unit;
+    return [{ line, product, name: copyOf(lang, line.id)?.name ?? line.id, unit, lineTotal: server?.line ?? unit * line.qty, wholesale: server ? server.unit !== product.price : priced.wholesale }];
   });
-  const subtotal = rows.reduce((sum, row) => sum + row.product.price * row.line.qty, 0);
+  const subtotal = priceChange?.subtotal ?? rows.reduce((sum, row) => sum + row.unit * row.line.qty, 0);
 
   const zones = options?.zones ?? [];
   const methods = (options?.shipping ?? []).filter(
@@ -111,6 +120,9 @@ export function CheckoutPage() {
   const shipCost = shipping ? shippingFee(shipping, subtotal) : 0;
   const payCost = payment?.fee ?? 0;
   const total = subtotal + shipCost + payCost;
+
+  // A changed cart starts from the shown prices again.
+  useEffect(() => setPriceChange(null), [lines, customer]);
 
   const errors = useMemo(() => {
     const found: Partial<Record<Field, string>> = {};
@@ -128,7 +140,7 @@ export function CheckoutPage() {
   }, [form, shipping, payment, copy]);
   const show = (field: Field) => (tried ? errors[field] : undefined);
 
-  async function submit(event: React.FormEvent) {
+  async function submit(event: React.FormEvent, confirmedSubtotal?: number) {
     event.preventDefault();
     setTried(true);
     setSubmitError("");
@@ -146,6 +158,8 @@ export function CheckoutPage() {
           shippingMethodCode: shipping.code,
           paymentMethod: payment.code,
           items: rows.map((row) => ({ productId: row.product.id, quantity: row.line.qty })),
+          // What the customer was shown. It is never a price: the server prices the order and asks to confirm if it differs.
+          expectedSubtotal: confirmedSubtotal ?? subtotal,
           locale: lang,
           ...(customer && addressId === "new" && saveAddress ? { saveAddress: {} } : {}),
         },
@@ -158,6 +172,17 @@ export function CheckoutPage() {
       clear();
       navigate(`/${lang}/order/confirmed`);
     } catch (failure) {
+      if (failure instanceof ApiError && failure.code === "PRICE_CHANGED") {
+        const details = failure.body.details as { subtotal: string; total: string; lines: Array<{ productId: string; unitPrice: string; lineTotal: string }> } | undefined;
+        if (details) {
+          setPriceChange({
+            subtotal: Number(details.subtotal),
+            total: Number(details.total),
+            lines: Object.fromEntries(details.lines.map((line) => [line.productId, { unit: Number(line.unitPrice), line: Number(line.lineTotal) }])),
+          });
+          return;
+        }
+      }
       setSubmitError(copy.orderErrors[errorCode(failure)] ?? copy.orderErrors.generic);
     } finally {
       setBusy(false);
@@ -165,7 +190,7 @@ export function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-svh bg-[var(--tone-b)] text-navy">
+    <div className="inner-page-white min-h-svh bg-[var(--page-bg)] text-navy">
       <SiteHeader />
       <main id="main" tabIndex={-1} className="tone-scope page-shell min-h-[60svh] py-10 outline-none">
         <h1 className="text-2xl font-bold tracking-tight text-navy sm:text-3xl">{copy.checkout}</h1>
@@ -313,14 +338,17 @@ export function CheckoutPage() {
             <aside className="rounded-[1.25rem] border border-navy/10 bg-white p-5 lg:sticky lg:top-40">
               <h2 className="text-lg font-bold">{copy.summary}</h2>
               <ul className="mt-4 space-y-3">
-                {rows.map(({ line, product, name }) => (
+                {rows.map(({ line, product, name, lineTotal, wholesale }) => (
                   <li key={line.id} className="flex items-center gap-3">
                     <span className="relative shrink-0">
                       <img src={productPhoto(product)} alt="" className="size-14 rounded-xl border border-navy/10 object-contain p-1" />
                       <span className="absolute -end-1.5 -top-1.5 grid size-5 place-items-center rounded-full bg-navy text-[11px] font-bold text-white">{line.qty}</span>
                     </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-medium">{name}</span>
-                    <span className="text-sm font-semibold">{money(product.price * line.qty)}</span>
+                    <span className="min-w-0 flex-1 text-sm font-medium">
+                      <span className="block truncate">{name}</span>
+                      {wholesale ? <span className="mt-0.5 inline-block rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold text-brand-ink">{t.wholesale.cartApplied}</span> : null}
+                    </span>
+                    <span className="text-sm font-semibold">{money(lineTotal)}</span>
                   </li>
                 ))}
               </ul>
@@ -333,6 +361,23 @@ export function CheckoutPage() {
                   <dd className="text-xl text-brand-ink">{money(total)}</dd>
                 </div>
               </dl>
+              {priceChange ? (
+                <div role="alert" className="mt-4 rounded-xl border border-burgundy/30 bg-burgundy/5 px-3 py-3 text-sm text-navy">
+                  <p className="font-bold text-burgundy">{t.wholesale.priceChangedTitle}</p>
+                  <p className="mt-1 leading-6 text-navy/75">{t.wholesale.priceChangedLead}</p>
+                  <p className="mt-2 font-semibold">
+                    {t.wholesale.newSubtotal.replace("{amount}", priceChange.subtotal.toLocaleString("en-US")).replace("{currency}", t.deals.currency)}
+                  </p>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={(event) => void submit(event as unknown as React.FormEvent, priceChange.subtotal)}
+                    className="mt-3 inline-flex h-11 w-full cursor-pointer items-center justify-center rounded-full bg-[#20C5D4] px-4 text-sm font-bold text-navy transition-colors hover:bg-brand-hover disabled:cursor-default disabled:opacity-70"
+                  >
+                    {t.wholesale.confirmPrices}
+                  </button>
+                </div>
+              ) : null}
               {submitError ? (
                 <p role="alert" className="mt-4 rounded-xl bg-burgundy/10 px-3 py-2.5 text-sm text-burgundy">
                   {submitError}

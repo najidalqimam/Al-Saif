@@ -8,9 +8,10 @@ import { useSiteContent } from "@/lib/site-content";
 import { cn, publicUrl } from "@/lib/utils";
 import { ContentHub } from "./admin/ContentHub";
 import { Customers } from "./admin/Customers";
+import { crumbsFor } from "./admin/crumbs";
 import { Departments } from "./admin/Departments";
 import { Inventory } from "./admin/Inventory";
-import { NAV_GROUPS, NAV_ITEMS, onHashMove, pushHash, readHash, type View } from "./admin/nav";
+import { NAV_GROUPS, NAV_ITEMS, onHashMove, pushHash, readHash, registerLeavePrompt, type View } from "./admin/nav";
 import { Offers } from "./admin/Offers";
 import { OpsProvider } from "./admin/ops";
 import { Orders } from "./admin/OrdersPage";
@@ -19,9 +20,11 @@ import { Payments } from "./admin/Payments";
 import { Products } from "./admin/Products";
 import { Reports } from "./admin/Reports";
 import { Settings } from "./admin/Settings";
+import { SetupRequests } from "./admin/SetupRequests";
+import { Shops } from "./admin/Shops";
 import { Shipping } from "./admin/Shipping";
 import { useAdminTheme, type AdminTheme } from "./admin/theme";
-import { Button } from "./admin/ui";
+import { Button, Confirm } from "./admin/ui";
 
 export function AdminPage() {
   // undefined while the saved session is being checked with the server.
@@ -210,7 +213,7 @@ function Login({ onSuccess, initialError }: { onSuccess: (admin: AdminUser) => v
 }
 
 function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLogout: () => void; theme: AdminTheme; onTheme: (theme: AdminTheme) => void }) {
-  const { catalogue, loadAdminCatalogue, dismissSaveError } = useSiteContent();
+  const { catalogue, loadAdminCatalogue, dismissSaveError, content, shops } = useSiteContent();
   // Products, departments and stock load from the database before the pages that edit them are shown.
   const [loadState, setLoadState] = useState<"loading" | "ready" | string>("loading");
   const load = useCallback(() => {
@@ -221,6 +224,9 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
   }, [loadAdminCatalogue]);
   useEffect(load, [load]);
   const [view, setView] = useState<View>(() => readHash().view);
+  const [hash, setHash] = useState(() => readHash());
+  const [leaving, setLeaving] = useState<(() => void) | null>(null);
+  useEffect(() => registerLeavePrompt((proceed) => setLeaving(() => proceed)), []);
   const [menuOpen, setMenuOpen] = useState(false);
   const current = NAV_ITEMS.find((item) => item.id === view) ?? NAV_ITEMS[0];
   const dark = theme === "dark";
@@ -229,7 +235,18 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
     window.scrollTo({ top: 0 });
   }, [view]);
 
-  useEffect(() => onHashMove(() => setView(readHash().view)), []);
+  useEffect(
+    () =>
+      onHashMove(() => {
+        setView(readHash().view);
+        setHash(readHash());
+      }),
+    [],
+  );
+  const crumbs = crumbsFor(hash.view, hash.sub, {
+    shopName: (id) => shops.find((shop) => shop.id === id)?.name,
+    productName: (id) => content.products.find((item) => item.id === id)?.nameAr,
+  });
 
   function open(next: View) {
     pushHash(next);
@@ -308,10 +325,6 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
             <button type="button" onClick={() => setMenuOpen(true)} aria-label="فتح القائمة" className="grid size-10 place-items-center rounded-xl border border-(--a-line) lg:hidden">
               <Menu className="size-5" />
             </button>
-            <p className="truncate text-sm">
-              <span className="text-(--a-muted)">لوحة التحكم / </span>
-              <span className="font-semibold">{current.label}</span>
-            </p>
           </div>
           <div className="flex items-center gap-2">
             {catalogue.saving ? (
@@ -366,9 +379,37 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
               </Button>
             </div>
           ) : null}
-          {loadState !== "ready" ? null : <Pages view={view} open={open} theme={theme} onTheme={onTheme} />}
+          {loadState !== "ready" ? null : (
+            <>
+              <nav aria-label="مسار التنقل" className="mb-3 text-sm">
+                {crumbs.map((crumb, index) => (
+                  <span key={`${index}-${crumb.label}`}>
+                    {index > 0 ? <span className="text-(--a-muted)"> / </span> : null}
+                    {crumb.go ? (
+                      <button type="button" onClick={crumb.go} className="text-(--a-muted) hover:text-(--a-text)">
+                        {crumb.label}
+                      </button>
+                    ) : (
+                      <span aria-current="page" className="font-semibold">
+                        {crumb.label}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </nav>
+              <Pages view={view} open={open} theme={theme} onTheme={onTheme} />
+            </>
+          )}
         </main>
       </div>
+      <Confirm
+        open={leaving !== null}
+        onClose={() => setLeaving(null)}
+        onConfirm={() => leaving?.()}
+        title="فيه تعديلات غير مؤكدة"
+        lead="لو خرجت الآن، تضيع التعديلات اللي ما أكدتها. ارجع للصفحة واضغط «تأكيد التعديلات» لو تبي تحفظها."
+        action="خروج بدون حفظ"
+      />
     </div>
   );
 }
@@ -378,11 +419,13 @@ function Pages({ view, open, theme, onTheme }: { view: View; open: (view: View) 
     <>
           {view === "overview" ? <Overview onOpen={open} /> : null}
           {view === "orders" ? <Orders /> : null}
+          {view === "setupRequests" ? <SetupRequests /> : null}
           {view === "customers" ? <Customers /> : null}
           {view === "shipping" ? <Shipping /> : null}
           {view === "payments" ? <Payments /> : null}
           {view === "products" ? <Products /> : null}
           {view === "departments" ? <Departments /> : null}
+          {view === "shops" ? <Shops /> : null}
           {view === "inventory" ? <Inventory /> : null}
           {view === "offers" ? <Offers onOpen={open} /> : null}
           {view === "content" ? <ContentHub onOpen={open} /> : null}

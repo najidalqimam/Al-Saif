@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ArrowLeft, Flame, Heart, Moon, ShoppingCart, Sun, Truck, UserRound } from "lucide-react";
+import { ArrowLeft, Boxes, Flame, Heart, Moon, ShoppingCart, Sun, Truck, UserRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Link, useLocation } from "wouter";
 import { CartDrawer } from "@/components/site/CartDrawer";
@@ -26,8 +26,8 @@ export function SiteHeader() {
   const langMenuRef = useRef<HTMLUListElement>(null);
   const brand = useBrandText();
   const { content } = useSiteContent();
-  const [location] = useLocation();
-  const { count, setOpen } = useCart();
+  const [location, navigate] = useLocation();
+  const { count } = useCart();
   const { count: favoritesCount } = useFavorites();
   const { customer } = useCustomer();
   const accountCopy = ACCOUNT_COPY[lang];
@@ -38,6 +38,24 @@ export function SiteHeader() {
   const { setTheme } = useTheme();
   // Dark theme: the header is always the dark Midnight Circuit bar. Light theme: always the blue-gray bar.
   const overHero = !light;
+  // Light theme, home page: the bar keeps the hero's tone while the hero is under it, and turns white once the page has
+  // scrolled past the hero. Pages without a hero keep the bar as it was.
+  const [pastHero, setPastHero] = useState(false);
+  useEffect(() => {
+    const hero = document.getElementById("hero");
+    if (!hero) {
+      setPastHero(false);
+      return;
+    }
+    const update = () => setPastHero(hero.getBoundingClientRect().bottom <= (document.querySelector("header.sticky")?.clientHeight ?? 130));
+    update();
+    window.addEventListener("scroll", update, { passive: true });
+    window.addEventListener("resize", update);
+    return () => {
+      window.removeEventListener("scroll", update);
+      window.removeEventListener("resize", update);
+    };
+  }, [location]);
   const [cartPulse, setCartPulse] = useState(false);
   const previousCount = useRef(count);
 
@@ -129,7 +147,7 @@ export function SiteHeader() {
           overHero
             ? "surface-dark border-white/10 bg-[color-mix(in_srgb,var(--chrome)_72%,transparent)] text-white shadow-none backdrop-blur-xl backdrop-saturate-150"
             : light
-              ? "border-navy/10 bg-[color-mix(in_srgb,var(--chrome)_94%,transparent)] text-navy shadow-[0_6px_18px_rgba(11,18,32,0.05)] backdrop-blur-xl"
+              ? `border-navy/10 text-navy shadow-[0_6px_18px_rgba(11,18,32,0.05)] backdrop-blur-xl ${pastHero ? "bg-white/95" : "bg-[color-mix(in_srgb,var(--chrome)_94%,transparent)]"}`
               : "border-navy/10 bg-white/95 text-navy shadow-[0_8px_24px_rgba(11,18,32,0.06)] backdrop-blur"
         }`}
       >
@@ -240,7 +258,7 @@ export function SiteHeader() {
           </Link>
           <button
             type="button"
-            onClick={() => setOpen(true)}
+            onClick={() => navigate(`/${lang}/cart`)}
             aria-label={count > 0 ? `${t.cart} ${count}` : t.cart}
             className={`group flex h-11 cursor-pointer items-center gap-2.5 rounded-full border pe-3 ps-1.5 transition-colors duration-300 ${
               overHero ? "border-white/25 text-white hover:border-mint" : "border-navy/15 text-navy hover:border-brand"
@@ -267,8 +285,18 @@ export function SiteHeader() {
         </div>
       </div>
 
-      <nav className="page-shell flex items-center gap-2 pb-2" aria-label={t.allCategories}>
+      {/* max-sm:flex-wrap: on phones the links that no longer fit on one line go to a second line instead of overflowing the page. */}
+      <nav className="page-shell flex items-center gap-2 pb-2 max-sm:flex-wrap" aria-label={t.allCategories}>
         <CategoryMenu />
+        {/* Fixed right after "all departments", before the offers link, so it shows without scrolling the departments. */}
+        <Link
+          href={`/${lang}/wholesale`}
+          aria-current={location === `/${lang}/wholesale` ? "page" : undefined}
+          className="wholesale-nav inline-flex shrink-0 items-center gap-1.5 px-2 py-2.5 text-sm font-semibold text-brand"
+        >
+          <Boxes className="size-4 shrink-0" aria-hidden />
+          <span className="whitespace-nowrap">{t.wholesale.navLabel}</span>
+        </Link>
         <Link
           href={`/${lang}/offers`}
           aria-current={location === `/${lang}/offers` ? "page" : undefined}

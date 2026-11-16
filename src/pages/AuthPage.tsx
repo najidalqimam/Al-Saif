@@ -78,7 +78,7 @@ export function AuthPage() {
   }
 
   return (
-    <div className="min-h-svh bg-[var(--tone-b)] text-navy">
+    <div className="inner-page-white min-h-svh bg-[var(--page-bg)] text-navy">
       <SiteHeader />
       <main id="main" tabIndex={-1} className="tone-scope page-shell grid min-h-[60svh] place-items-center py-10 outline-none">
         <div className="w-full max-w-md rounded-3xl border border-navy/10 bg-white p-6 shadow-[0_10px_28px_rgba(11,18,32,0.06)] sm:p-8">

@@ -1,86 +1,81 @@
-import { ShieldCheck, Truck } from "lucide-react";
 import { Link } from "wouter";
-import { categoryLabel, topDepartments } from "@/lib/catalog";
+import { categoryLabel, rootDepartments } from "@/lib/catalog";
 import { BrandMark, useBrandText } from "@/components/site/Brand";
 import { useLang } from "@/lib/i18n";
 import { useSiteContent } from "@/lib/site-content";
-import { useIsLight } from "@/lib/theme";
+
+// The footer's department links: the same destinations the store already uses (/{lang}/c/{slug} and /{lang}/offers).
+// A department hidden from the store drops out of the list.
+const FOOTER_DEPARTMENTS = ["computers-laptops", "monitors", "pc-components", "printers-scanners", "networking", "servers", "storage"];
+
+const link =
+  "rounded-sm text-[#CBD2DE] transition-colors hover:text-white focus-visible:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F7F7F5]";
 
 export function SiteFooter() {
   const { t, lang } = useLang();
   const brand = useBrandText();
   const { content } = useSiteContent();
-  const footer = content.footer[lang];
-  const departments = topDepartments(content.categoryHidden, 7);
-  const light = useIsLight();
-  // Dark classes are the baseline; light mode swaps only the colours.
-  const c = light
-    ? { root: "border-t border-[#dce5ef] bg-[var(--chrome)] text-navy", tag: "text-navy/65", about: "text-navy/70", facts: "text-navy/75", links: "text-navy/65", hover: "hover:text-navy", rule: "border-navy/10", rights: "text-navy/65", icon: "text-brand-ink" }
-    : { root: "border-t border-white/10 bg-[var(--chrome)] text-white", tag: "text-white/55", about: "text-white/65", facts: "text-white/75", links: "text-white/65", hover: "hover:text-white", rule: "border-white/10", rights: "text-white/45", icon: "text-cyan" };
+  const visible = rootDepartments(content.categoryHidden);
+  const departments = FOOTER_DEPARTMENTS.flatMap((slug) => visible.filter((item) => item.slug === slug));
+  const heading = "text-[17px] font-semibold leading-7 text-[#F7F7F5]";
+  const text = "text-sm leading-[1.8] text-[#CBD2DE]";
+  // Thin rule between the stacked groups on small screens; on desktop the groups are separated by space only.
+  const divider = "h-px w-full bg-white/10 lg:hidden";
 
   return (
-    <footer className={c.root}>
-      <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:grid-cols-2 lg:grid-cols-4">
-        <div>
-          <Link href={`/${lang}`} className="flex items-center gap-3">
+    <footer className="border-t border-white/10 bg-[#111C30] text-[#CBD2DE]">
+      <div className="mx-auto flex max-w-[1360px] flex-col gap-6 px-6 py-8 lg:flex-row lg:items-start lg:justify-between lg:py-14">
+        <div className="min-w-0 lg:w-[28%]">
+          <Link href={`/${lang}`} className="inline-flex items-center gap-3 rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#F7F7F5]">
             <BrandMark />
-            <span className="leading-tight">
-              <span className="block text-lg font-semibold leading-7">{brand.name}</span>
-              {brand.tagline ? <span className={`block text-xs ${c.tag}`}>{brand.tagline}</span> : null}
-            </span>
+            <span className="text-[21px] font-semibold leading-8 text-[#F7F7F5]">{brand.name}</span>
           </Link>
-          <p className={`mt-4 max-w-xs text-sm leading-7 ${c.about}`}>{footer.about}</p>
-          <ul className={`mt-5 space-y-3 text-sm ${c.facts}`}>
-            <li className="flex items-start gap-2">
-              <Truck className={`mt-1 size-4 shrink-0 ${c.icon}`} />
-              {footer.shipping}
-            </li>
-            <li className="flex items-start gap-2">
-              <ShieldCheck className={`mt-1 size-4 shrink-0 ${c.icon}`} />
-              {footer.warranty}
-            </li>
-          </ul>
+          <p className={`mt-4 ${text}`}>{t.footer.intro}</p>
         </div>
 
-        <div>
-          <h2 className="text-base font-semibold">{t.footer.departmentsTitle}</h2>
-          <ul className={`mt-4 space-y-2.5 text-sm ${c.links}`}>
-            <li>
-              <Link href={`/${lang}/offers`} className={`transition ${c.hover}`}>
-                {t.offers}
-              </Link>
-            </li>
+        <div aria-hidden className={divider} />
+
+        <nav aria-labelledby="footer-shop" className="min-w-0 lg:w-[36%]">
+          <h2 id="footer-shop" className={heading}>
+            {t.footer.shopTitle}
+          </h2>
+          <ul className="mt-3 columns-1 gap-x-8 min-[340px]:columns-2">
             {departments.map((item) => (
-              <li key={item.id}>
-                <Link href={`/${lang}/c/${item.slug}`} className={`transition ${c.hover}`}>
+              <li key={item.id} className="break-inside-avoid text-sm leading-[1.8]">
+                <Link href={`/${lang}/c/${item.slug}`} className={link}>
                   {categoryLabel(item, lang)}
                 </Link>
               </li>
             ))}
+            <li className="break-inside-avoid text-sm leading-[1.8]">
+              <Link href={`/${lang}/offers`} className={link}>
+                {t.offers}
+              </Link>
+            </li>
           </ul>
-        </div>
+        </nav>
 
-        <div>
-          <h2 className="text-base font-semibold">{t.footer.serviceTitle}</h2>
-          <ul className={`mt-4 space-y-2.5 text-sm leading-6 ${c.links}`}>
-            {t.footer.services.map((item) => (
-              <li key={item}>{item}</li>
+        <div aria-hidden className={divider} />
+
+        <section aria-labelledby="footer-before" className="min-w-0 lg:w-[30%]">
+          <h2 id="footer-before" className={heading}>
+            {t.footer.beforeTitle}
+          </h2>
+          <ul className="mt-3">
+            {t.footer.before.map((item) => (
+              <li key={item} className={`flex gap-2 ${text}`}>
+                <span aria-hidden className="text-[#CBD2DE]/60">
+                  •
+                </span>
+                {item}
+              </li>
             ))}
           </ul>
-        </div>
-
-        <div>
-          <h2 className="text-base font-semibold">{t.footer.helpTitle}</h2>
-          <ul className={`mt-4 space-y-2.5 text-sm leading-6 ${c.links}`}>
-            {t.footer.help.map((item) => (
-              <li key={item}>{item}</li>
-            ))}
-          </ul>
-        </div>
+        </section>
       </div>
 
-      <div className={`border-t ${c.rule}`}>
-        <p className={`mx-auto max-w-7xl px-4 py-4 text-xs ${c.rights}`}>{t.footer.rights}</p>
+      <div className="border-t border-white/10">
+        <p className="mx-auto max-w-[1360px] px-6 py-3.5 text-xs text-[#CBD2DE]/80">{t.footer.rights}</p>
       </div>
     </footer>
   );

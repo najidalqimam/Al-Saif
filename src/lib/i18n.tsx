@@ -36,6 +36,66 @@ export interface Translations {
   allProducts: string;
   offers: string;
   navOffers: string;
+  cartPage: {
+    title: string;
+    summary: string;
+    productsOne: string;
+    productsTwo: string;
+    productsFew: string; // {count}
+    productsMany: string; // {count}
+    piecesOne: string;
+    piecesTwo: string;
+    piecesFew: string; // {count}
+    piecesMany: string; // {count}
+    perPiece: string; // {price} {currency}
+    lineBreakdown: string; // {qty} {price}
+  };
+  wholesale: {
+    productNotice: string; // {price} {currency}
+    loginRequired: string;
+    loginLink: string;
+    cartApplied: string;
+    cartNudge: string; // {price} {currency}
+    cartNudgeTotal: string; // {total} {currency}
+    previewNote: string;
+    priceChangedTitle: string;
+    priceChangedLead: string;
+    newSubtotal: string; // {amount} {currency}
+    confirmPrices: string;
+    navLabel: string;
+    pageLead: string;
+    pageEmpty: string;
+    cardLine: string; // {price} {currency}
+    cardPerPiece: string;
+    cardCondition: string; // {count}
+    cardRetail: string; // {price} {currency}
+    cardTotal: string; // {count}
+    cardAddOne: string;
+    cardAddTwo: string;
+    cardAddFew: string; // {count}
+    cardInCart: string;
+    cardUnavailable: string;
+  };
+  compare: {
+    back: string;
+    offersTitle: string; // {count}
+    sortNote: string;
+    startsFrom: string;
+    countOne: string;
+    countMany: string; // {count}
+    lowest: string;
+    opened: string;
+    viewProduct: string;
+    demoBadge: string;
+    demoNote: string;
+    compareButton: string;
+    availableIn: string; // {shops}
+    shopsTwo: string;
+    shopsFew: string; // {count}, 3 to 10
+    shopsMany: string; // {count}, 11 and more
+    shopLabel: string;
+    demoShopPrefix: string;
+  };
   favoritesPage: {
     title: string;
     lead: string;
@@ -97,6 +157,8 @@ export interface Translations {
     addToCart: string;
     quickView: string;
     viewAll: string;
+    /** The offers banner button on the home page (the shared "viewAll" text is used by other pages too). */
+    bannerAction: string;
     pageTitle: string;
     pageLead: string;
     close: string;
@@ -134,6 +196,8 @@ export interface Translations {
       submit: string;
       close: string;
       success: string;
+      successLocal: string;
+      saveError: string;
       phoneError: string;
       required: string;
     };
@@ -164,6 +228,10 @@ export interface Translations {
     helpTitle: string;
     help: string[];
     rights: string;
+    intro: string;
+    shopTitle: string;
+    beforeTitle: string;
+    before: string[];
   };
   hero: {
     imageAlt: string;
@@ -217,6 +285,66 @@ const ar: Translations = {
   allProducts: "جميع المنتجات",
   offers: "العروض",
   navOffers: "عروض وتخفيضات",
+  cartPage: {
+    title: "سلة التسوق",
+    summary: "ملخص الطلب",
+    productsOne: "منتج واحد",
+    productsTwo: "منتجان",
+    productsFew: "{count} منتجات",
+    productsMany: "{count} منتجًا",
+    piecesOne: "قطعة واحدة",
+    piecesTwo: "قطعتان",
+    piecesFew: "{count} قطع",
+    piecesMany: "{count} قطعة",
+    perPiece: "{price} {currency} للقطعة",
+    lineBreakdown: "{qty} × {price}",
+  },
+  wholesale: {
+    productNotice: "اشترِ 5 قطع أو أكثر من نفس المنتج من هذا المحل بسعر الجملة: {price} {currency} للقطعة",
+    loginRequired: "الاستفادة من سعر الجملة تتطلب تسجيل الدخول.",
+    loginLink: "تسجيل الدخول",
+    cartApplied: "سعر الجملة",
+    cartNudge: "زوّد قطعة واحدة واستفد بسعر الجملة: {price} {currency} للقطعة",
+    cartNudgeTotal: "إجمالي 5 قطع بسعر الجملة: {total} {currency}",
+    previewNote: "سعر الجملة معاينة محلية على هذا المتصفح، ولا يُطبَّق بعد عند إتمام الطلب.",
+    priceChangedTitle: "تغيّرت الأسعار",
+    priceChangedLead: "تغيّر سعر أحد المنتجات أو لم تعد تنطبق عليه شروط سعر الجملة، فلم نُنفّذ الطلب. راجع الإجمالي الجديد وأكّده لإتمام الطلب.",
+    newSubtotal: "إجمالي المنتجات الجديد: {amount} {currency}",
+    confirmPrices: "أؤكد الأسعار الجديدة وأكمل الطلب",
+    navLabel: "عروض الجملة",
+    pageLead: "سعر الجملة يبدأ من 5 قطع من نفس المنتج عند نفس المحل، بعد تسجيل الدخول",
+    pageEmpty: "لا توجد عروض جملة متاحة حاليًا",
+    cardLine: "سعر الجملة: {price} {currency} للقطعة من 5 قطع",
+    cardPerPiece: "/ قطعة",
+    cardCondition: "عند شراء {count} قطع فأكثر من نفس المنتج ومن نفس المحل",
+    cardRetail: "سعر القطعة منفردة: {price} {currency}",
+    cardTotal: "إجمالي {count} قطع",
+    cardAddOne: "أضف قطعة واحدة للسلة",
+    cardAddTwo: "أضف قطعتين للسلة",
+    cardAddFew: "أضف {count} قطع للسلة",
+    cardInCart: "عرض في السلة",
+    cardUnavailable: "غير متاح حاليًا",
+  },
+  compare: {
+    back: "رجوع للمنتج",
+    offersTitle: "عروض المحلات ({count})",
+    sortNote: "مرتبة من الأقل سعرًا",
+    startsFrom: "يبدأ من",
+    countOne: "عرض واحد من محل",
+    countMany: "{count} عروض من محلات",
+    lowest: "الأقل سعرًا",
+    opened: "العرض الذي فتحته",
+    viewProduct: "عرض المنتج",
+    demoBadge: "بيانات تجريبية",
+    demoNote: "بيانات تجريبية للمعاينة، وليست أسعار محلات حقيقية.",
+    compareButton: "مقارنة بالمحلات الأخرى",
+    availableIn: "موجود في {shops}",
+    shopsTwo: "محلّين",
+    shopsFew: "{count} محلات",
+    shopsMany: "{count} محلًا",
+    shopLabel: "المحل",
+    demoShopPrefix: "محل تجريبي",
+  },
   favoritesPage: {
     title: "المفضلة",
     lead: "المنتجات اللي حفظتها، علشان ترجع لها بسهولة.",
@@ -304,9 +432,9 @@ const ar: Translations = {
   },
   deals: {
     eyebrow: "أقوى عروض سوق الكمبيوترات",
-    title: "أقوى العروض الحصرية",
+    title: "عروض على أجهزتك وإكسسواراتك",
     highlight: "خصومات تصل إلى 60%",
-    lead: "أسعار واضحة على جوالات، وأجهزة بلايستيشن، وإكسسوارات مختارة.",
+    lead: "تصفّح عروض الجوالات والشاشات وأجهزة الألعاب، واختر ما يناسبك.",
     endsSoon: "ينتهي العرض قريبًا",
     discount: "خصم {percent}%",
     reviews: "{count} تقييم",
@@ -314,6 +442,7 @@ const ar: Translations = {
     addToCart: "أضف إلى السلة",
     quickView: "عرض سريع",
     viewAll: "عرض الكل",
+    bannerAction: "تصفّح العروض",
     pageTitle: "كل الخصومات",
     pageLead: "كل العروض الحالية على الجوالات، وأجهزة البلايستيشن، وإكسسواراتها.",
     close: "إغلاق",
@@ -377,6 +506,8 @@ const ar: Translations = {
       submit: "إرسال الطلب",
       close: "إغلاق",
       success: "وصلنا طلبك، وهنتواصل معاك قريب على رقم الجوال.",
+      successLocal: "تم حفظ الطلب على هذا المتصفح فقط للمعاينة، ولم يُرسل إلى المتجر.",
+      saveError: "تعذّر حفظ طلبك. حاول مرة ثانية.",
       phoneError: "أدخل رقم جوال سعودي يبدأ بـ 05 ومكوّن من 10 أرقام.",
       required: "هذا الحقل مطلوب.",
     },
@@ -454,6 +585,10 @@ const ar: Translations = {
     helpTitle: "الطلب",
     help: ["تختار الجهاز، ونكمل معاك الخطوة التالية", "قطع أصلية بضمان محلي", "طلب بخطوات بسيطة"],
     rights: "© 2026 سوق الكمبيوترات",
+    intro: "كل احتياجاتك التقنية في مكان واحد، من الكمبيوترات والجوالات إلى الأجهزة والإكسسوارات.",
+    shopTitle: "تسوّق حسب القسم",
+    beforeTitle: "قبل إتمام الطلب",
+    before: ["راجع مواصفات المنتج.", "اختر الكمية المناسبة.", "تأكد من تفاصيل سلتك."],
   },
   hero: {
     imageAlt: "جوال، يد تحكم، وسماعات على قماش فاتح",
@@ -531,6 +666,66 @@ const en: Translations = {
   allProducts: "All products",
   offers: "Offers",
   navOffers: "Offers and discounts",
+  cartPage: {
+    title: "Shopping cart",
+    summary: "Order summary",
+    productsOne: "1 product",
+    productsTwo: "2 products",
+    productsFew: "{count} products",
+    productsMany: "{count} products",
+    piecesOne: "1 item",
+    piecesTwo: "2 items",
+    piecesFew: "{count} items",
+    piecesMany: "{count} items",
+    perPiece: "{price} {currency} per piece",
+    lineBreakdown: "{qty} × {price}",
+  },
+  wholesale: {
+    productNotice: "Buy 5 or more pieces of this same product from this shop at the wholesale price: {price} {currency} per piece",
+    loginRequired: "Signing in is required to get the wholesale price.",
+    loginLink: "Sign in",
+    cartApplied: "Wholesale price",
+    cartNudge: "Add one more piece to get the wholesale price: {price} {currency} per piece",
+    cartNudgeTotal: "Total for 5 pieces at the wholesale price: {total} {currency}",
+    previewNote: "The wholesale price is a local preview in this browser and is not applied at checkout yet.",
+    priceChangedTitle: "Prices have changed",
+    priceChangedLead: "A product price changed, or the wholesale price no longer applies, so the order was not placed. Review the new total and confirm it to place the order.",
+    newSubtotal: "New items total: {amount} {currency}",
+    confirmPrices: "Confirm the new prices and place the order",
+    navLabel: "Wholesale offers",
+    pageLead: "The wholesale price starts from 5 pieces of the same product at the same shop, after signing in",
+    pageEmpty: "No wholesale offers are available right now",
+    cardLine: "Wholesale price: {price} {currency} per piece from 5 pieces",
+    cardPerPiece: "/ piece",
+    cardCondition: "When you buy {count} or more pieces of the same product from the same shop",
+    cardRetail: "Single-piece price: {price} {currency}",
+    cardTotal: "Total for {count} pieces",
+    cardAddOne: "Add 1 piece to cart",
+    cardAddTwo: "Add 2 pieces to cart",
+    cardAddFew: "Add {count} pieces to cart",
+    cardInCart: "View in cart",
+    cardUnavailable: "Currently unavailable",
+  },
+  compare: {
+    back: "Back to product",
+    offersTitle: "Shop offers ({count})",
+    sortNote: "Sorted from the lowest price",
+    startsFrom: "Starts from",
+    countOne: "1 offer from shops",
+    countMany: "{count} offers from shops",
+    lowest: "Lowest price",
+    opened: "The offer you opened",
+    viewProduct: "View product",
+    demoBadge: "Demo data",
+    demoNote: "Preview demo data, not real shop prices.",
+    compareButton: "Compare with other shops",
+    availableIn: "available in {shops}",
+    shopsTwo: "2 shops",
+    shopsFew: "{count} shops",
+    shopsMany: "{count} shops",
+    shopLabel: "Shop",
+    demoShopPrefix: "Demo shop",
+  },
   favoritesPage: {
     title: "Wishlist",
     lead: "Products you saved, so you can come back to them easily.",
@@ -618,9 +813,9 @@ const en: Translations = {
   },
   deals: {
     eyebrow: "Electronics Market's strongest offers",
-    title: "Exclusive offers",
+    title: "Offers on your devices and accessories",
     highlight: "Discounts up to 60%",
-    lead: "Clear prices on selected phones, PlayStation consoles, and accessories.",
+    lead: "Browse offers on phones, monitors, and gaming devices, and pick what suits you.",
     endsSoon: "Offer ends soon",
     discount: "{percent}% off",
     reviews: "{count} reviews",
@@ -628,6 +823,7 @@ const en: Translations = {
     addToCart: "Add to cart",
     quickView: "Quick view",
     viewAll: "View all",
+    bannerAction: "Browse offers",
     pageTitle: "All discounts",
     pageLead: "Every current offer on phones, PlayStation consoles, and their accessories.",
     close: "Close",
@@ -691,6 +887,8 @@ const en: Translations = {
       submit: "Send request",
       close: "Close",
       success: "We received your request and will contact you soon on this number.",
+      successLocal: "The request was saved on this browser only, for preview. It was not sent to the store.",
+      saveError: "We could not save your request. Please try again.",
       phoneError: "Enter a Saudi mobile number starting with 05 (10 digits).",
       required: "This field is required.",
     },
@@ -768,6 +966,10 @@ const en: Translations = {
     helpTitle: "Ordering",
     help: ["Pick the device, and we take the next step with you", "Original pieces with a local warranty", "Shipping after the order is confirmed"],
     rights: "© 2026 Electronics Market",
+    intro: "All your tech needs in one place, from computers and phones to devices and accessories.",
+    shopTitle: "Shop by department",
+    beforeTitle: "Before you check out",
+    before: ["Review the product specifications.", "Choose the right quantity.", "Check your cart details."],
   },
   hero: {
     imageAlt: "A phone, a controller, and earbuds on light linen",

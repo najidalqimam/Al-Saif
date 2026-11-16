@@ -15,7 +15,7 @@ export function FavoritesPage() {
   const products = ids.map((id) => productById(id)).filter((item): item is OfferProduct => item !== undefined);
 
   return (
-    <div className="min-h-svh bg-[var(--tone-b)] text-navy">
+    <div className="inner-page-white min-h-svh bg-[var(--page-bg)] text-navy">
       <SiteHeader />
       <main id="main" tabIndex={-1} className="tone-scope page-shell min-h-[60svh] py-10 outline-none">
         <h1 className="text-2xl font-bold tracking-tight text-navy sm:text-3xl">{t.favoritesPage.title}</h1>

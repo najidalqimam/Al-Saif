@@ -2,10 +2,12 @@ import { useEffect, useId } from "react";
 import { Minus, Plus, X } from "lucide-react";
 import { Link } from "wouter";
 import { useCart } from "@/lib/cart";
+import { useCartPricing } from "@/lib/cart-pricing";
+import { useCustomer } from "@/lib/customer";
 import { CHECKOUT_COPY } from "@/lib/checkout-copy";
 import { useLang } from "@/lib/i18n";
-import { OFFER_PRODUCTS, productPhoto } from "@/lib/products";
-import { useSiteContent } from "@/lib/site-content";
+import { productPhoto } from "@/lib/products";
+import { WHOLESALE_MIN } from "@/lib/wholesale";
 
 function money(value: number) {
   return value.toLocaleString("en-US");
@@ -14,9 +16,10 @@ function money(value: number) {
 
 export function CartDrawer() {
   const { t, lang } = useLang();
-  const { copyOf, productById } = useSiteContent();
-  const { lines, open, setOpen, setQty, remove } = useCart();
+  const { customer } = useCustomer();
+  const { open, setOpen, setQty, remove } = useCart();
   const titleId = useId();
+  const pricing = useCartPricing();
 
   useEffect(() => {
     if (!open) return;
@@ -34,12 +37,7 @@ export function CartDrawer() {
 
   if (!open) return null;
 
-  const rows = lines.map((line) => {
-    const product = productById(line.id) ?? OFFER_PRODUCTS.find((item) => item.id === line.id);
-    const copy = copyOf(lang, line.id) ?? t.deals.products[line.id];
-    return { line, product, copy };
-  });
-  const total = rows.reduce((sum, row) => sum + (row.product?.price ?? 0) * row.line.qty, 0);
+  const { rows, total, anyWholesale, local } = pricing;
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-navy/40 backdrop-blur-sm" onClick={() => setOpen(false)}>
@@ -68,7 +66,7 @@ export function CartDrawer() {
           <p className="px-4 py-10 text-sm leading-7 text-navy/55">{t.cartEmptyMessage}</p>
         ) : (
           <ul className="min-h-0 flex-1 space-y-3 overflow-y-auto px-4 py-4">
-            {rows.map(({ line, product, copy }) => (
+            {rows.map(({ line, product, copy, priced, wholesale, nudge }) => (
               // The whole card opens the product page and closes the cart; the quantity and remove buttons sit above the link.
               <li key={line.id} className="group relative flex gap-3 rounded-2xl border border-navy/10 p-3 transition-colors hover:border-brand/40 hover:bg-brand/5">
                 <img src={productPhoto(product ?? { id: line.id })} alt="" className="size-16 shrink-0 object-contain" />
@@ -81,8 +79,21 @@ export function CartDrawer() {
                     {copy?.name ?? line.id}
                   </Link>
                   <p className="mt-1 text-sm font-bold text-brand-ink">
-                    {product ? `${money(product.price)} ${t.deals.currency}` : ""}
+                    {product ? `${money(priced.unit)} ${t.deals.currency}` : ""}
+                    {priced.wholesale ? <span className="ms-2 rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-semibold">{t.wholesale.cartApplied}</span> : null}
                   </p>
+                  {nudge && wholesale !== null ? (
+                    <div className="relative z-10 mt-2 rounded-xl bg-brand/10 px-3 py-2 text-xs leading-5 text-navy">
+                      <p className="font-semibold">{t.wholesale.cartNudge.replace("{price}", money(wholesale)).replace("{currency}", t.deals.currency)}</p>
+                      <p className="text-navy/70">
+                        {t.wholesale.cartNudgeTotal.replace("{total}", money(wholesale * WHOLESALE_MIN)).replace("{currency}", t.deals.currency)}
+                      </p>
+                      {customer ? null : <p className="mt-1 text-navy/70">{t.wholesale.loginRequired}</p>}
+                    </div>
+                  ) : null}
+                  {!customer && wholesale !== null && line.qty >= WHOLESALE_MIN ? (
+                    <p className="relative z-10 mt-2 rounded-xl bg-brand/10 px-3 py-2 text-xs leading-5 text-navy/70">{t.wholesale.loginRequired}</p>
+                  ) : null}
                   <div className="relative z-10 mt-2 flex items-center justify-between gap-2">
                     <div className="inline-flex h-8 items-center rounded-full border border-navy/10 bg-white">
                       <button
@@ -121,6 +132,8 @@ export function CartDrawer() {
                 {money(total)} {t.deals.currency}
               </span>
             </p>
+            {/* Only the local preview is unconnected to the server: with the store's server the checkout prices the same way. */}
+            {anyWholesale && local ? <p className="mt-2 text-xs leading-5 text-navy/55">{t.wholesale.previewNote}</p> : null}
             <Link
               href={`/${lang}/checkout`}
               onClick={() => setOpen(false)}

@@ -110,7 +110,7 @@ export function AccountPage() {
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-svh bg-[var(--tone-b)] text-navy">
+    <div className="inner-page-white min-h-svh bg-[var(--page-bg)] text-navy">
       <SiteHeader />
       <main id="main" tabIndex={-1} className="tone-scope page-shell min-h-[60svh] py-10 outline-none">
         {children}

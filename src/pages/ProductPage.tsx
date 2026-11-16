@@ -4,6 +4,7 @@ import { Link, Redirect, useLocation } from "wouter";
 import { toast } from "sonner";
 import { useBrandText } from "@/components/site/Brand";
 import { OfferGrid, type OfferProduct } from "@/components/site/Offers";
+import { CompareShops } from "@/components/site/CompareShops";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { useCart } from "@/lib/cart";
@@ -14,6 +15,10 @@ import { offerDetail } from "@/lib/offer-details";
 import { productCategoryOf, productInCategory } from "@/lib/product-categories";
 import { productPhoto } from "@/lib/products";
 import { useSiteContent } from "@/lib/site-content";
+import { useCustomer } from "@/lib/customer";
+import { shopLabel } from "@/lib/shop-label";
+import { wholesaleFor } from "@/lib/wholesale";
+import { specsForUrdu } from "@/lib/spec-ur";
 
 const PERK_ICONS = [Truck, ShieldCheck, Tag, Wallet];
 const RELATED_LIMIT = 5;
@@ -25,8 +30,9 @@ function money(value: number) {
 /** Full product page: photo, details and a buy box side by side, then similar products. */
 export function ProductPage({ id }: { id: string }) {
   const { t, lang, dir } = useLang();
-  const { content, productById, copyOf, visibleProducts } = useSiteContent();
+  const { content, productById, copyOf, visibleProducts, shopOf } = useSiteContent();
   const { add } = useCart();
+  const { customer } = useCustomer();
   const { has, toggle } = useFavorites();
   const brand = useBrandText();
   const [, navigate] = useLocation();
@@ -38,13 +44,18 @@ export function ProductPage({ id }: { id: string }) {
   const copy = copyOf(lang, product.id) ?? t.deals.products[product.id];
   const name = copy?.name ?? "";
   const row = content.products.find((item) => item.id === product.id);
+  const shop = shopOf(product.id);
+  // Wholesale price (local preview): shown only when this listing really offers a valid one.
+  const wholesalePrice = wholesaleFor(row);
   // Copy saved from the dashboard wins; until then the built-in highlights and specs show.
   const builtIn = offerDetail(lang, product.id);
   const savedFeatures = lang === "en" ? row?.featuresEn : row?.featuresAr;
   const savedSpecs = lang === "en" ? row?.specsEn : row?.specsAr;
   const detail = {
     features: savedFeatures ?? builtIn?.features ?? [],
-    specs: savedSpecs ? savedSpecs.map(({ label, value }): [string, string] => [label, value]) : (builtIn?.specs ?? []),
+    specs: ((specs) => (lang === "ur" ? specsForUrdu(specs) : specs))(
+      savedSpecs ? savedSpecs.map(({ label, value }): [string, string] => [label, value]) : (builtIn?.specs ?? []),
+    ),
   };
   const description = ((lang === "en" ? row?.descriptionEn : row?.descriptionAr) ?? "").trim();
   const categoryId = row ? productCategoryOf(row) : null;
@@ -84,7 +95,7 @@ export function ProductPage({ id }: { id: string }) {
   );
 
   return (
-    <div className="min-h-svh bg-[var(--tone-b)] text-navy">
+    <div className="inner-page-white min-h-svh bg-[var(--page-bg)] text-navy">
       <SiteHeader />
       <main id="main" tabIndex={-1} className="tone-scope page-shell min-h-[60svh] py-8 outline-none">
         <nav aria-label={t.brand} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-navy/45">
@@ -137,6 +148,12 @@ export function ProductPage({ id }: { id: string }) {
           <div className="min-w-0">
             {copy?.category ? <p className="text-sm font-semibold text-brand-ink">{copy.category}</p> : null}
             <h1 className="mt-2 text-2xl font-bold leading-snug text-navy sm:text-3xl">{name}</h1>
+            {shop ? (
+              <p className="mt-2 text-sm text-ink-soft">
+                {t.compare.shopLabel}: <span className="font-semibold text-navy">{shopLabel(shop.name, lang, t)}</span>
+              </p>
+            ) : null}
+            {shop ? <CompareShops productId={product.id} /> : null}
             {product.rating > 0 ? (
               <div className="mt-3 flex items-center gap-2 text-sm">
                 <span className="font-semibold text-navy">{product.rating.toFixed(1)}</span>
@@ -163,6 +180,21 @@ export function ProductPage({ id }: { id: string }) {
               ) : null}
               {price}
               <p className="mt-1 text-xs text-ink-mute">{t.productPage.priceNote}</p>
+              {wholesalePrice !== null ? (
+                <div className="mt-3 rounded-xl border border-brand/30 bg-brand/5 px-3.5 py-2.5 text-sm leading-6 text-navy">
+                  <p className="font-semibold">
+                    {t.wholesale.productNotice.replace("{price}", money(wholesalePrice)).replace("{currency}", t.deals.currency)}
+                  </p>
+                  {customer ? null : (
+                    <p className="mt-1 text-xs text-ink-soft">
+                      {t.wholesale.loginRequired}{" "}
+                      <Link href={`/${lang}/login`} className="font-semibold text-brand-ink underline-offset-2 hover:underline">
+                        {t.wholesale.loginLink}
+                      </Link>
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             <ul className="mt-6 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
@@ -217,21 +249,7 @@ export function ProductPage({ id }: { id: string }) {
 
           {/* Buy box */}
           <aside className="rounded-3xl border border-navy/10 bg-white p-5 shadow-[0_10px_28px_rgba(11,18,32,0.06)] lg:sticky lg:top-40">
-            {price}
-            <p className="mt-4 flex items-center gap-2 text-sm font-semibold text-[#12875a]">
-              <Check className="size-4" aria-hidden />
-              {t.deals.inStock}
-            </p>
-            <p className="mt-3 flex items-start gap-2 text-sm leading-6 text-ink-soft">
-              <Truck className="mt-0.5 size-4 shrink-0 text-brand-ink" aria-hidden />
-              {t.deals.shippingNote}
-            </p>
-            <p className="mt-1 flex items-start gap-2 text-sm leading-6 text-ink-soft">
-              <ShieldCheck className="mt-0.5 size-4 shrink-0 text-brand-ink" aria-hidden />
-              {t.deals.warrantyNote}
-            </p>
-
-            <div className="mt-5 flex items-center justify-between gap-3">
+            <div className="flex items-center justify-between gap-3">
               <span className="text-sm font-medium text-navy">{t.productPage.quantity}</span>
               <div className="inline-flex h-11 items-center rounded-xl border border-navy/15">
                 <button

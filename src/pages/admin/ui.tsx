@@ -1,7 +1,7 @@
-import type { ComponentType, ReactNode } from "react";
+import { useEffect, useState, type ComponentType, type MouseEvent, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
-import { AlertTriangle, ChevronDown, Info, Search, X } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Info, Search, X } from "lucide-react";
 import type { Lang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -280,15 +280,16 @@ export function Button({
   );
 }
 
-export function IconButton({ icon: Icon, label, onClick, tone = "muted" }: { icon: IconType; label: string; onClick: () => void; tone?: "muted" | "danger" }) {
+export function IconButton({ icon: Icon, label, onClick, tone = "muted", disabled }: { icon: IconType; label: string; onClick: () => void; tone?: "muted" | "danger"; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
       title={label}
       className={cn(
-        "grid size-9 place-items-center rounded-lg transition",
+        "grid size-9 place-items-center rounded-lg transition disabled:pointer-events-none disabled:opacity-40",
         tone === "danger" ? "text-(--a-muted) hover:bg-(--a-danger-soft) hover:text-(--a-danger)" : "text-(--a-muted) hover:bg-(--a-surface-2) hover:text-(--a-text)",
       )}
     >
@@ -534,6 +535,78 @@ export function PendingNote() {
       <p>
         إضافة عنصر جديد تحتاج رفع صورة وحفظه في قاعدة البيانات، وهذا يتفعّل في المرحلة الثالثة مع ربط Supabase. النموذج جاهز، وزر الحفظ يشتغل بعد الربط.
       </p>
+    </div>
+  );
+}
+
+/**
+ * Props that make a whole table row (or list item) open its details: spread them on the row. Clicks on the row's own
+ * buttons, links, switches and fields are left alone, and so is a click that ends a text selection.
+ */
+export function rowOpen(open: () => void) {
+  return {
+    className: "cursor-pointer",
+    onClick: (event: MouseEvent<HTMLElement>) => {
+      if ((event.target as HTMLElement).closest("button, a, input, select, textarea, label, [role='switch'], [role='dialog']")) return;
+      if (window.getSelection()?.toString()) return;
+      open();
+    },
+  };
+}
+
+/** Rows per page in the dashboard lists: 10 to begin with, and the page can show more. */
+export const PAGE_SIZE = 10;
+const PAGE_SIZES = [10, 25, 50, 100];
+
+/**
+ * Pages a list. Only the current page's rows are returned; `resetKey` (the filters and the search text) sends the list
+ * back to page 1 when it changes, and a page that no longer exists after a change falls back to the last one.
+ */
+export function usePager<T>(items: readonly T[], resetKey: unknown = "") {
+  const [size, setSize] = useState(PAGE_SIZE);
+  const [page, setPage] = useState(1);
+  const pages = Math.max(1, Math.ceil(items.length / size));
+  const current = Math.min(page, pages);
+  useEffect(() => setPage(1), [resetKey, size]);
+  return { rows: items.slice((current - 1) * size, current * size), page: current, pages, size, total: items.length, setPage, setSize };
+}
+
+export type Pager = ReturnType<typeof usePager<never>>;
+
+/** Page controls under a list: where you are, previous and next, and how many rows each page shows. Hidden while everything fits on one page. */
+export function Pager({ pager }: { pager: Pager }) {
+  if (pager.total <= PAGE_SIZE) return null;
+  const from = (pager.page - 1) * pager.size + 1;
+  const to = Math.min(pager.total, pager.page * pager.size);
+  const num = new Intl.NumberFormat("en-US");
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-(--a-line) px-5 py-3 text-sm">
+      <p className="text-(--a-muted)" aria-live="polite">
+        عرض {num.format(from)}–{num.format(to)} من {num.format(pager.total)}
+      </p>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="w-36">
+          <Select
+            label="عدد الصفوف في الصفحة"
+            hideLabel
+            value={String(pager.size)}
+            onChange={(value) => pager.setSize(Number(value))}
+            options={PAGE_SIZES.map((size): [string, string] => [String(size), `${num.format(size)} صفوف`])}
+          />
+        </div>
+        <nav aria-label="التنقل بين الصفحات" className="flex items-center gap-2">
+          <Button icon={ChevronRight} onClick={() => pager.setPage(pager.page - 1)} disabled={pager.page <= 1}>
+            السابق
+          </Button>
+          <span className="min-w-24 text-center tabular-nums text-(--a-muted)">
+            صفحة {num.format(pager.page)} من {num.format(pager.pages)}
+          </span>
+          <Button onClick={() => pager.setPage(pager.page + 1)} disabled={pager.page >= pager.pages}>
+            التالي
+            <ChevronLeft className="size-4" />
+          </Button>
+        </nav>
+      </div>
     </div>
   );
 }

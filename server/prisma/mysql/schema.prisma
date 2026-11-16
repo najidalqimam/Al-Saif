@@ -70,6 +70,9 @@ model Product {
   categoryId       String?   @map("category_id") @db.Char(36)
   /// RESTRICT: a category that still holds products cannot be deleted; the API archives instead.
   category         Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  /// The shop that owns this product listing. Null: not linked to any shop (every product before shops existed).
+  shopId           String?   @map("shop_id") @db.Char(36)
+  shop             Shop?     @relation(fields: [shopId], references: [id], onDelete: Restrict)
   nameAr           String    @map("name_ar") @db.VarChar(300)
   nameEn           String    @map("name_en") @db.VarChar(300)
   /// Short label printed above the name on product cards ("لابتوبات أعمال").
@@ -86,6 +89,9 @@ model Product {
   price            Decimal   @db.Decimal(12, 2)
   /// "Was" price shown struck through; null or <= price means no visible discount.
   compareAtPrice   Decimal?  @map("compare_at_price") @db.Decimal(12, 2)
+  /// Optional wholesale price per piece for this listing (this shop's offer of the product). Applies from 5 pieces of this
+  /// same product to a signed-in customer. Null means no wholesale price. Only valid while > 0 and < price; orders re-check it.
+  wholesalePrice   Decimal?  @map("wholesale_price") @db.Decimal(12, 2)
   currency         String    @default("SAR") @db.Char(3)
   /// Null means stock is not tracked for this product (the dashboard's "not recorded").
   stockQuantity    Int?      @map("stock_quantity")
@@ -108,10 +114,23 @@ model Product {
   homeSectionItems HomeSectionProduct[]
 
   @@index([categoryId])
+  @@index([shopId])
   @@index([isVisible, archivedAt])
   @@index([showInHomeOffers])
   @@index([sortOrder])
   @@map("products")
+}
+
+/// A shop that lists products on the platform. Shops are never deleted in this phase (restrict).
+model Shop {
+  id        String   @id @default(uuid()) @db.Char(36)
+  name      String   @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  products Product[]
+
+  @@map("shops")
 }
 
 model ProductImage {

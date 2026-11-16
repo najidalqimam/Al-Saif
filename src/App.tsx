@@ -20,7 +20,10 @@ import { OffersPage } from "@/pages/OffersPage";
 import { SearchPage } from "@/pages/SearchPage";
 import { AccountPage } from "@/pages/AccountPage";
 import { AuthPage } from "@/pages/AuthPage";
+import { CartPage } from "@/pages/CartPage";
+import { ComparePage } from "@/pages/ComparePage";
 import { ProductPage } from "@/pages/ProductPage";
+import { WholesalePage } from "@/pages/WholesalePage";
 
 function ScrollToTop() {
   const [location] = useLocation();
@@ -97,6 +100,21 @@ export default function App() {
           {LANGS.map((lang) => (
             <Route key={`${lang}-product`} path={`/${lang}/p/:id`}>
               {(params) => withLang(lang, <ProductPage id={params.id} />)}
+            </Route>
+          ))}
+          {LANGS.map((lang) => (
+            <Route key={`${lang}-wholesale`} path={`/${lang}/wholesale`}>
+              {withLang(lang, <WholesalePage />)}
+            </Route>
+          ))}
+          {LANGS.map((lang) => (
+            <Route key={`${lang}-cart`} path={`/${lang}/cart`}>
+              {withLang(lang, <CartPage />)}
+            </Route>
+          ))}
+          {LANGS.map((lang) => (
+            <Route key={`${lang}-compare`} path={`/${lang}/compare/:id`}>
+              {(params) => withLang(lang, <ComparePage id={params.id} />)}
             </Route>
           ))}
           {LANGS.map((lang) => (

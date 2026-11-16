@@ -1,4 +1,4 @@
-import type { Category, Prisma, Product, ProductImage } from "@prisma/client";
+import type { Category, Prisma, Product, ProductImage, Shop } from "@prisma/client";
 
 // Shapes the storefront and dashboard read. Products and categories are identified by their legacy id
 // ("phone", "demo-tv", "laptops"), the id the frontend, carts, favourites and links have always used; the
@@ -6,10 +6,11 @@ import type { Category, Prisma, Product, ProductImage } from "@prisma/client";
 
 export const productInclude = {
   category: { select: { legacyId: true, slug: true } },
+  shop: { select: { id: true, name: true } },
   images: { orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] },
 } satisfies Prisma.ProductInclude;
 
-type ProductWithRelations = Product & { category: Pick<Category, "legacyId" | "slug"> | null; images: ProductImage[] };
+type ProductWithRelations = Product & { category: Pick<Category, "legacyId" | "slug"> | null; shop: Pick<Shop, "id" | "name"> | null; images: ProductImage[] };
 
 export const productOrder: Prisma.ProductOrderByWithRelationInput[] = [{ sortOrder: "asc" }, { createdAt: "asc" }];
 
@@ -50,11 +51,15 @@ export function publicProduct(product: ProductWithRelations) {
     specsEn: specs(product.specsEn),
     price: money(product.price)!,
     compareAtPrice: money(product.compareAtPrice),
+    /** Optional per-piece wholesale price (from 5 pieces, signed-in customers); null when the listing has none. */
+    wholesalePrice: money(product.wholesalePrice),
     currency: product.currency,
     categoryId: product.category ? (product.category.legacyId ?? product.category.slug) : null,
     showInHomeOffers: product.showInHomeOffers,
     ratingAverage: product.ratingAverage === null ? null : product.ratingAverage.toFixed(1),
     reviewCount: product.reviewCount,
+    /** Optional: the shop that owns this listing; null when the product is not linked to a shop. */
+    shop: product.shop ? { id: product.shop.id, name: product.shop.name } : null,
     images: product.images.map((image) => ({ url: image.url, altAr: image.altAr, altEn: image.altEn })),
   };
 }
@@ -113,4 +118,10 @@ export function publicCategory(category: CategoryWithParent, level: number) {
 
 export function adminCategory(category: CategoryWithParent, level: number) {
   return { ...publicCategory(category, level), uuid: category.id, archivedAt: category.archivedAt, updatedAt: category.updatedAt };
+}
+
+export const shopOrder: Prisma.ShopOrderByWithRelationInput[] = [{ createdAt: "asc" }];
+
+export function adminShop(shop: Pick<Shop, "id" | "name">, products: number) {
+  return { id: shop.id, name: shop.name, products };
 }

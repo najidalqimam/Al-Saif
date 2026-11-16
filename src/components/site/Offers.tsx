@@ -1,4 +1,4 @@
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
 import {
@@ -6,7 +6,6 @@ import {
   ArrowRight,
   Check,
   Clock,
-  Flame,
   Heart,
   Minus,
   Plus,
@@ -71,38 +70,36 @@ export function Offers() {
   const light = useIsLight();
 
   return (
-    <section className="ambient-edge tone-a tone-swap-light section-y" aria-labelledby="offers-title">
+    <section className="ambient-edge tone-a tone-swap-light section-y offers-tight-top" aria-labelledby="offers-title">
       <div className="page-shell">
         <div className="reveal">
           <div
             className={`relative isolate overflow-hidden rounded-[1.5rem] px-6 py-5 sm:px-10 sm:py-6 lg:px-12 ${
-              light ? "border border-navy/10 text-navy" : "surface-dark text-white"
+              light ? "border border-[#304761] text-white" : "surface-dark text-white"
             }`}
-            style={{ background: "var(--tone-promo)" }}
+            // Light theme: a solid navy banner, no glow and no lighter gradient. The dark theme keeps its own look.
+            style={{ background: light ? "#162A46" : "var(--tone-promo)" }}
           >
-            <div aria-hidden className="pointer-events-none absolute -end-20 -top-28 -z-10 size-80 rounded-full bg-cyan/20 blur-3xl" />
-            <div aria-hidden className="led-strip absolute inset-x-0 top-0 -z-10" />
+            <div aria-hidden className={`pointer-events-none absolute -end-20 -top-28 -z-10 size-80 rounded-full bg-cyan/20 blur-3xl ${light ? "hidden" : ""}`} />
+            <div aria-hidden className="led-strip promo-led absolute inset-x-0 top-0 -z-10" style={light ? { backgroundImage: "none", backgroundColor: "#304761" } : undefined} />
             <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
               <div className="max-w-2xl">
-                <p className={`flex items-center gap-2 text-sm font-semibold ${light ? "text-brand-ink" : "text-gold"}`}>
-                  <Flame className="size-4" aria-hidden />
-                  {deals.eyebrow}
-                </p>
                 <h2
                   id="offers-title"
-                  className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl font-bold leading-tight sm:text-4xl"
+                  className="flex flex-wrap items-baseline gap-x-3 gap-y-1 text-2xl font-bold leading-tight sm:text-4xl"
                 >
                   <span>{deals.title}</span>
-                  <span className={`whitespace-nowrap ${light ? "text-brand-ink" : "text-gold"}`}>{deals.highlight}</span>
                 </h2>
-                <p className={`mt-2 max-w-xl text-sm leading-7 ${light ? "text-navy/75" : "text-white/80"}`}>{deals.lead}</p>
+                <p className={`mt-2 max-w-xl text-sm leading-7 ${light ? "text-[#D2DCE8]" : "text-white/80"}`}>{deals.lead}</p>
                 <Link
                   href={`/${lang}/offers`}
-                  className={`mt-4 inline-flex h-11 items-center gap-2 rounded-full px-6 text-sm font-semibold text-navy transition-colors ${
-                    light ? "bg-[#20C5D4] hover:bg-brand-hover" : "bg-[#fff] hover:bg-mint"
+                  className={`mt-4 inline-flex h-11 items-center gap-2 rounded-full px-6 text-sm font-semibold transition-colors ${
+                    light
+                      ? "bg-white text-[#162A46] hover:bg-[#EDF2F7] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                      : "bg-[#fff] text-navy hover:bg-mint"
                   }`}
                 >
-                  {t.deals.viewAll}
+                  {t.deals.bannerAction}
                   {dir === "rtl" ? <ArrowLeft className="size-4" aria-hidden /> : <ArrowRight className="size-4" aria-hidden />}
                 </Link>
               </div>
@@ -110,18 +107,18 @@ export function Offers() {
                 role="timer"
                 aria-label={t.deals.endsSoon}
                 className={`flex w-fit flex-col gap-2 rounded-2xl border px-4 py-3.5 backdrop-blur-sm sm:flex-row sm:items-center sm:gap-4 ${
-                  light ? "border-navy/10 bg-white/70" : "border-white/15 bg-black/25"
+                  light ? "border-navy/10 bg-[#F3F6FA]" : "border-white/15 bg-black/25"
                 }`}
               >
-                <span className={`flex items-center gap-2 text-sm font-medium ${light ? "text-navy/85" : "text-white/90"}`}>
-                  <Clock className={`size-4 ${light ? "text-brand-ink" : "text-gold"}`} aria-hidden />
+                <span className={`flex items-center gap-2 text-sm font-medium ${light ? "text-[#162A46]" : "text-white/90"}`}>
+                  <Clock className={`size-4 ${light ? "text-[#162A46]" : "text-gold"}`} aria-hidden />
                   {t.deals.endsSoon}
                 </span>
                 <div dir="ltr" className="flex items-center gap-1.5 tabular-nums">
                   {[countdown.hours, countdown.minutes, countdown.seconds].map((value, index) => (
                     <span key={index} className="flex items-center gap-1.5">
-                      {index > 0 ? <span className={light ? "text-navy/40" : "text-white/50"}>:</span> : null}
-                      <span className={`grid min-w-11 place-items-center rounded-lg px-2 py-1.5 text-xl font-bold ${light ? "bg-navy/[0.06]" : "bg-[rgb(255_255_255/0.1)] text-mint"}`}>
+                      {index > 0 ? <span className={light ? "text-[#162A46]" : "text-white/50"}>:</span> : null}
+                      <span className={`grid min-w-11 place-items-center rounded-lg px-2 py-1.5 text-xl font-bold ${light ? "bg-[#E5EBF2] text-[#162A46]" : "bg-[rgb(255_255_255/0.1)] text-mint"}`}>
                         {pad(value)}
                       </span>
                     </span>
@@ -138,7 +135,7 @@ export function Offers() {
   );
 }
 
-export function OfferGrid({ products, rail = false }: { products: readonly OfferProduct[]; rail?: boolean }) {
+export function OfferGrid({ products, rail = false, extraFor }: { products: readonly OfferProduct[]; rail?: boolean; extraFor?: (product: OfferProduct) => ReactNode }) {
   const { t, lang } = useLang();
   const { copyOf } = useSiteContent();
   const railState = useRail();
@@ -158,6 +155,7 @@ export function OfferGrid({ products, rail = false }: { products: readonly Offer
         onOpen={() => setOpenId(product.id)}
         onToggleSave={() => toggle(product.id)}
         duplicate={duplicate}
+        extra={extraFor?.(product)}
       />
     );
   };

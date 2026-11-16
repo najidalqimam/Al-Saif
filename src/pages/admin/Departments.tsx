@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { Archive, ArchiveRestore, ArrowRight, ChevronLeft, ExternalLink, FolderSearch, PackageSearch, Pencil, Plus } from "lucide-react";
-import { allCategories, categoryById, categoryTrail, rootDepartments, type CatalogCategory } from "@/lib/catalog";
+import { Archive, ArchiveRestore, ChevronLeft, ExternalLink, FolderSearch, PackageSearch, Pencil, Plus } from "lucide-react";
+import { allCategories, categoryById, rootDepartments, type CatalogCategory } from "@/lib/catalog";
 import { apiMessage } from "@/lib/api";
 import { useSiteContent, type NewCategory } from "@/lib/site-content";
 import { publicUrl } from "@/lib/utils";
@@ -9,7 +9,7 @@ import { ProductArt } from "@/components/site/card-art";
 import { productInCategory } from "@/lib/product-categories";
 import { onHashMove, pushHash, readHash, replaceHash } from "./nav";
 import { ToggleRow } from "./Products";
-import { Badge, BilingualField, Button, Confirm, DemoNote, Drawer, Empty, Field, IconButton, PageHead, Panel, SearchBox, Select, Switch, Tabs, num, sar } from "./ui";
+import { Badge, BilingualField, Button, Confirm, DemoNote, Drawer, Empty, Field, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, SearchBox, Select, Switch, Tabs, usePager } from "./ui";
 
 type Filter = "main" | "hidden" | "archived";
 
@@ -55,7 +55,7 @@ export function Departments() {
   const showingProducts = opened !== null && opened.level >= 2;
   const needle = query.trim().toLowerCase();
   const productRows = showingProducts ? productsOf(opened.id).filter((item) => !needle || [item.nameAr, item.nameEn].some((text) => text.toLowerCase().includes(needle))) : [];
-  const rows = catalog.filter((item) => {
+  const allRows = catalog.filter((item) => {
     const gone = archived.includes(item.id);
     if (opened) {
       if (gone || item.parentId !== opened.id) return false;
@@ -68,6 +68,9 @@ export function Departments() {
     if (needle && ![item.nameAr, item.nameEn, item.slug].some((text) => text.toLowerCase().includes(needle))) return false;
     return true;
   });
+  const rowsPager = usePager(allRows, `${filter}|${query}|${opened?.id ?? ""}`);
+  const productsPager = usePager(productRows, `${query}|${opened?.id ?? ""}`);
+  const rows = rowsPager.rows;
 
   return (
     <div className="space-y-6">
@@ -88,37 +91,7 @@ export function Departments() {
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        {opened ? (
-          <div className="flex min-h-10 flex-wrap items-center gap-2 rounded-xl border border-(--a-line) bg-(--a-surface) p-1 pe-3">
-            <Button
-              icon={ArrowRight}
-              onClick={() => {
-                setOpenId(opened.parentId);
-                setQuery("");
-              }}
-              className="h-8 border-transparent px-3"
-            >
-              رجوع
-            </Button>
-            <nav aria-label="مسار القسم" className="flex flex-wrap items-center gap-1 text-sm">
-              <button type="button" onClick={() => setOpenId(null)} className="text-(--a-muted) hover:text-(--a-text)">
-                الأقسام
-              </button>
-              {categoryTrail(opened.id).map((step) => (
-                <span key={step.id} className="flex items-center gap-1">
-                  <ChevronLeft className="size-3.5 text-(--a-muted)" />
-                  {step.id === opened.id ? (
-                    <span className="font-semibold">{step.nameAr}</span>
-                  ) : (
-                    <button type="button" onClick={() => setOpenId(step.id)} className="text-(--a-muted) hover:text-(--a-text)">
-                      {step.nameAr}
-                    </button>
-                  )}
-                </span>
-              ))}
-            </nav>
-          </div>
-        ) : (
+        {opened ? null : (
           <Tabs
             value={filter}
             onChange={setFilter}
@@ -136,8 +109,12 @@ export function Departments() {
         {showingProducts ? (
           productRows.length ? (
             <ul className="divide-y divide-(--a-line)">
-              {productRows.map((item) => (
-                <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-2.5">
+              {productsPager.rows.map((item) => (
+                <li
+                  key={item.id}
+                  {...rowOpen(() => pushHash("products", `${opened.id}/edit-${item.id}`))}
+                  className="flex cursor-pointer flex-wrap items-center gap-4 px-5 py-2.5"
+                >
                   <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-(--a-surface-2)">
                     <ProductArt id={item.id} className="size-8" />
                   </span>
@@ -199,7 +176,18 @@ export function Departments() {
                 </>
               );
               return (
-                <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-2.5">
+                <li
+                  key={item.id}
+                  {...(gone
+                    ? {}
+                    : rowOpen(() => {
+                        if (opens) {
+                          setOpenId(item.id);
+                          setQuery("");
+                        } else setEditingId(item.id);
+                      }))}
+                  className={`flex flex-wrap items-center gap-4 px-5 py-2.5${gone ? "" : " cursor-pointer"}`}
+                >
                   {opens ? (
                     <button
                       type="button"
@@ -241,6 +229,7 @@ export function Departments() {
         ) : (
           <Empty icon={FolderSearch} title="ما فيه أقسام هنا" lead={opened && !needle ? "ما فيه أقسام فرعية داخل هذا القسم. تقدر تضيف واحد من زر إضافة قسم فرعي." : filter === "archived" && !opened ? "الأقسام المحذوفة تنتقل للأرشيف وتقدر تسترجعها." : "جرّب كلمة بحث ثانية أو غيّر الفلتر."} />
         )}
+        <Pager pager={showingProducts ? productsPager : rowsPager} />
       </Panel>
 
       <Drawer

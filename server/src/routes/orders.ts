@@ -39,6 +39,8 @@ const OrderBody = z
       .min(1)
       .max(50),
     locale: z.enum(["ar", "en", "ur"]).optional(),
+    /** The items subtotal the customer was shown. Never a price: a mismatch only asks the customer to confirm the real one. */
+    expectedSubtotal: z.union([z.number().min(0).max(9_999_999_999.99), z.string().regex(/^\d{1,10}(\.\d{1,2})?$/)]).optional(),
     /** Signed-in customers only: also keep this delivery address in the account. */
     saveAddress: z.object({ label: text(0, 60).optional(), makeDefault: z.boolean().optional() }).strict().optional(),
   })
@@ -53,6 +55,7 @@ const ORDER_ERROR_STATUS: Record<OrderError["code"], number> = {
   SHIPPING_UNAVAILABLE: 422,
   BELOW_MINIMUM: 422,
   PAYMENT_UNAVAILABLE: 422,
+  PRICE_CHANGED: 409,
 };
 
 export const ordersRouter = Router();
@@ -103,7 +106,7 @@ ordersRouter.post(
       });
     } catch (error) {
       if (error instanceof OrderError) {
-        res.status(ORDER_ERROR_STATUS[error.code]).json({ error: error.code, message: error.message });
+        res.status(ORDER_ERROR_STATUS[error.code]).json({ error: error.code, message: error.message, ...(error.details ? { details: error.details } : {}) });
         return;
       }
       throw error;

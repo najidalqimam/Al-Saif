@@ -6,6 +6,7 @@ import { ProductDialog, type OfferProduct } from "@/components/site/Offers";
 import { IconTile, ProductCard } from "@/components/site/showcase";
 import { useFavorites } from "@/lib/favorites";
 import { useLang } from "@/lib/i18n";
+import { addInquiry, westernDigits } from "@/lib/setup-inquiries";
 import { useSiteContent } from "@/lib/site-content";
 
 const GROUPS: Record<string, readonly string[]> = {
@@ -35,7 +36,7 @@ export function Bestsellers() {
   const openProduct = openId ? productById(openId) ?? null : null;
 
   return (
-    <section className="ambient section-y tone-b tone-swap-light" aria-labelledby="bestsellers-title">
+    <section className="ambient section-y tone-b tone-swap-light pure-white-light" aria-labelledby="bestsellers-title">
       <div className="page-shell">
         <div className="reveal flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-2xl">
@@ -102,7 +103,7 @@ export function Bestsellers() {
               <p className="mt-1 text-sm leading-6 text-ink-soft">{block.bannerLead}</p>
             </div>
           </div>
-          <button type="button" className="btn-brand shrink-0" onClick={() => setInquiryOpen(true)}>
+          <button type="button" className="btn-brand inquiry-open shrink-0" onClick={() => setInquiryOpen(true)}>
             {t.bestsellers.bannerAction}
           </button>
         </div>
@@ -148,7 +149,7 @@ function SetupInquiryDialog({ onClose }: { onClose: () => void }) {
   function validate() {
     const next: typeof errors = {};
     if (!name.trim()) next.name = copy.required;
-    const mobile = phone.replace(/[\s-]/g, "");
+    const mobile = westernDigits(phone).replace(/[\s-]/g, "");
     if (!PHONE_OK.test(mobile)) next.phone = copy.phoneError;
     if (!note.trim()) next.note = copy.required;
     setErrors(next);
@@ -159,22 +160,14 @@ function SetupInquiryDialog({ onClose }: { onClose: () => void }) {
     event.preventDefault();
     if (!validate()) return;
     setSending(true);
-    // Persist locally until store contact settings / WhatsApp are wired in admin.
-    try {
-      const key = "al-saif-setup-inquiries";
-      const prior = JSON.parse(localStorage.getItem(key) ?? "[]") as unknown[];
-      const row = {
-        name: name.trim(),
-        phone: phone.replace(/[\s-]/g, ""),
-        note: note.trim(),
-        at: new Date().toISOString(),
-      };
-      localStorage.setItem(key, JSON.stringify([row, ...(Array.isArray(prior) ? prior : [])].slice(0, 50)));
-    } catch {
-      /* ignore quota / private mode */
-    }
-    toast.success(copy.success);
+    // No server endpoint exists yet, so requests are saved in this browser (the dashboard reads the same list).
+    const saved = addInquiry({ name: name.trim(), phone: westernDigits(phone).replace(/[\s-]/g, ""), note: note.trim() });
     setSending(false);
+    if (!saved) {
+      toast.error(copy.saveError);
+      return;
+    }
+    toast.success(copy.successLocal);
     onClose();
   }
 
@@ -213,6 +206,7 @@ function SetupInquiryDialog({ onClose }: { onClose: () => void }) {
               value={name}
               onChange={(event) => setName(event.target.value)}
               autoComplete="name"
+              maxLength={100}
               className={inputClass(Boolean(errors.name))}
             />
           </Field>
@@ -232,6 +226,7 @@ function SetupInquiryDialog({ onClose }: { onClose: () => void }) {
               value={note}
               onChange={(event) => setNote(event.target.value)}
               rows={4}
+              maxLength={1000}
               placeholder={copy.noteHint}
               className={`${inputClass(Boolean(errors.note))} min-h-28 resize-y py-3`}
             />

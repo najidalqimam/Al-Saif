@@ -1,23 +1,26 @@
 import { useState } from "react";
-import { Eye, Inbox, X } from "lucide-react";
+import { ArchiveRestore, Inbox, Trash2, X } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
 import { useSiteContent } from "@/lib/site-content";
 import { PAYMENT_LABELS, PAYMENT_STATUS, SHIP_STAGE, shipStage, useOps, type ShipStage } from "./ops";
 import { readHash } from "./nav";
 import { ORDER_STATUS, type Order, type OrderStatus, type PaymentStatus } from "./orders";
-import { AR_DATE, Badge, Button, Drawer, Empty, IconButton, PageHead, Panel, SearchBox, Select, Tabs, num, sar } from "./ui";
+import { AR_DATE, Badge, Button, Confirm, Drawer, Empty, IconButton, PageHead, Panel, SearchBox, Select, Pager, Tabs, num, rowOpen, sar, usePager } from "./ui";
 
 export const shortDate = (date: string) => new Date(date).toLocaleDateString(AR_DATE, { day: "numeric", month: "short" });
 
-export function OrdersTable({ orders, onView, compact }: { orders: Order[]; onView: (order: Order) => void; compact?: boolean }) {
+export function OrdersTable({ orders, onView, compact, archived }: { orders: Order[]; onView: (order: Order) => void; compact?: boolean; archived?: boolean }) {
   const { content } = useSiteContent();
-  const { ops } = useOps();
+  const { ops, archiveOrder, canArchiveOrders } = useOps();
+  const [archiving, setArchiving] = useState<Order | null>(null);
+  const pager = usePager(orders, `${orders.length}|${archived ? "a" : ""}`);
   const nameOf = (id: string) => content.products.find((item) => item.id === id)?.nameAr ?? id;
   const methodOf = (id: string) => ops.shipping.find((item) => item.id === id)?.nameAr ?? "—";
   const head = "px-4 py-2.5 text-start text-xs font-medium whitespace-nowrap text-(--a-muted) first:ps-5 last:pe-5";
   const cell = "px-4 py-2.5 first:ps-5 last:pe-5";
 
   return (
+    <>
     <div className="relative overflow-x-auto">
       <table className={compact ? "w-full min-w-[680px] text-sm" : "w-full min-w-[920px] text-sm"}>
         <thead className="bg-(--a-surface-2)/50">
@@ -35,11 +38,12 @@ export function OrdersTable({ orders, onView, compact }: { orders: Order[]; onVi
           </tr>
         </thead>
         <tbody>
-          {orders.map((order) => {
+          {pager.rows.map((order) => {
             const status = ORDER_STATUS[order.status];
             const payment = PAYMENT_STATUS[order.paymentStatus];
+            const open = rowOpen(() => onView(order));
             return (
-              <tr key={order.id} className="border-t border-(--a-line) transition-colors hover:bg-(--a-surface-2)/40">
+              <tr key={order.id} onClick={open.onClick} className={`${open.className} border-t border-(--a-line) transition-colors hover:bg-(--a-surface-2)/40`}>
                 <td className={cell}>
                   <p className="font-semibold tabular-nums" dir="ltr">
                     #{order.id}
@@ -89,14 +93,34 @@ export function OrdersTable({ orders, onView, compact }: { orders: Order[]; onVi
                   </Badge>
                 </td>
                 <td className={`${cell} text-end`}>
-                  <IconButton icon={Eye} label={`عرض الطلب ${order.id}`} onClick={() => onView(order)} />
+                  {archived ? (
+                    <IconButton icon={ArchiveRestore} label={`استرجاع الطلب ${order.id}`} onClick={() => archiveOrder(order.id, false)} />
+                  ) : (
+                    <IconButton
+                      icon={Trash2}
+                      tone="danger"
+                      label={canArchiveOrders ? `حذف الطلب ${order.id}` : "حذف الطلبات غير متاح أثناء الاتصال بقاعدة البيانات"}
+                      disabled={!canArchiveOrders}
+                      onClick={() => setArchiving(order)}
+                    />
+                  )}
                 </td>
               </tr>
             );
           })}
         </tbody>
       </table>
+      <Confirm
+        open={archiving !== null}
+        onClose={() => setArchiving(null)}
+        onConfirm={() => archiving && archiveOrder(archiving.id, true)}
+        title={`حذف الطلب #${archiving?.id ?? ""}؟`}
+        lead="الطلب يختفي من قوائم الطلبات والمدفوعات والشحن والنظرة العامة، وينتقل لتبويب الأرشيف في صفحة الطلبات. بياناته تبقى محفوظة وتقدر تسترجعه في أي وقت. الأرشفة على هذا المتصفح فقط."
+        action="نقل للأرشيف"
+      />
     </div>
+    <Pager pager={pager} />
+    </>
   );
 }
 
@@ -262,10 +286,10 @@ export function OrderDrawer({ order, onClose }: { order: Order | null; onClose: 
   );
 }
 
-type ShipFilter = "all" | ShipStage;
+type ShipFilter = "all" | ShipStage | "archived";
 
 export function Orders({ initialShip = "all" }: { initialShip?: ShipFilter }) {
-  const { orders, ops } = useOps();
+  const { orders, archivedOrders, canArchiveOrders, ops } = useOps();
   const [ship, setShip] = useState<ShipFilter>(initialShip);
   const [payMethod, setPayMethod] = useState<"all" | Order["paymentMethod"]>("all");
   const [payStatus, setPayStatus] = useState<"all" | PaymentStatus>("all");
@@ -277,9 +301,10 @@ export function Orders({ initialShip = "all" }: { initialShip?: ShipFilter }) {
 
   const count = (stage: ShipStage) => orders.filter((order) => shipStage(order.status) === stage).length;
   const needle = query.trim();
-  const rows = orders.filter((order) => {
+  const inArchive = ship === "archived";
+  const rows = (inArchive ? archivedOrders : orders).filter((order) => {
     if (onlyNew && order.status !== "new") return false;
-    if (ship !== "all" && shipStage(order.status) !== ship) return false;
+    if (!inArchive && ship !== "all" && shipStage(order.status) !== ship) return false;
     if (payMethod !== "all" && order.paymentMethod !== payMethod) return false;
     if (payStatus !== "all" && order.paymentStatus !== payStatus) return false;
     if (method !== "all" && order.shippingMethod !== method) return false;
@@ -312,6 +337,7 @@ export function Orders({ initialShip = "all" }: { initialShip?: ShipFilter }) {
             ["shipped", SHIP_STAGE.shipped.label, count("shipped")],
             ["delivered", SHIP_STAGE.delivered.label, count("delivered")],
             ["cancelled", SHIP_STAGE.cancelled.label, count("cancelled")],
+            ...(canArchiveOrders ? ([["archived", "الأرشيف", archivedOrders.length]] as Array<[ShipFilter, string, number]>) : []),
           ]}
         />
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,2fr)_repeat(3,minmax(0,1fr))]">
@@ -340,9 +366,9 @@ export function Orders({ initialShip = "all" }: { initialShip?: ShipFilter }) {
 
       <Panel>
         {rows.length ? (
-          <OrdersTable orders={rows} onView={setViewing} />
+          <OrdersTable orders={rows} onView={setViewing} archived={inArchive} />
         ) : (
-          <Empty icon={Inbox} title="ما فيه طلبات بهذي الفلاتر" lead="غيّر الفلتر أو امسح البحث لعرض كل الطلبات." />
+          <Empty icon={Inbox} title={inArchive ? "الأرشيف فاضي" : "ما فيه طلبات بهذي الفلاتر"} lead={inArchive ? "الطلبات اللي تحذفها من القائمة تنتقل هنا وتقدر تسترجعها." : "غيّر الفلتر أو امسح البحث لعرض كل الطلبات."} />
         )}
       </Panel>
 

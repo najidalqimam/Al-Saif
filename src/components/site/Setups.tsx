@@ -37,8 +37,8 @@ export function Setups() {
 
   return (
     <section className="on-dark tone-a tone-swap-light section-y relative isolate overflow-hidden" aria-labelledby="solutions-title">
-      <div aria-hidden className="pointer-events-none absolute inset-x-0 -top-24 -z-10 h-80 bg-[radial-gradient(50%_100%_at_50%_0%,rgb(var(--accent-rgb)/0.14),transparent)]" />
-      <div aria-hidden className="pointer-events-none absolute -bottom-32 -end-24 -z-10 size-96 rounded-full bg-blue/10 blur-3xl" />
+      <div aria-hidden className="setups-glow pointer-events-none absolute inset-x-0 -top-24 -z-10 h-80 bg-[radial-gradient(50%_100%_at_50%_0%,rgb(var(--accent-rgb)/0.14),transparent)]" />
+      <div aria-hidden className="setups-glow pointer-events-none absolute -bottom-32 -end-24 -z-10 size-96 rounded-full bg-blue/10 blur-3xl" />
       <div className="page-shell">
         <div className="reveal flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div className="max-w-2xl">
@@ -89,20 +89,20 @@ export function Setups() {
                 aria-labelledby={titleId}
                 dir={dir}
                 onClick={(event) => event.stopPropagation()}
-                className="relative w-full max-w-2xl overflow-hidden rounded-3xl bg-[#0b1f3a] p-5 shadow-2xl sm:p-7"
+                className="relative w-full max-w-2xl overflow-hidden rounded-3xl bg-[#0b1f3a] [html.light_&]:bg-white [html.light_&]:border [html.light_&]:border-navy/10 p-5 shadow-2xl sm:p-7"
               >
                 <button
                   type="button"
                   onClick={() => setPickerOpen(false)}
                   aria-label={dir === "rtl" ? "إغلاق" : "Close"}
-                  className="absolute end-4 top-4 grid size-10 cursor-pointer place-items-center rounded-full bg-white/10 text-white hover:bg-white/15"
+                  className="absolute end-4 top-4 grid size-10 cursor-pointer place-items-center rounded-full bg-white/10 text-white hover:bg-white/15 [html.light_&]:bg-navy/5 [html.light_&]:text-navy [html.light_&]:hover:bg-navy/10"
                 >
                   <X className="size-5" />
                 </button>
-                <h2 id={titleId} className="pe-10 text-xl font-bold text-white">
+                <h2 id={titleId} className="pe-10 text-xl font-bold text-white [html.light_&]:text-navy">
                   {block.action}
                 </h2>
-                <p className="mt-2 max-w-xl text-sm leading-7 text-white/70">{block.lead}</p>
+                <p className="mt-2 max-w-xl text-sm leading-7 text-white/70 [html.light_&]:text-navy/70">{block.lead}</p>
                 <div className="mt-6 grid gap-3 sm:grid-cols-2">
                   {SOLUTIONS.map((item) => {
                     const text = copy.get(item.id);
@@ -111,16 +111,16 @@ export function Setups() {
                         key={item.id}
                         href={`/${lang}/c/${item.slug}`}
                         onClick={() => setPickerOpen(false)}
-                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 transition hover:border-brand/50 hover:bg-white/10"
+                        className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-3 transition hover:border-brand/50 hover:bg-white/10 [html.light_&]:border-navy/10 [html.light_&]:bg-[#F4F7FB] [html.light_&]:hover:border-brand-ink/40 [html.light_&]:hover:bg-brand/10"
                       >
-                        <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5">
+                        <span className="grid size-14 shrink-0 place-items-center overflow-hidden rounded-xl bg-white/5 [html.light_&]:bg-white">
                           <img src={publicUrl(item.image)} alt="" className="max-h-12 max-w-12 object-contain" />
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-sm font-bold text-white">{text?.title}</span>
-                          <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-white/65">{text?.text}</span>
+                          <span className="block truncate text-sm font-bold text-white [html.light_&]:text-navy">{text?.title}</span>
+                          <span className="mt-0.5 line-clamp-2 block text-xs leading-5 text-white/65 [html.light_&]:text-navy/65">{text?.text}</span>
                         </span>
-                        <ArrowLeft className={`size-4 shrink-0 text-brand ${dir === "ltr" ? "rotate-180" : ""}`} aria-hidden />
+                        <ArrowLeft className={`size-4 shrink-0 text-brand [html.light_&]:text-brand-ink ${dir === "ltr" ? "rotate-180" : ""}`} aria-hidden />
                       </Link>
                     );
                   })}

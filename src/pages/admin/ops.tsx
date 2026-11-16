@@ -37,7 +37,10 @@ export type PaymentMethod = {
   note: string;
 };
 
-export type OrderEdit = Partial<Pick<Order, "status" | "shippingMethod" | "paymentStatus">>;
+export type OrderEdit = Partial<Pick<Order, "status" | "shippingMethod" | "paymentStatus">> & {
+  /** Hidden from the order lists on this browser; kept in the data and restorable. */
+  archived?: boolean;
+};
 
 export type Ops = {
   shipping: ShippingMethod[];
@@ -106,7 +109,12 @@ export function readOps(): Ops {
 
 type OpsApi = {
   ops: Ops;
+  /** Orders shown in the lists. Archived ones are left out (see archivedOrders). */
   orders: Order[];
+  archivedOrders: Order[];
+  /** Archiving is a browser-only view setting for now: it is off while orders come from the database, which has no archive. */
+  canArchiveOrders: boolean;
+  archiveOrder: (id: string, archived: boolean) => void;
   updateShipping: (id: string, patch: Partial<ShippingMethod>) => void;
   updateZone: (id: string, patch: Partial<Zone>) => void;
   addZone: () => void;
@@ -258,7 +266,11 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     const remote = fromDatabase && settings !== null;
     // Connected: the real orders from the database (numbered from 1001). Otherwise the browser's store orders
     // and the sample orders, with the dashboard's local edits applied.
-    const orders = fromDatabase && dbOrders !== null ? dbOrders : [...placed, ...SAMPLE_ORDERS].map((order) => ({ ...order, ...ops.orders[order.id] }));
+    const live = fromDatabase && dbOrders !== null;
+    const everyOrder = live ? dbOrders : [...placed, ...SAMPLE_ORDERS].map((order) => ({ ...order, ...ops.orders[order.id] }));
+    const isArchived = (order: Order) => !live && ops.orders[order.id]?.archived === true;
+    const orders = everyOrder.filter((order) => !isArchived(order));
+    const archivedOrders = everyOrder.filter(isArchived);
     const stock: Record<string, number> = {};
     for (const item of content.products) if (typeof item.stock === "number") stock[item.id] = item.stock;
     const edit = <K extends keyof Settings>(key: K, change: (list: Settings[K]) => Settings[K]) =>
@@ -266,6 +278,12 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     return {
       ops: fromDatabase ? { ...ops, ...(settings ?? {}), stock, lowStock: catalogue.lowStock } : ops,
       orders,
+      archivedOrders,
+      canArchiveOrders: !live,
+      archiveOrder: (id, archived) => {
+        if (live) return;
+        setOps((current) => ({ ...current, orders: { ...current.orders, [id]: { ...current.orders[id], archived } } }));
+      },
       updateShipping: (id, patch) => edit("shipping", (list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item))),
       updateZone: (id, patch) => edit("zones", (list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item))),
       addZone: () => {

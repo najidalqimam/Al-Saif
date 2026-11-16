@@ -1141,8 +1141,9 @@ html.light #hero [class~="text-[#0a8a9b]"] {
     transition: background 320ms ease;
   }
 
+  /* No colour change on hover: the background stays the button's own. */
   .solution-cta:hover {
-    background: #5be6f0;
+    background: var(--accent);
   }
 }
 
@@ -1223,7 +1224,8 @@ a.bg-emerald:hover,
 }
 
 .solution-cta:hover {
-  box-shadow: 0 8px 22px rgb(var(--accent-rgb) / 0.34);
+  /* The same shadow as at rest: no glow on hover. */
+  box-shadow: 0 6px 18px rgb(var(--accent-rgb) / 0.22);
 }
 
 .cart-btn:hover {
@@ -1384,6 +1386,11 @@ footer::before {
 
 header.sticky::after {
   bottom: -1px;
+}
+
+/* Light theme: no colored hairline under the header (the header's own faint border stays). */
+html.light header.sticky::after {
+  display: none;
 }
 
 footer {
@@ -1741,6 +1748,8 @@ footer::before {
   --tone-card: #233750;
   --tone-edge: rgb(255 255 255 / 0.12);
   --tone-promo: #1a3550;
+  /* General page background of the storefront pages and the tinted home bands (not used by small chips or tabs). */
+  --page-bg: #182a42;
   /* Header, footer and the hero block share one surface per theme. */
   --chrome: #111d32;
 }
@@ -1748,6 +1757,8 @@ footer::before {
 html.light {
   --tone-a: #ffffff;
   --tone-b: #eef4ff;
+  /* Off-white page background in the light theme only; the dark theme keeps its own tone. */
+  --page-bg: #f7f7f5;
   --tone-card: #ffffff;
   --tone-edge: #d8e3f8;
   --tone-promo: #e3edff;
@@ -1923,6 +1934,69 @@ html.light .tone-white-light {
   background: #ffffff;
 }
 
+/* Light only: the categories and best-sellers sections are plain white, edge to edge, with no tinted glow. */
+html.light .pure-white-light {
+  background: #ffffff;
+}
+
+html.light .pure-white-light::before,
+html.light .pure-white-light::after {
+  background: none;
+}
+
+/* Light only: tighter spacing around the categories section. The categories section is 40px (24px on mobile) above and
+   below its content, and the offers content starts 32px (24px on mobile) after it: the offers section's own top padding
+   is the whole gap, so no padding and margin add up. Smaller current values would stay as they are. */
+html.light .categories-tight {
+  padding-block: min(24px, 3rem);
+}
+
+html.light .offers-tight-top {
+  padding-top: min(24px, 3rem);
+}
+
+@media (min-width: 768px) {
+  html.light .categories-tight {
+    padding-block: min(40px, 4.5rem);
+  }
+
+  html.light .offers-tight-top {
+    padding-top: min(32px, 4.5rem);
+  }
+}
+
+/* Light only: the business-solutions section (the last one before the footer) is one flat color, without its blue glows. */
+html.light .setups-glow {
+  display: none;
+}
+
+/* Light only: the offers banner's top line is a plain line, without the strip's blurred spectrum glow. */
+html.light .promo-led::after {
+  display: none;
+}
+
+/* Only the "ask about a group order" button: on hover it keeps its own colour and resting shadow (no turquoise, no stronger glow). */
+.inquiry-open:hover {
+  background: var(--accent);
+  box-shadow: 0 6px 18px rgb(var(--accent-rgb) / 0.22);
+}
+
+/* Light only: the inner store pages (everything except the home page and the dashboard) sit on plain white. Cards keep their own white, border and shadow. */
+html.light .inner-page-white {
+  background: #ffffff;
+}
+
+/* The wholesale link in the nav has its own short underline, so the shared nav-link underline effect is switched off for it. */
+header nav > a.wholesale-nav::after {
+  display: none;
+}
+
+/* Light theme: no animated underline under the nav links on hover or on the current page (the wholesale link keeps its own short line). */
+html.light header nav > a::after,
+html.light header nav > div > a::after {
+  display: none;
+}
+
 /* Glass header: the page behind it at scroll-top matches the hero tone so the frosted bar blends in. */
 .home-shell {
   background: var(--chrome) !important;
@@ -2080,7 +2154,7 @@ html:not(.light) .product-card {
 
 /* Light only: from the third section on, the alternating tones are swapped so white categories are followed by a tinted band. */
 html.light .tone-swap-light.tone-a {
-  background: var(--tone-b);
+  background: var(--page-bg);
 }
 
 html.light .tone-swap-light.tone-b {

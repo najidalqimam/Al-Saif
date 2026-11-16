@@ -5,7 +5,7 @@ import { Prisma, type AdminRole } from "@prisma/client";
 import { requireAdmin } from "../auth/middleware.js";
 import { categoryWhere, isCatalogueId, productWhere, slugify } from "../catalogue/ids.js";
 import { DATA_URL, ImageError, decodeImage, saveProductImage } from "../catalogue/images.js";
-import { adminCategory, adminProduct, categoryInclude, categoryLevels, productInclude, productOrder } from "../catalogue/serialize.js";
+import { adminCategory, adminProduct, adminShop, categoryInclude, categoryLevels, productInclude, productOrder, shopOrder } from "../catalogue/serialize.js";
 import { prisma } from "../db.js";
 
 // /api/admin/...: catalogue management for the dashboard. Every change is validated here and saved to the
@@ -49,6 +49,8 @@ const ProductFields = z.object({
   categoryId: catalogueId.nullable(),
   price,
   compareAtPrice: money.nullable(),
+  /** Optional wholesale price per piece; null clears it. Checked against the selling price in the routes below. */
+  wholesalePrice: price.nullable(),
   isVisible: z.boolean(),
   showInHomeOffers: z.boolean(),
 });
@@ -63,15 +65,17 @@ const NewProduct = ProductFields.partial({
   specsAr: true,
   specsEn: true,
   compareAtPrice: true,
+  wholesalePrice: true,
   isVisible: true,
   showInHomeOffers: true,
 })
-  .extend({ categoryId: catalogueId, image: image.optional() })
+  .extend({ categoryId: catalogueId, image: image.optional(), shopId: z.string().uuid().nullable().optional() })
   .strict();
 const ProductPatch = ProductFields.partial()
-  .extend({ image: image.optional() })
+  .extend({ image: image.optional(), shopId: z.string().uuid().nullable().optional() })
   .strict()
   .refine((body) => Object.keys(body).length > 0, "Nothing to change");
+const ShopBody = z.object({ name: name(200) }).strict();
 /** Prisma writes a JSON column's SQL NULL as Prisma.DbNull, not as a plain null. */
 function jsonFields<T extends { featuresAr?: unknown; featuresEn?: unknown; specsAr?: unknown; specsEn?: unknown }>(fields: T) {
   const out: Record<string, unknown> = { ...fields };
@@ -159,6 +163,14 @@ async function usableCategory(id: string) {
   return category;
 }
 
+/** A shop products can be linked to: it must exist. Null unlinks the product. */
+async function shopRef(id: string | null | undefined) {
+  if (id === undefined || id === null) return id;
+  const shop = await prisma.shop.findUnique({ where: { id }, select: { id: true } });
+  if (!shop) throw new ApiProblem(404, "SHOP_NOT_FOUND");
+  return shop.id;
+}
+
 async function levelOf(categoryId: string) {
   const all = await prisma.category.findMany({ select: { id: true, parentId: true } });
   return categoryLevels(all).get(categoryId) ?? 1;
@@ -185,19 +197,59 @@ adminCatalogueRouter.get(
   "/catalogue",
   requireAdmin(READ_ROLES),
   handle(async (req, res) => {
-    const [categories, products, lowStock] = await Promise.all([
+    const [categories, products, lowStock, shops] = await Promise.all([
       prisma.category.findMany({ include: categoryInclude, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
       prisma.product.findMany({ include: productInclude, orderBy: productOrder }),
       lowStockSetting(),
+      prisma.shop.findMany({ orderBy: shopOrder, include: { _count: { select: { products: true } } } }),
     ]);
     const levels = categoryLevels(categories);
     res.setHeader("Cache-Control", "no-store");
     res.json({
       categories: categories.map((category) => adminCategory(category, levels.get(category.id) ?? 1)),
       products: products.map(adminProduct),
+      shops: shops.map((shop) => adminShop(shop, shop._count.products)),
       settings: { lowStock },
       canEdit: WRITE_ROLES.includes(req.admin!.role),
     });
+  }),
+);
+
+// ---------------------------------------------------------------------------
+// Shops: list, add and rename. No delete in this phase.
+// ---------------------------------------------------------------------------
+
+adminCatalogueRouter.get(
+  "/shops",
+  requireAdmin(READ_ROLES),
+  handle(async (_req, res) => {
+    const shops = await prisma.shop.findMany({ orderBy: shopOrder, include: { _count: { select: { products: true } } } });
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ shops: shops.map((shop) => adminShop(shop, shop._count.products)) });
+  }),
+);
+
+adminCatalogueRouter.post(
+  "/shops",
+  requireAdmin(WRITE_ROLES),
+  handle(async (req, res) => {
+    const body = ShopBody.safeParse(req.body);
+    if (!body.success) return invalid(res, body.error);
+    const shop = await prisma.shop.create({ data: { name: body.data.name } });
+    res.status(201).json({ shop: adminShop(shop, 0) });
+  }),
+);
+
+adminCatalogueRouter.patch(
+  "/shops/:id",
+  requireAdmin(WRITE_ROLES),
+  handle(async (req, res) => {
+    const body = ShopBody.safeParse(req.body);
+    if (!body.success) return invalid(res, body.error);
+    const id = z.string().uuid().safeParse(req.params.id);
+    if (!id.success || !(await prisma.shop.findUnique({ where: { id: id.data }, select: { id: true } }))) throw new ApiProblem(404, "SHOP_NOT_FOUND");
+    const shop = await prisma.shop.update({ where: { id: id.data }, data: { name: body.data.name }, include: { _count: { select: { products: true } } } });
+    res.json({ shop: adminShop(shop, shop._count.products) });
   }),
 );
 
@@ -211,8 +263,11 @@ adminCatalogueRouter.post(
   handle(async (req, res) => {
     const body = NewProduct.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
-    const { image: upload, categoryId, ...fields } = body.data;
+    const { image: upload, categoryId, shopId, ...fields } = body.data;
+    // A wholesale price is a positive number below the selling price; empty means none (null), never zero.
+    if (fields.wholesalePrice && fields.wholesalePrice.gte(fields.price)) throw new ApiProblem(400, "INVALID_WHOLESALE_PRICE");
     const category = await usableCategory(categoryId);
+    const shopUuid = await shopRef(shopId);
     if (upload) decodeImage(upload); // refuse a bad image before anything is written
     const legacyId = `p-${Date.now().toString(36)}${randomBytes(2).toString("hex")}`;
     const last = await prisma.product.aggregate({ _max: { sortOrder: true } });
@@ -223,6 +278,7 @@ adminCatalogueRouter.post(
         legacyId,
         slug: legacyId,
         categoryId: category.id,
+        shopId: shopUuid,
         sortOrder: (last._max.sortOrder ?? 0) + 1,
         images: url ? { create: { url, altAr: fields.nameAr, altEn: fields.nameEn } } : undefined,
       },
@@ -239,7 +295,11 @@ adminCatalogueRouter.patch(
     const body = ProductPatch.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
     const product = await findProduct(String(req.params.id));
-    const { image: upload, categoryId, ...fields } = body.data;
+    const { image: upload, categoryId, shopId, ...fields } = body.data;
+    // Checked against the selling price this change will leave in place. Lowering the price later never blocks the save;
+    // an order simply ignores a wholesale price that is no longer below the price.
+    if (fields.wholesalePrice && fields.wholesalePrice.gte(fields.price ?? product.price)) throw new ApiProblem(400, "INVALID_WHOLESALE_PRICE");
+    const shopUuid = await shopRef(shopId);
     let categoryUuid: string | null | undefined;
     if (categoryId !== undefined) categoryUuid = categoryId === null ? null : (await usableCategory(categoryId)).id;
     if (upload) decodeImage(upload);
@@ -251,6 +311,7 @@ adminCatalogueRouter.patch(
       data: {
         ...jsonFields(fields),
         categoryId: categoryUuid,
+        shopId: shopUuid,
         images: url ? { create: { url, sortOrder: first - 1, altAr: fields.nameAr ?? product.nameAr, altEn: fields.nameEn ?? product.nameEn } } : undefined,
       },
       include: productInclude,

@@ -3,7 +3,7 @@ import { Boxes, PackageCheck, PackageSearch, PackageX, TriangleAlert } from "luc
 import { ProductArt } from "@/components/site/card-art";
 import { useSiteContent } from "@/lib/site-content";
 import { STOCK_LEVEL, stockLevel, useOps, type StockLevel } from "./ops";
-import { Badge, DemoNote, Empty, NumberField, PageHead, Panel, SearchBox, StatCard, Tabs, num } from "./ui";
+import { Badge, DemoNote, Empty, num, NumberField, PageHead, Pager, Panel, SearchBox, StatCard, Tabs, usePager } from "./ui";
 
 type Filter = "all" | StockLevel;
 
@@ -22,6 +22,8 @@ export function Inventory() {
     if (needle && ![item.nameAr, item.nameEn, item.categoryAr].some((text) => text.toLowerCase().includes(needle))) return false;
     return true;
   });
+
+  const pager = usePager(rows, `${filter}|${query}`);
 
   return (
     <div className="space-y-6">
@@ -62,7 +64,7 @@ export function Inventory() {
       <Panel>
         {rows.length ? (
           <ul className="divide-y divide-(--a-line)">
-            {rows.map((item) => {
+            {pager.rows.map((item) => {
               const level = STOCK_LEVEL[levelOf(item.id)];
               return (
                 <li key={item.id} className="flex flex-wrap items-center gap-4 px-5 py-2.5">
@@ -87,6 +89,7 @@ export function Inventory() {
         ) : (
           <Empty icon={PackageSearch} title="ما فيه منتجات هنا" lead="غيّر الفلتر أو كلمة البحث." />
         )}
+        <Pager pager={pager} />
       </Panel>
     </div>
   );

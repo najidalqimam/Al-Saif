@@ -57,7 +57,7 @@ export function Categories() {
   const [titleHead, titleTail] = catalog.title.split(/(?<=[،,])\s+/, 2);
 
   return (
-    <section className="section-y tone-b tone-white-light" aria-labelledby="categories-title">
+    <section className="section-y tone-b tone-white-light pure-white-light categories-tight" aria-labelledby="categories-title">
       <div className="page-shell">
         <div className="reveal flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
           <div className="flex max-w-2xl items-start gap-3.5">
