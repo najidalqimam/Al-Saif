@@ -3,8 +3,11 @@ export type CatalogCategory = {
   slug: string;
   nameAr: string;
   nameEn: string;
+  /** Optional Urdu copy (from the database); empty falls back to the built-in Urdu name or the Arabic one. */
+  nameUr?: string;
   descriptionAr: string;
   descriptionEn: string;
+  descriptionUr?: string;
   image: string;
   icon: string;
   parentId: string | null;

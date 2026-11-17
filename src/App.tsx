@@ -11,6 +11,8 @@ import { CustomerProvider } from "@/lib/customer";
 import { FavoritesProvider } from "@/lib/favorites";
 import { SiteContentProvider } from "@/lib/site-content";
 import { AdminPage } from "@/pages/AdminPage";
+import { ShopPage } from "@/pages/ShopPage";
+import { StoreShopPage } from "@/pages/StoreShopPage";
 import { HomePage } from "@/pages/HomePage";
 import { CategoryPage } from "@/pages/CategoryPage";
 import { CheckoutPage } from "@/pages/CheckoutPage";
@@ -55,6 +57,16 @@ export default function App() {
           {LANGS.map((lang) => (
             <Route key={`${lang}-admin`} path={`/${lang}/admin`}>
               <AdminPage />
+            </Route>
+          ))}
+          {LANGS.map((lang) => (
+            <Route key={`${lang}-store-shop`} path={`/${lang}/shops/:id`}>
+              {(params) => withLang(lang, <StoreShopPage id={decodeURIComponent(params.id)} />)}
+            </Route>
+          ))}
+          {LANGS.map((lang) => (
+            <Route key={`${lang}-shop`} path={`/${lang}/shop`}>
+              <ShopPage />
             </Route>
           ))}
           {LANGS.map((lang) => (

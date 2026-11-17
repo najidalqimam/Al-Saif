@@ -1,21 +1,18 @@
-import { useState } from "react";
-import { Link } from "wouter";
-import { AlertTriangle, ArrowLeft, Boxes, CheckCircle2, CreditCard, ExternalLink, FolderPlus, LayoutTemplate, Package, PackageX, Percent, Plus, ShoppingCart, Truck, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Boxes, CheckCircle2, CreditCard, FolderPlus, LayoutTemplate, Package, PackageX, Percent, Plus, ShoppingCart, Truck, Wallet } from "lucide-react";
 import { featuredDepartments } from "@/lib/catalog";
 import { useSiteContent } from "@/lib/site-content";
 import { cn } from "@/lib/utils";
-import { OrderDrawer, OrdersTable } from "./OrdersPage";
+import { OrdersTable, openOrder } from "./OrdersPage";
 import { SHIP_STAGE, shipStage, stockLevel, useOps } from "./ops";
 import type { Order } from "./orders";
 import { pushHash, type View } from "./nav";
 import { AR_DATE, Button, PageHead, Panel, StatCard, num, sar, type IconType } from "./ui";
 
-const DAYS = 7;
+const DAYS = 14;
 
 export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
   const { content } = useSiteContent();
   const { ops, orders } = useOps();
-  const [viewing, setViewing] = useState<Order | null>(null);
 
   const kept = orders.filter((order) => order.status !== "cancelled");
   const sales = kept.reduce((sum, order) => sum + order.total, 0);
@@ -33,8 +30,10 @@ export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
   const noDiscount = live.filter((item) => item.onHome && item.compareAt <= item.price).length;
   const sectionsOn = content.homeOrder.filter((id) => (id.startsWith("custom-") ? !content.customSections.find((item) => item.id === id)?.hidden : !content.sectionHidden.includes(id as never))).length;
   // Only things that need someone to act; counts come straight from the orders, stock and offers data.
+  const awaitingApproval = content.products.filter((item) => item.approval === "pending").length;
   const attention = [
     { key: "new", icon: ShoppingCart, label: "طلبات جديدة بانتظار التجهيز", value: newOrders, tone: "warn" as const, open: () => pushHash("orders", "new") },
+    { key: "approval", icon: Package, label: "منتجات من المحلات بانتظار موافقتك", value: awaitingApproval, tone: "warn" as const, open: () => onOpen("productRequests") },
     { key: "failed", icon: CreditCard, label: "طلبات فشل دفعها", value: failedPayments, tone: "danger" as const, open: () => onOpen("payments") },
     { key: "out", icon: PackageX, label: "منتجات نفدت من المخزون", value: outOfStock, tone: "danger" as const, open: () => onOpen("inventory") },
     { key: "low", icon: Boxes, label: "منتجات مخزونها منخفض", value: low.length - outOfStock, tone: "warn" as const, open: () => onOpen("inventory") },
@@ -46,12 +45,6 @@ export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
       <PageHead
         title="نظرة عامة"
         lead="ملخص الطلبات والمبيعات والمنتجات في صفحة واحدة."
-        actions={
-          <Link href="/ar" className="inline-flex h-10 items-center gap-2 rounded-xl border border-(--a-line) bg-(--a-surface) px-4 text-sm font-medium hover:bg-(--a-surface-2)">
-            <ExternalLink className="size-4" />
-            فتح المتجر
-          </Link>
-        }
       />
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -128,7 +121,7 @@ export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
             </Button>
           }
         >
-          <OrdersTable orders={orders.slice(0, 5)} onView={setViewing} compact />
+          <OrdersTable orders={orders.slice(0, 5)} onView={openOrder} compact />
         </Panel>
 
         <Panel title="يحتاج انتباهك" lead={`${num.format(sectionsOn)} قسم ظاهر في الصفحة الرئيسية · ${num.format(featuredDepartments(content.categoryHidden).length)} قسم في الشبكة`}>
@@ -148,8 +141,6 @@ export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
           )}
         </Panel>
       </div>
-
-      <OrderDrawer order={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 }
@@ -168,23 +159,23 @@ function SalesChart({ orders, className }: { orders: Order[]; className?: string
   const sum = days.reduce((total, day) => total + day.total, 0);
 
   return (
-    <Panel className={className} title="المبيعات" lead={`آخر ${num.format(DAYS)} أيام`}>
+    <Panel className={className} title="المبيعات" lead={`آخر ${num.format(DAYS)} يومًا`}>
       <div className="p-5">
         <p className="text-2xl font-bold tabular-nums">{sar.format(sum)}</p>
         <p className="text-xs text-(--a-muted)">إجمالي الفترة بدون الطلبات الملغية</p>
-        <div className="mt-6 grid h-40 grid-cols-7 items-end gap-2 sm:gap-4" role="img" aria-label="مبيعات آخر سبعة أيام">
+        <div className="mt-5 grid h-44 items-end gap-1 sm:gap-2" style={{ gridTemplateColumns: `repeat(${DAYS}, minmax(0, 1fr))` }} role="img" aria-label={`مبيعات آخر ${DAYS} يومًا`}>
           {days.map((day) => (
             <div key={day.key} className="group flex h-full flex-col items-center justify-end gap-2">
-              <span className="text-[11px] whitespace-nowrap text-(--a-muted) tabular-nums opacity-0 transition group-hover:opacity-100">{day.total ? sar.format(day.total) : "0"}</span>
+              <span className="text-[10px] whitespace-nowrap text-(--a-muted) tabular-nums opacity-0 transition group-hover:opacity-100">{day.total ? sar.format(day.total) : "0"}</span>
               <div
-                className={cn("w-full max-w-10 rounded-t-lg transition-colors", day.total ? "bg-(--a-blue)/75 group-hover:bg-(--a-blue)" : "bg-(--a-surface-2)")}
+                className={cn("w-full max-w-5 rounded-t-md transition-colors", day.total ? "bg-(--a-blue)/75 group-hover:bg-(--a-blue)" : "bg-(--a-surface-2)")}
                 style={{ height: `${Math.max((day.total / peak) * 100, 3)}%` }}
                 title={`${day.date}: ${sar.format(day.total)}`}
               />
             </div>
           ))}
         </div>
-        <div className="mt-2 grid grid-cols-7 gap-2 border-t border-(--a-line) pt-2 text-center text-[11px] text-(--a-muted) sm:gap-4">
+        <div className="mt-2 grid gap-1 border-t border-(--a-line) pt-2 text-center text-[10px] leading-4 text-(--a-muted) sm:gap-2" style={{ gridTemplateColumns: `repeat(${DAYS}, minmax(0, 1fr))` }}>
           {days.map((day) => (
             <span key={day.key}>
               <span className="block">{day.label}</span>

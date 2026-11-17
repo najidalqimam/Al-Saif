@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
-import { ArchiveRestore, Mail, MapPin, Package, RefreshCw, Trash2, UserCheck, Users, UserX } from "lucide-react";
+import { ArchiveRestore, Mail, Package, RefreshCw, Store, Trash2, UserCheck, Users, UserX } from "lucide-react";
+import { ProductArt } from "@/components/site/card-art";
 import { PREVIEW, api, apiMessage } from "@/lib/api";
 import { Avatar } from "@/lib/avatars";
-import { pushHash } from "./nav";
-import { AR_DATE, Badge, Button, Confirm, Drawer, Empty, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, SearchBox, StatCard, Tabs, usePager } from "./ui";
+import { useSiteContent } from "@/lib/site-content";
+import { onHashMove, pushHash, readHash } from "./nav";
+import { useOps } from "./ops";
+import { AR_DATE, Badge, Button, Confirm, Empty, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, Select, SearchBox, StatCard, usePager } from "./ui";
 
 // Registered store accounts (customers who signed up on the storefront). Read-only: staff can look up a
 // customer's details, saved addresses and orders, and send the welcome email again.
@@ -30,9 +33,7 @@ type Detail = {
   orders: Array<{ number: number; status: string; paymentStatus: string; paymentMethod: string; total: string; placedAt: string; lines: number }>;
 };
 
-const ORDER_STATUS: Record<string, string> = { NEW: "جديد", PROCESSING: "قيد التجهيز", SHIPPED: "تم الشحن", DELIVERED: "تم التسليم", CANCELLED: "ملغي" };
-const PAYMENT_STATUS: Record<string, string> = { PENDING: "بانتظار الدفع", PAID: "مدفوع", FAILED: "فشل الدفع", REFUNDED: "مسترجع" };
-const PAYMENT_METHOD: Record<string, string> = { COD: "عند الاستلام", BANK_TRANSFER: "تحويل بنكي", ONLINE: "إلكتروني" };
+const ORDER_STATUS_LABEL: Record<string, string> = { new: "جديد", processing: "قيد التجهيز", shipped: "تم الشحن", delivered: "تم التسليم", cancelled: "ملغي" };
 
 // Archived customers are hidden from the list on this browser only and can be restored. The accounts themselves are not
 // touched: the server has no archive yet, so the archive button is available only in the local preview.
@@ -55,13 +56,21 @@ function WelcomeBadge({ email }: { email: WelcomeEmail }) {
   return <Badge tone="warn">الإيميل بالانتظار</Badge>;
 }
 
+/** Opens a customer on its own page (#customers/customer-<id>). */
+const openCustomer = (id: string) => pushHash("customers", `customer-${id}`);
+
 export function Customers() {
+  const [sub, setSub] = useState(() => readHash().sub);
+  useEffect(() => onHashMove(() => setSub(readHash().sub)), []);
+  return sub?.startsWith("customer-") ? <CustomerPage id={sub.slice(9)} /> : <CustomersList />;
+}
+
+function CustomersList() {
   const [rows, setRows] = useState<CustomerRow[] | null>(null);
   const [total, setTotal] = useState(0);
   const [guestOrders, setGuestOrders] = useState(0);
   const [query, setQuery] = useState("");
   const [error, setError] = useState("");
-  const [openId, setOpenId] = useState<string | null>(null);
   const [archived, setArchived] = useState<string[]>(readArchived);
   const [tab, setTab] = useState<"all" | "archived">("all");
   const [archiving, setArchiving] = useState<CustomerRow | null>(null);
@@ -115,13 +124,25 @@ export function Customers() {
         <StatCard label="إيميلات الترحيب المعلّقة" value={num.format(pendingEmails)} note="ما وصلت لسه" icon={Mail} tone={pendingEmails ? "warn" : "ok"} />
       </div>
 
-      {canArchive ? (
-        <Tabs value={tab} onChange={setTab} items={[["all", "الكل", activeRows?.length], ["archived", "الأرشيف", archivedRows.length]]} />
-      ) : null}
-
       <Panel>
-        <div className="border-b border-(--a-line) p-4">
-          <SearchBox value={query} onChange={setQuery} placeholder="ابحث بالاسم أو الجوال أو الإيميل" />
+        <div className="flex flex-wrap items-center gap-3 border-b border-(--a-line) p-4">
+          <div className="min-w-56 flex-1">
+            <SearchBox value={query} onChange={setQuery} placeholder="ابحث بالاسم أو الجوال أو الإيميل" />
+          </div>
+          {canArchive ? (
+            <div className="w-44">
+              <Select<"all" | "archived">
+                label="عرض"
+                hideLabel
+                value={tab}
+                onChange={setTab}
+                options={[
+                  ["all", `الكل (${num.format(activeRows?.length ?? 0)})`],
+                  ["archived", `الأرشيف (${num.format(archivedRows.length)})`],
+                ]}
+              />
+            </div>
+          ) : null}
         </div>
         {error ? (
           <p className="p-5 text-sm text-(--a-danger)">{error}</p>
@@ -149,9 +170,9 @@ export function Customers() {
               </thead>
               <tbody>
                 {pager.rows.map((row) => (
-                  <tr key={row.id} {...rowOpen(() => setOpenId(row.id))} className="cursor-pointer border-t border-(--a-line) transition-colors hover:bg-(--a-surface-2)/40">
+                  <tr key={row.id} {...rowOpen(() => openCustomer(row.id))} className="cursor-pointer border-t border-(--a-line) transition-colors hover:bg-(--a-surface-2)/40">
                     <td className="px-5 py-3">
-                      <button type="button" onClick={() => setOpenId(row.id)} className="flex cursor-pointer items-center gap-3 text-start">
+                      <button type="button" onClick={() => openCustomer(row.id)} className="flex cursor-pointer items-center gap-3 text-start">
                         <Avatar avatar={row.avatar} firstName={row.firstName} lastName={row.lastName} className="size-9 bg-(--a-surface-2) text-xs text-(--a-muted)" />
                         <span>
                           <span className="block font-medium">
@@ -193,8 +214,6 @@ export function Customers() {
         <Pager pager={pager} />
       </Panel>
 
-      <CustomerDrawer id={openId} onClose={() => setOpenId(null)} />
-
       <Confirm
         open={archiving !== null}
         onClose={() => setArchiving(null)}
@@ -207,7 +226,9 @@ export function Customers() {
   );
 }
 
-function CustomerDrawer({ id, onClose }: { id: string | null; onClose: () => void }) {
+function CustomerPage({ id }: { id: string }) {
+  const { content, shops } = useSiteContent();
+  const { orders: allOrders } = useOps();
   const [detail, setDetail] = useState<Detail | null>(null);
   const [error, setError] = useState("");
   const [resend, setResend] = useState<"idle" | "busy" | "done" | "error">("idle");
@@ -216,7 +237,6 @@ function CustomerDrawer({ id, onClose }: { id: string | null; onClose: () => voi
     setDetail(null);
     setError("");
     setResend("idle");
-    if (!id) return;
     const controller = new AbortController();
     api<Detail>(`/admin/customers/${encodeURIComponent(id)}`, { signal: controller.signal })
       .then(setDetail)
@@ -227,7 +247,6 @@ function CustomerDrawer({ id, onClose }: { id: string | null; onClose: () => voi
   }, [id]);
 
   async function sendWelcome() {
-    if (!id) return;
     setResend("busy");
     try {
       await api(`/admin/customers/${encodeURIComponent(id)}/welcome-email`, { body: {} });
@@ -239,118 +258,152 @@ function CustomerDrawer({ id, onClose }: { id: string | null; onClose: () => voi
   }
 
   const customer = detail?.customer;
+  // The customer's orders with their products: matched by the order numbers the server lists, or by the same phone or email.
+  const numbers = new Set((detail?.orders ?? []).map((order) => String(order.number)));
+  const mine = customer
+    ? allOrders.filter((order) => numbers.has(order.id) || (!!order.phone && order.phone === customer.phone) || (!!order.email && order.email.toLowerCase() === customer.email.toLowerCase()))
+    : [];
+  const shopOf = (productId: string) => {
+    const product = content.products.find((item) => item.id === productId);
+    return (product?.shopId && shops.find((shop) => shop.id === product.shopId)?.name) || product?.shop?.name || null;
+  };
+  const nameOf = (productId: string) => content.products.find((item) => item.id === productId)?.nameAr ?? productId;
+
   return (
-    <Drawer open={id !== null} onClose={onClose} title={customer ? `${customer.firstName} ${customer.lastName}` : "العميل"} lead={customer ? `عميل من ${date(customer.createdAt)}` : undefined}>
+    <div className="space-y-6">
+      <PageHead title={customer ? `${customer.firstName} ${customer.lastName}` : "العميل"} lead={customer ? `عميل من ${date(customer.createdAt)}` : undefined} />
       {error ? <p className="text-sm text-(--a-danger)">{error}</p> : null}
       {!detail && !error ? <p className="text-sm text-(--a-muted)">جاري التحميل…</p> : null}
       {detail && customer ? (
         <div className="space-y-6">
-          <div className="flex items-center gap-4 rounded-2xl bg-(--a-surface-2) p-4">
-            <Avatar avatar={customer.avatar} firstName={customer.firstName} lastName={customer.lastName} className="size-14 bg-(--a-surface) text-lg text-(--a-muted)" />
-            <dl className="grid flex-1 gap-1 text-sm">
-              <div className="flex justify-between gap-3">
-                <dt className="text-(--a-muted)">الجوال</dt>
-                <dd dir="ltr">{customer.phone}</dd>
+          <Panel className="p-5">
+            <div className="flex flex-wrap items-start gap-x-8 gap-y-4">
+              <Avatar avatar={customer.avatar} firstName={customer.firstName} lastName={customer.lastName} className="size-14 bg-(--a-surface-2) text-lg text-(--a-muted)" />
+              <dl className="flex min-w-0 flex-1 flex-wrap gap-x-8 gap-y-3 text-sm">
+                <div>
+                  <dt className="text-xs text-(--a-muted)">الجوال</dt>
+                  <dd dir="ltr" className="mt-0.5 text-end font-medium">
+                    {customer.phone}
+                  </dd>
+                </div>
+                <div className="min-w-0">
+                  <dt className="text-xs text-(--a-muted)">الإيميل</dt>
+                  <dd dir="ltr" className="mt-0.5 truncate text-end font-medium">
+                    {customer.email}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-(--a-muted)">آخر دخول</dt>
+                  <dd className="mt-0.5 font-medium">{date(customer.lastLoginAt)}</dd>
+                </div>
+                <div className="min-w-0 basis-full">
+                  <dt className="text-xs text-(--a-muted)">العناوين ({num.format(detail.addresses.length)})</dt>
+                  <dd className="mt-0.5 font-medium">
+                    {detail.addresses.length ? (
+                      detail.addresses.map((address) => (
+                        <span key={address.id} className="mt-1 block">
+                          {address.label || address.city}
+                          {address.isDefault ? " (الأساسي)" : ""}
+                          <span className="font-normal text-(--a-muted)">
+                            {" · "}
+                            {address.zoneName ? `${address.zoneName} · ` : ""}
+                            {address.city}، {address.line1}
+                          </span>
+                        </span>
+                      ))
+                    ) : (
+                      <span className="font-normal text-(--a-muted)">ما حفظ عناوين</span>
+                    )}
+                  </dd>
+                </div>
+              </dl>
+              <div className="flex gap-3 text-center">
+                <div className="min-w-28 rounded-xl bg-(--a-surface-2) px-4 py-2.5">
+                  <p className="text-xs text-(--a-muted)">عدد الطلبات</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums">{num.format(customer.orders)}</p>
+                </div>
+                <div className="min-w-28 rounded-xl bg-(--a-surface-2) px-4 py-2.5">
+                  <p className="text-xs text-(--a-muted)">إجمالي المشتريات</p>
+                  <p className="mt-0.5 text-lg font-bold tabular-nums">{sar.format(Number(customer.spent))}</p>
+                </div>
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-(--a-muted)">الإيميل</dt>
-                <dd dir="ltr" className="truncate">
-                  {customer.email}
-                </dd>
+            </div>
+
+            <div className="mt-5 border-t border-(--a-line) pt-5">
+              <section>
+                <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                  <Mail className="size-4 text-(--a-muted)" />
+                  إيميل الترحيب
+                </h3>
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <WelcomeBadge email={customer.welcomeEmail} />
+                {customer.welcomeEmail?.status === "SENT" ? <span className="text-xs text-(--a-muted)">{date(customer.welcomeEmail.sentAt)}</span> : null}
+                {customer.welcomeEmail && customer.welcomeEmail.status !== "SENT" ? (
+                  <>
+                    {customer.welcomeEmail.lastError ? <span className="w-full text-xs leading-5 text-(--a-muted)">{/not configured/i.test(customer.welcomeEmail.lastError) ? "خدمة الإيميل غير مربوطة بالخادم بعد." : customer.welcomeEmail.lastError}</span> : null}
+                    <Button icon={RefreshCw} onClick={sendWelcome} disabled={resend === "busy"}>
+                      إرسال مرة ثانية
+                    </Button>
+                    {resend === "error" ? <span className="text-xs text-(--a-danger)">ما قدرنا نرسله الحين.</span> : null}
+                  </>
+                ) : null}
               </div>
-              <div className="flex justify-between gap-3">
-                <dt className="text-(--a-muted)">آخر دخول</dt>
-                <dd>{date(customer.lastLoginAt)}</dd>
-              </div>
-            </dl>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 text-center">
-            <div className="rounded-xl border border-(--a-line) p-3">
-              <p className="text-xs text-(--a-muted)">عدد الطلبات</p>
-              <p className="mt-1 text-lg font-bold tabular-nums">{num.format(customer.orders)}</p>
+              </section>
             </div>
-            <div className="rounded-xl border border-(--a-line) p-3">
-              <p className="text-xs text-(--a-muted)">إجمالي المشتريات</p>
-              <p className="mt-1 text-lg font-bold tabular-nums">{sar.format(Number(customer.spent))}</p>
-            </div>
-          </div>
+          </Panel>
 
-          <section>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-              <Mail className="size-4 text-(--a-muted)" />
-              إيميل الترحيب
-            </h3>
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-(--a-line) p-3 text-sm">
-              <WelcomeBadge email={customer.welcomeEmail} />
-              {customer.welcomeEmail?.status === "SENT" ? <span className="text-xs text-(--a-muted)">{date(customer.welcomeEmail.sentAt)}</span> : null}
-              {customer.welcomeEmail && customer.welcomeEmail.status !== "SENT" ? (
-                <>
-                  {customer.welcomeEmail.lastError ? <span className="w-full text-xs leading-5 text-(--a-muted)">{/not configured/i.test(customer.welcomeEmail.lastError) ? "خدمة الإيميل غير مربوطة بالخادم بعد." : customer.welcomeEmail.lastError}</span> : null}
-                  <Button icon={RefreshCw} onClick={sendWelcome} disabled={resend === "busy"}>
-                    إرسال مرة ثانية
-                  </Button>
-                  {resend === "error" ? <span className="text-xs text-(--a-danger)">ما قدرنا نرسله الحين.</span> : null}
-                </>
-              ) : null}
-            </div>
-          </section>
-
-          <section>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-              <MapPin className="size-4 text-(--a-muted)" />
-              العناوين ({num.format(detail.addresses.length)})
-            </h3>
-            {detail.addresses.length ? (
-              <ul className="space-y-2">
-                {detail.addresses.map((address) => (
-                  <li key={address.id} className="rounded-xl border border-(--a-line) p-3 text-sm leading-6">
-                    <p className="flex items-center gap-2 font-medium">
-                      {address.label || address.city}
-                      {address.isDefault ? <Badge tone="accent">الأساسي</Badge> : null}
-                    </p>
-                    <p className="text-(--a-muted)">
-                      {address.zoneName ? `${address.zoneName} · ` : ""}
-                      {address.city}، {address.line1}
-                      {address.notes ? ` · ${address.notes}` : ""}
-                    </p>
-                  </li>
-                ))}
+          <Panel title={`الطلبات (${num.format(Math.max(mine.length, detail.orders.length))})`} lead="كل طلب بمنتجاته والمحل اللي جاء منه">
+            {mine.length ? (
+              <ul className="divide-y divide-(--a-line)">
+                {mine.map((order) => {
+                  const lines = order.lines?.length ? order.lines.map((line) => ({ id: line.id, name: line.name, qty: line.qty, price: line.price })) : [{ id: order.productId, name: nameOf(order.productId), qty: order.items, price: order.items ? order.total / order.items : order.total }];
+                  const status = ORDER_STATUS_LABEL[order.status];
+                  return (
+                    <li key={order.id} className="grid items-center gap-x-6 gap-y-3 px-5 py-4 md:grid-cols-[9rem_minmax(0,1fr)_7rem_7rem]">
+                      <button type="button" onClick={() => pushHash("orders", `order-${order.id}`)} className="text-start font-semibold hover:underline">
+                        <span dir="ltr">#{order.id}</span>
+                        <span className="block text-xs font-normal text-(--a-muted)">{date(order.date)}</span>
+                      </button>
+                      <ul className="space-y-2">
+                        {lines.map((line) => {
+                          const shop = shopOf(line.id);
+                          return (
+                            <li key={line.id} className="flex flex-wrap items-center gap-3 text-sm">
+                              <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-(--a-surface-2)">
+                                <ProductArt id={line.id} className="size-8" />
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="line-clamp-1 font-medium">{line.name}</span>
+                                <span className="text-xs text-(--a-muted)">
+                                  {num.format(line.qty)} × {sar.format(line.price)}
+                                </span>
+                              </span>
+                              {shop ? (
+                                <Badge tone="accent">
+                                  <Store className="size-3" />
+                                  {shop}
+                                </Badge>
+                              ) : (
+                                <Badge>بدون محل</Badge>
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                      <span>
+                        <Badge tone={order.status === "cancelled" ? "danger" : order.status === "delivered" ? "ok" : "blue"}>{status}</Badge>
+                      </span>
+                      <span className="font-semibold tabular-nums md:text-end">{sar.format(order.total)}</span>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
-              <p className="text-sm text-(--a-muted)">ما حفظ عناوين.</p>
+              <Empty icon={Package} title="ما فيه طلبات" lead="طلبات هذا العميل تظهر هنا بمنتجاتها والمحل اللي جاءت منه." />
             )}
-          </section>
-
-          <section>
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-              <Package className="size-4 text-(--a-muted)" />
-              الطلبات ({num.format(detail.orders.length)})
-            </h3>
-            {detail.orders.length ? (
-              <ul className="divide-y divide-(--a-line) rounded-xl border border-(--a-line)">
-                {detail.orders.map((order) => (
-                  <li key={order.number} className="flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
-                    <span>
-                      <span className="font-semibold">#{order.number}</span>
-                      <span className="ms-2 text-xs text-(--a-muted)">{date(order.placedAt)}</span>
-                    </span>
-                    <span className="flex flex-wrap items-center gap-2">
-                      <Badge tone={order.status === "CANCELLED" ? "danger" : order.status === "DELIVERED" ? "ok" : "blue"}>{ORDER_STATUS[order.status] ?? order.status}</Badge>
-                      <Badge>
-                        {PAYMENT_METHOD[order.paymentMethod] ?? order.paymentMethod} · {PAYMENT_STATUS[order.paymentStatus] ?? order.paymentStatus}
-                      </Badge>
-                      <span className="font-semibold tabular-nums">{sar.format(Number(order.total))}</span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-sm text-(--a-muted)">ما طلب لسه.</p>
-            )}
-          </section>
+          </Panel>
         </div>
       ) : null}
-    </Drawer>
+    </div>
   );
 }

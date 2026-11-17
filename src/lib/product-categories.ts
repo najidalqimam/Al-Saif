@@ -1,4 +1,4 @@
-import { categoryById, categoryTrail, childCategories, rootDepartments } from "@/lib/catalog";
+import { categoryById, categoryTrail, rootDepartments } from "@/lib/catalog";
 import type { BuiltInProductId } from "@/lib/products";
 
 // Default department for each product in the catalog tree (src/data/catalog-tree.ts). Products only
@@ -41,7 +41,7 @@ export function productInCategory(product: Placed, categoryId: string) {
   return own ? categoryTrail(own).some((item) => item.id === categoryId) : false;
 }
 
-/** Every listed main department followed by its subcategories, in storefront menu order (two levels). */
+/** Every listed main department, in storefront menu order (the store has no subcategories). */
 export function departmentTree(hidden: readonly string[]) {
-  return rootDepartments(hidden).flatMap((item) => [item, ...childCategories(item.id, hidden)]);
+  return rootDepartments(hidden);
 }

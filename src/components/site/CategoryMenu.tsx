@@ -5,7 +5,6 @@ import { catalogIcon } from "@/components/site/catalog-icons";
 import {
   categoryBlurb,
   categoryLabel,
-  childCategories,
   rootDepartments,
   type CatalogCategory,
 } from "@/lib/catalog";
@@ -21,7 +20,6 @@ export function CategoryMenu() {
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
   const active = roots.find((item) => item.id === activeId) ?? roots[0];
-  const branches = active ? childCategories(active.id, content.categoryHidden) : [];
 
   useEffect(() => {
     function onPointerDown(event: MouseEvent) {
@@ -86,12 +84,7 @@ export function CategoryMenu() {
                 );
               })}
             </div>
-            <DepartmentPanel
-              active={active}
-              branches={branches}
-              hidden={content.categoryHidden}
-              onNavigate={() => setOpen(false)}
-            />
+            <DepartmentPanel active={active} onNavigate={() => setOpen(false)} />
           </div>
         </div>
       ) : null}
@@ -99,65 +92,21 @@ export function CategoryMenu() {
   );
 }
 
-function DepartmentPanel({
-  active,
-  branches,
-  hidden,
-  onNavigate,
-}: {
-  active: CatalogCategory;
-  branches: CatalogCategory[];
-  hidden: readonly string[];
-  onNavigate: () => void;
-}) {
+function DepartmentPanel({ active, onNavigate }: { active: CatalogCategory; onNavigate: () => void }) {
   const { t, lang } = useLang();
 
+  // The store has main departments only: the panel names the department and opens its products.
   return (
     <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-base font-bold">{categoryLabel(active, lang)}</p>
-          <p className="mt-1 text-xs leading-5 text-ink-soft">{categoryBlurb(active, lang)}</p>
-        </div>
-        <Link
-          href={`/${lang}/c/${active.slug}`}
-          onClick={onNavigate}
-          className="shrink-0 text-sm font-semibold text-brand-ink"
-        >
-          {t.categoryPage.open}
-        </Link>
-      </div>
-      <div className="mt-4 grid gap-4 sm:grid-cols-2">
-        {branches.map((branch) => {
-          const leaves = childCategories(branch.id, hidden);
-          return (
-            <div key={branch.id}>
-              <Link
-                href={`/${lang}/c/${branch.slug}`}
-                onClick={onNavigate}
-                className="text-sm font-semibold text-navy hover:text-brand-ink"
-              >
-                {categoryLabel(branch, lang)}
-              </Link>
-              {leaves.length > 0 ? (
-                <ul className="mt-1.5 space-y-1">
-                  {leaves.map((leaf) => (
-                    <li key={leaf.id}>
-                      <Link
-                        href={`/${lang}/c/${leaf.slug}`}
-                        onClick={onNavigate}
-                        className="text-xs text-ink-soft hover:text-brand-ink"
-                      >
-                        {categoryLabel(leaf, lang)}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
+      <p className="text-base font-bold">{categoryLabel(active, lang)}</p>
+      <p className="mt-1 text-xs leading-5 text-ink-soft">{categoryBlurb(active, lang)}</p>
+      <Link
+        href={`/${lang}/c/${active.slug}`}
+        onClick={onNavigate}
+        className="mt-4 inline-flex h-10 items-center rounded-full bg-brand px-5 text-sm font-semibold text-navy transition-colors hover:bg-brand-hover"
+      >
+        {t.categoryPage.open}
+      </Link>
     </div>
   );
 }

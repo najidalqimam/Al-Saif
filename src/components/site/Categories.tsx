@@ -2,7 +2,7 @@ import { useId, useState } from "react";
 import { Link } from "wouter";
 import { ChevronDown, LayoutGrid, type LucideIcon } from "lucide-react";
 import { catalogIcon } from "@/components/site/catalog-icons";
-import { categoryLabel, childCategories, rootDepartments } from "@/lib/catalog";
+import { allCategories, categoryLabel, rootDepartments } from "@/lib/catalog";
 import { useLang } from "@/lib/i18n";
 import { useSiteContent } from "@/lib/site-content";
 import { publicUrl } from "@/lib/utils";
@@ -50,9 +50,8 @@ export function Categories() {
   const visible = open ? all : all.slice(0, INITIAL_COUNT);
   const hasMore = all.length > MOBILE_COUNT;
   const hasMoreDesktop = all.length > INITIAL_COUNT;
-  // Departments without their own picture borrow the first listed sub-department's picture.
-  const imageFor = (item: (typeof all)[number]) =>
-    item.image || childCategories(item.id, content.categoryHidden).find((child) => child.image)?.image || undefined;
+  // Departments without their own picture borrow the picture of one of the built-in categories filed under them.
+  const imageFor = (item: (typeof all)[number]) => item.image || allCategories().find((child) => child.parentId === item.id && child.image)?.image || undefined;
 
   const [titleHead, titleTail] = catalog.title.split(/(?<=[،,])\s+/, 2);
 

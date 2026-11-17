@@ -39,7 +39,7 @@ export function searchStore(query: string, products: ProductRow[], hidden: reado
   if (terms.length === 0) return { categories: [] as CatalogCategory[], productIds: [] as string[] };
 
   const categories = allCategories().filter(
-    (item) => isListed(item, hidden) && matches(`${item.nameAr} ${item.nameEn}`, terms),
+    (item) => item.level === 1 && isListed(item, hidden) && matches(`${item.nameAr} ${item.nameEn} ${(item as { nameUr?: string }).nameUr ?? ""}`, terms),
   );
   const listed = products.filter((item) => !item.hidden && !item.archived);
   const byName = listed.filter((item) => matches(`${item.nameAr} ${item.nameEn} ${item.categoryAr} ${item.categoryEn}`, terms));

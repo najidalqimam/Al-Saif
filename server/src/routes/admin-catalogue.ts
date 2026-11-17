@@ -16,8 +16,8 @@ const READ_ROLES: AdminRole[] = ["OWNER", "MANAGER", "EDITOR", "SUPPORT"];
 const WRITE_ROLES: AdminRole[] = ["OWNER", "MANAGER", "EDITOR"];
 const INVENTORY_SETTING = "inventory";
 const DEFAULT_LOW_STOCK = 5;
-/** New categories go at most two levels deep, like the dashboard form; older deeper ones stay as they are. */
-const MAX_NEW_CATEGORY_LEVEL = 2;
+/** The store has main departments only: a new category can no longer be placed inside another one. Older ones stay as they are. */
+const MAX_NEW_CATEGORY_LEVEL = 1;
 
 const text = (max: number) => z.string().trim().max(max);
 const name = (max: number) => text(max).min(1);
@@ -37,15 +37,21 @@ const specRows = z.array(z.object({ label: text(80).min(1), value: text(200).min
 
 const ProductFields = z.object({
   nameAr: name(300),
-  nameEn: name(300),
+  /** English and Urdu are optional; empty means "show the Arabic text". */
+  nameEn: text(300),
+  nameUr: text(300),
   labelAr: text(200),
   labelEn: text(200),
+  labelUr: text(200),
   descriptionAr: text(4000),
   descriptionEn: text(4000),
+  descriptionUr: text(4000),
   featuresAr: features,
   featuresEn: features,
+  featuresUr: features,
   specsAr: specRows,
   specsEn: specRows,
+  specsUr: specRows,
   categoryId: catalogueId.nullable(),
   price,
   compareAtPrice: money.nullable(),
@@ -56,14 +62,20 @@ const ProductFields = z.object({
 });
 
 const NewProduct = ProductFields.partial({
+  nameEn: true,
+  nameUr: true,
   labelAr: true,
   labelEn: true,
+  labelUr: true,
   descriptionAr: true,
   descriptionEn: true,
+  descriptionUr: true,
   featuresAr: true,
   featuresEn: true,
+  featuresUr: true,
   specsAr: true,
   specsEn: true,
+  specsUr: true,
   compareAtPrice: true,
   wholesalePrice: true,
   isVisible: true,
@@ -75,14 +87,26 @@ const ProductPatch = ProductFields.partial()
   .extend({ image: image.optional(), shopId: z.string().uuid().nullable().optional() })
   .strict()
   .refine((body) => Object.keys(body).length > 0, "Nothing to change");
-const ShopBody = z.object({ name: name(200) }).strict();
+const ShopFields = z.object({
+  name: name(200),
+  ownerName: text(200),
+  phone: text(40),
+  email: text(200),
+  city: text(120),
+  address: text(500),
+  description: text(2000),
+});
+/** A new shop needs a name; the contact details are optional. */
+const ShopBody = ShopFields.partial({ ownerName: true, phone: true, email: true, city: true, address: true, description: true }).strict();
+const ShopPatch = ShopFields.partial().strict().refine((body) => Object.keys(body).length > 0, "Nothing to change");
 /** Prisma writes a JSON column's SQL NULL as Prisma.DbNull, not as a plain null. */
-function jsonFields<T extends { featuresAr?: unknown; featuresEn?: unknown; specsAr?: unknown; specsEn?: unknown }>(fields: T) {
+function jsonFields<T extends { featuresAr?: unknown; featuresEn?: unknown; featuresUr?: unknown; specsAr?: unknown; specsEn?: unknown; specsUr?: unknown }>(fields: T) {
   const out: Record<string, unknown> = { ...fields };
-  for (const key of ["featuresAr", "featuresEn", "specsAr", "specsEn"] as const) {
+  for (const key of ["featuresAr", "featuresEn", "featuresUr", "specsAr", "specsEn", "specsUr"] as const) {
     if (fields[key] === null) out[key] = Prisma.DbNull;
   }
-  return out as Omit<T, "featuresAr" | "featuresEn" | "specsAr" | "specsEn"> & Record<"featuresAr" | "featuresEn" | "specsAr" | "specsEn", Prisma.InputJsonValue | typeof Prisma.DbNull | undefined>;
+  return out as Omit<T, "featuresAr" | "featuresEn" | "featuresUr" | "specsAr" | "specsEn" | "specsUr"> &
+    Record<"featuresAr" | "featuresEn" | "featuresUr" | "specsAr" | "specsEn" | "specsUr", Prisma.InputJsonValue | typeof Prisma.DbNull | undefined>;
 }
 
 const StockBody = z
@@ -96,17 +120,22 @@ const StockBody = z
 const CategoryFields = z.object({
   nameAr: name(200),
   nameEn: name(200),
+  /** Urdu is optional; empty means the built-in Urdu name or the Arabic one. */
+  nameUr: text(200),
   descriptionAr: text(2000),
   descriptionEn: text(2000),
+  descriptionUr: text(2000),
   isVisible: z.boolean(),
   isFeatured: z.boolean(),
 });
-const NewCategory = CategoryFields.partial({ descriptionAr: true, descriptionEn: true, isVisible: true, isFeatured: true })
+const NewCategory = CategoryFields.partial({ nameUr: true, descriptionAr: true, descriptionEn: true, descriptionUr: true, isVisible: true, isFeatured: true })
   .extend({ parentId: catalogueId.nullable().optional() })
   .strict();
 const CategoryPatch = CategoryFields.partial()
   .strict()
   .refine((body) => Object.keys(body).length > 0, "Nothing to change");
+/** The new order of sibling categories (same parent): the first id gets sort 1, and so on. */
+const CategoryOrder = z.object({ ids: z.array(catalogueId).min(1).max(200) }).strict();
 const InventoryBody = z.object({ lowStock: z.number().int().min(0).max(100_000) }).strict();
 
 class ApiProblem extends Error {
@@ -235,7 +264,7 @@ adminCatalogueRouter.post(
   handle(async (req, res) => {
     const body = ShopBody.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
-    const shop = await prisma.shop.create({ data: { name: body.data.name } });
+    const shop = await prisma.shop.create({ data: body.data });
     res.status(201).json({ shop: adminShop(shop, 0) });
   }),
 );
@@ -244,11 +273,11 @@ adminCatalogueRouter.patch(
   "/shops/:id",
   requireAdmin(WRITE_ROLES),
   handle(async (req, res) => {
-    const body = ShopBody.safeParse(req.body);
+    const body = ShopPatch.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
     const id = z.string().uuid().safeParse(req.params.id);
     if (!id.success || !(await prisma.shop.findUnique({ where: { id: id.data }, select: { id: true } }))) throw new ApiProblem(404, "SHOP_NOT_FOUND");
-    const shop = await prisma.shop.update({ where: { id: id.data }, data: { name: body.data.name }, include: { _count: { select: { products: true } } } });
+    const shop = await prisma.shop.update({ where: { id: id.data }, data: body.data, include: { _count: { select: { products: true } } } });
     res.json({ shop: adminShop(shop, shop._count.products) });
   }),
 );
@@ -270,7 +299,8 @@ adminCatalogueRouter.post(
     const shopUuid = await shopRef(shopId);
     if (upload) decodeImage(upload); // refuse a bad image before anything is written
     const legacyId = `p-${Date.now().toString(36)}${randomBytes(2).toString("hex")}`;
-    const last = await prisma.product.aggregate({ _max: { sortOrder: true } });
+    // A new product goes first: one place before the current first product (lists are ordered by sort_order).
+    const first = await prisma.product.aggregate({ _min: { sortOrder: true } });
     const url = upload ? await saveProductImage(upload, legacyId) : null;
     const product = await prisma.product.create({
       data: {
@@ -279,8 +309,8 @@ adminCatalogueRouter.post(
         slug: legacyId,
         categoryId: category.id,
         shopId: shopUuid,
-        sortOrder: (last._max.sortOrder ?? 0) + 1,
-        images: url ? { create: { url, altAr: fields.nameAr, altEn: fields.nameEn } } : undefined,
+        sortOrder: (first._min.sortOrder ?? 1) - 1,
+        images: url ? { create: { url, altAr: fields.nameAr, altEn: fields.nameEn || fields.nameAr } } : undefined,
       },
       include: productInclude,
     });
@@ -312,7 +342,7 @@ adminCatalogueRouter.patch(
         ...jsonFields(fields),
         categoryId: categoryUuid,
         shopId: shopUuid,
-        images: url ? { create: { url, sortOrder: first - 1, altAr: fields.nameAr ?? product.nameAr, altEn: fields.nameEn ?? product.nameEn } } : undefined,
+        images: url ? { create: { url, sortOrder: first - 1, altAr: fields.nameAr ?? product.nameAr, altEn: fields.nameEn || product.nameEn || fields.nameAr || product.nameAr } } : undefined,
       },
       include: productInclude,
     });
@@ -388,11 +418,26 @@ adminCatalogueRouter.post(
     const base = slugify(fields.nameEn, "department");
     let slug = base;
     for (let n = 2; await prisma.category.findFirst({ where: { OR: [{ slug }, { legacyId: slug }] }, select: { id: true } }); n += 1) slug = `${base}-${n}`;
-    const last = await prisma.category.aggregate({ where: { parentId: parent?.id ?? null }, _max: { sortOrder: true } });
+    // A new category goes first among its siblings: one place before the current first one.
+    const first = await prisma.category.aggregate({ where: { parentId: parent?.id ?? null }, _min: { sortOrder: true } });
     const category = await prisma.category.create({
-      data: { ...fields, slug, legacyId: slug, parentId: parent?.id ?? null, isFeatured: !parent && Boolean(isFeatured), sortOrder: (last._max.sortOrder ?? 0) + 1 },
+      data: { ...fields, slug, legacyId: slug, parentId: parent?.id ?? null, isFeatured: !parent && Boolean(isFeatured), sortOrder: (first._min.sortOrder ?? 1) - 1 },
     });
     await sendCategory(res, category.id, 201);
+  }),
+);
+
+adminCatalogueRouter.put(
+  "/categories/order",
+  requireAdmin(WRITE_ROLES),
+  handle(async (req, res) => {
+    const body = CategoryOrder.safeParse(req.body);
+    if (!body.success) return invalid(res, body.error);
+    const found = await Promise.all(body.data.ids.map((id) => findCategory(id)));
+    // One list only: the same parent, and no category twice.
+    if (new Set(found.map((item) => item.parentId ?? "")).size !== 1 || new Set(found.map((item) => item.id)).size !== found.length) throw new ApiProblem(400, "INVALID_ORDER");
+    await prisma.$transaction(found.map((item, index) => prisma.category.update({ where: { id: item.id }, data: { sortOrder: index + 1 } })));
+    res.json({ ok: true });
   }),
 );
 

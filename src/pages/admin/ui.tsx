@@ -1,7 +1,7 @@
-import { useEffect, useState, type ComponentType, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ComponentType, type MouseEvent, type ReactNode } from "react";
 import * as Dialog from "@radix-ui/react-dialog";
 import * as SwitchPrimitive from "@radix-ui/react-switch";
-import { AlertTriangle, ChevronDown, ChevronLeft, ChevronRight, Info, Search, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, Info, Search, X } from "lucide-react";
 import type { Lang } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -18,8 +18,8 @@ export function PageHead({ title, lead, actions }: { title: string; lead?: strin
   return (
     <div className="flex flex-wrap items-end justify-between gap-4">
       <div className="min-w-0">
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        {lead ? <p className="mt-1 max-w-3xl text-sm text-(--a-muted)">{lead}</p> : null}
+        <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+        {lead ? <p className="mt-0.5 max-w-3xl text-xs text-(--a-muted)">{lead}</p> : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
@@ -81,18 +81,18 @@ export function StatCard({
     danger: "bg-(--a-danger-soft) text-(--a-danger)",
   };
   const body = (
-    <div className="flex items-start gap-3.5">
-      <span className={cn("grid size-10 shrink-0 place-items-center rounded-xl", tones[tone])}>
-        <Icon className="size-5" />
+    <div className="flex items-start gap-3">
+      <span className={cn("grid size-8 shrink-0 place-items-center rounded-lg", tones[tone])}>
+        <Icon className="size-4" />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[13px] text-(--a-muted)">{label}</p>
-        <p className="mt-0.5 text-2xl leading-8 font-bold tracking-tight tabular-nums">{value}</p>
-        <p className="mt-0.5 text-xs leading-5 text-(--a-muted)">{note}</p>
+        <p className="truncate text-xs text-(--a-muted)">{label}</p>
+        <p className="text-xl leading-7 font-bold tracking-tight tabular-nums">{value}</p>
+        <p className="text-[11px] leading-4 text-(--a-muted)">{note}</p>
       </div>
     </div>
   );
-  const shell = "block w-full rounded-2xl border border-(--a-line) bg-(--a-surface) p-4 text-start shadow-(--a-shadow) transition duration-200";
+  const shell = "block w-full rounded-xl border border-(--a-line) bg-(--a-surface) p-3 text-start shadow-(--a-shadow) transition duration-200";
   return onClick ? (
     <button type="button" onClick={onClick} className={cn(shell, "hover:border-(--a-blue)/40")}>
       {body}
@@ -149,6 +149,106 @@ export function Select<T extends string>({
         <ChevronDown className="pointer-events-none absolute inset-y-0 end-3 my-auto size-4 text-(--a-muted)" />
       </span>
     </label>
+  );
+}
+
+/**
+ * A dropdown for long lists. The list opens inline under the field (it pushes the form down instead of covering it),
+ * has a fixed height with its own scroll, and a search box on top. Same props as Select.
+ */
+export function SearchSelect<T extends string>({
+  label,
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  label: string;
+  value: T;
+  onChange: (value: T) => void;
+  options: Array<[T, string]>;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const box = useRef<HTMLDivElement>(null);
+  const current = options.find(([id]) => id === value);
+  const needle = query.trim().toLowerCase();
+  const shown = needle ? options.filter(([, text]) => text.toLowerCase().includes(needle)) : options;
+
+  // A click outside or Escape closes the list.
+  useEffect(() => {
+    if (!open) return;
+    const away = (event: PointerEvent) => {
+      if (box.current && !box.current.contains(event.target as Node)) setOpen(false);
+    };
+    const escape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("pointerdown", away);
+    document.addEventListener("keydown", escape);
+    // Bring the opened list fully into view when it opens near the bottom of the screen.
+    const frame = window.requestAnimationFrame(() => box.current?.scrollIntoView({ block: "nearest", behavior: "smooth" }));
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", away);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+
+  return (
+    <div ref={box} className="block">
+      <span className="mb-1.5 block text-xs font-medium text-(--a-muted)">{label}</span>
+      <button
+        type="button"
+        disabled={disabled}
+        aria-label={label}
+        aria-expanded={open}
+        onClick={() => {
+          setQuery("");
+          setOpen((now) => !now);
+        }}
+        className={cn(control, "relative h-10 cursor-pointer bg-(--a-surface) pe-9 text-start disabled:cursor-default", open && "border-(--a-accent)")}
+      >
+        <span className="block truncate">{current?.[1].trim() ?? ""}</span>
+        <ChevronDown className={cn("pointer-events-none absolute inset-y-0 end-3 my-auto size-4 text-(--a-muted) transition", open && "rotate-180")} />
+      </button>
+      {open ? (
+        <div className="mt-2 overflow-hidden rounded-xl border border-(--a-line) bg-(--a-surface)">
+          <div className="relative border-b border-(--a-line) p-2">
+            <Search className="pointer-events-none absolute inset-y-0 start-5 my-auto size-4 text-(--a-muted)" />
+            <input
+              autoFocus
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="ابحث في القائمة"
+              className="h-9 w-full rounded-lg border border-(--a-line) bg-(--a-bg) ps-9 pe-3 text-sm shadow-none outline-none placeholder:text-(--a-muted) focus:border-(--a-accent) focus-visible:outline-none focus-visible:ring-0"
+            />
+          </div>
+          <ul role="listbox" aria-label={label} className="max-h-56 overflow-y-auto overscroll-contain p-1">
+            {shown.length ? (
+              shown.map(([id, text]) => (
+                <li key={id} role="option" aria-selected={id === value}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onChange(id);
+                      setOpen(false);
+                    }}
+                    className={cn("flex w-full cursor-pointer items-center justify-between gap-2 rounded-lg px-3 py-2 text-start text-sm hover:bg-(--a-surface-2)", id === value && "bg-(--a-surface-2) font-medium")}
+                  >
+                    <span className="truncate">{text}</span>
+                    {id === value ? <Check className="size-4 shrink-0 text-(--a-accent)" /> : null}
+                  </button>
+                </li>
+              ))
+            ) : (
+              <li className="px-3 py-4 text-center text-sm text-(--a-muted)">ما فيه نتائج</li>
+            )}
+          </ul>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -396,6 +496,7 @@ export function Confirm({
   title,
   lead,
   action,
+  alt,
 }: {
   open: boolean;
   onClose: () => void;
@@ -403,6 +504,8 @@ export function Confirm({
   title: string;
   lead: string;
   action: string;
+  /** A second choice (e.g. "save"); with it the dialog has exactly two buttons, this one and `action`. */
+  alt?: { label: string; onClick: () => void };
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={(next) => (next ? null : onClose())}>
@@ -418,7 +521,19 @@ export function Confirm({
           <Dialog.Title className="mt-4 text-lg font-bold">{title}</Dialog.Title>
           <Dialog.Description className="mt-2 text-sm leading-7 text-(--a-muted)">{lead}</Dialog.Description>
           <div className="mt-6 flex justify-end gap-2">
-            <Button onClick={onClose}>إلغاء</Button>
+            {alt ? (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  alt.onClick();
+                  onClose();
+                }}
+              >
+                {alt.label}
+              </Button>
+            ) : (
+              <Button onClick={onClose}>إلغاء</Button>
+            )}
             <Button
               variant="danger"
               onClick={() => {
@@ -469,27 +584,34 @@ export function Field({
   );
 }
 
+/** Arabic first; English and (when `ur` is given) Urdu are optional extras that fall back to the Arabic text. */
 export function BilingualField({
   label,
   ar,
   en,
+  ur,
   onAr,
   onEn,
+  onUr,
   multiline = false,
   disabled,
 }: {
   label: string;
   ar: string;
   en: string;
+  ur?: string;
   onAr: (value: string) => void;
   onEn: (value: string) => void;
+  onUr?: (value: string) => void;
   multiline?: boolean;
   disabled?: boolean;
 }) {
+  const threeLanguages = onUr !== undefined;
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className={cn("grid gap-3", threeLanguages ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
       <LangField lang="ar" label={label} value={ar} onChange={onAr} multiline={multiline} disabled={disabled} />
-      <LangField lang="en" label={label} value={en} onChange={onEn} multiline={multiline} disabled={disabled} />
+      <LangField lang="en" label={threeLanguages ? `${label} (اختياري)` : label} value={en} onChange={onEn} multiline={multiline} disabled={disabled} />
+      {threeLanguages ? <LangField lang="ur" label={`${label} (اختياري)`} value={ur ?? ""} onChange={onUr} multiline={multiline} disabled={disabled} /> : null}
     </div>
   );
 }
@@ -513,8 +635,8 @@ function LangField({
   return (
     <label className="block">
       <span className="mb-1.5 flex items-center gap-2 text-xs font-medium text-(--a-muted)">
-        <span className={cn("rounded px-1.5 py-px text-[10px] font-semibold", english ? "bg-(--a-blue-soft) text-(--a-blue)" : "bg-(--a-accent-soft) text-(--a-accent-ink)")}>
-          {english ? "EN" : "AR"}
+        <span className={cn("rounded px-1.5 py-px text-[10px] font-semibold", english ? "bg-(--a-blue-soft) text-(--a-blue)" : lang === "ur" ? "bg-(--a-ok-soft) text-(--a-ok)" : "bg-(--a-accent-soft) text-(--a-accent-ink)")}>
+          {english ? "EN" : lang === "ur" ? "UR" : "AR"}
         </span>
         {label}
       </span>

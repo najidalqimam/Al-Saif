@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ApiError, PREVIEW, api, apiMessage } from "@/lib/api";
-import { CATALOG, allCategories, registerAddedCategories, registerCatalogue, type CatalogCategory } from "@/lib/catalog";
+import { CATALOG, allCategories, registerAddedCategories, registerCatalogue, registerCategoryOrder, type CatalogCategory } from "@/lib/catalog";
 import { translations, type Lang } from "@/lib/i18n";
-import { DEMO_PRODUCTS, type DemoProduct } from "@/data/demo-products";
+import { DEMO_PRODUCTS, DEMO_PRODUCTS_UR, type DemoProduct } from "@/data/demo-products";
 import { OFFER_PRODUCTS, type OfferProduct } from "@/lib/products";
 
 const STORAGE_KEY = "alsaif-home-content";
@@ -19,8 +19,11 @@ export type ProductRow = {
   onHome: boolean;
   nameAr: string;
   nameEn: string;
+  /** Urdu copy is optional; empty means the Arabic text shows in Urdu. */
+  nameUr?: string;
   categoryAr: string;
   categoryEn: string;
+  categoryUr?: string;
   /** Archived products stay saved but leave the store; the dashboard can restore them. */
   archived?: boolean;
   /** Department chosen in the dashboard; without it the dashboard's default placement applies. */
@@ -29,6 +32,12 @@ export type ProductRow = {
   image?: string;
   /** Where the product came from when it is not one of the built-in store products. */
   source?: "demo" | "added";
+  /** Set on a product a shop sent from its own dashboard: pending waits for the admin's approval, rejected was refused. Missing: published (added or approved by the admin). */
+  approval?: "pending" | "rejected";
+  /** Why the admin refused it, shown to the shop. */
+  rejectReason?: string;
+  /** When the shop sent it (ISO date). */
+  submittedAt?: string;
   /** Recorded stock from the database (dashboard only); null means not tracked. */
   stock?: number | null;
   /** Explicit match key shared by the same product listed by different shops (preview data only for now). */
@@ -42,26 +51,61 @@ export type ProductRow = {
   /** Product page copy from the dashboard. Null or missing: the built-in highlights and specs show instead. */
   descriptionAr?: string;
   descriptionEn?: string;
+  descriptionUr?: string;
   featuresAr?: string[] | null;
   featuresEn?: string[] | null;
+  featuresUr?: string[] | null;
   specsAr?: ProductSpec[] | null;
   specsEn?: ProductSpec[] | null;
+  specsUr?: ProductSpec[] | null;
 };
 
 export type ProductSpec = { label: string; value: string };
 
-export type Shop = { id: string; name: string };
+/** A shop; the contact details are optional (empty means not filled in). */
+export type Shop = { id: string; name: string; ownerName?: string; phone?: string; email?: string; city?: string; address?: string; description?: string };
+export type ShopInput = Omit<Shop, "id">;
 
-export type NewProduct = Pick<ProductRow, "nameAr" | "nameEn" | "categoryAr" | "categoryEn" | "categoryId" | "price" | "compareAt" | "image" | "hidden" | "onHome"> & { shopId?: string | null; wholesalePrice?: number | null };
+/** The product page copy (description, highlights, spec table) in the three languages. */
+export type PageCopyKey = "descriptionAr" | "descriptionEn" | "descriptionUr" | "featuresAr" | "featuresEn" | "featuresUr" | "specsAr" | "specsEn" | "specsUr";
+
+export type NewProduct = Pick<ProductRow, "nameAr" | "nameEn" | "nameUr" | "categoryAr" | "categoryEn" | "categoryUr" | "categoryId" | "price" | "compareAt" | "image" | "hidden" | "onHome" | PageCopyKey> & { shopId?: string | null; wholesalePrice?: number | null };
 
 // Preview data for the shop price comparison: 3 demo shops, each listing the same tablet (same model, storage,
 // colour and condition) at a different price. The offers share an explicit matchKey; nothing is matched by name.
 // Added only in preview (`VITE_ADMIN_PREVIEW=1`), once per id, and never replaces anything already saved.
 const COMPARE_DEMO_KEY = "demo:tablet-11in-256gb-gray-new";
 const COMPARE_DEMO_SHOPS: Shop[] = [
-  { id: "demo-shop-1", name: "محل تجريبي: الرياض للإلكترونيات" },
-  { id: "demo-shop-2", name: "محل تجريبي: النور للحاسبات" },
-  { id: "demo-shop-3", name: "محل تجريبي: الواحة للتقنية" },
+  {
+    id: "demo-shop-1",
+    name: "محل تجريبي: الرياض للإلكترونيات",
+    ownerName: "عبدالله الحربي",
+    phone: "0501234567",
+    email: "riyadh@example.com",
+    city: "الرياض",
+    address: "حي العليا، طريق الملك فهد، مجمع التقنية، محل 12",
+    description: "متخصصون في الجوالات والأجهزة اللوحية والإكسسوارات منذ 2015، مع ضمان محلي وتوصيل سريع داخل الرياض.",
+  },
+  {
+    id: "demo-shop-2",
+    name: "محل تجريبي: النور للحاسبات",
+    ownerName: "نورة القحطاني",
+    phone: "0559876543",
+    email: "alnoor@example.com",
+    city: "جدة",
+    address: "حي الروضة، شارع التحلية، برج النور، الدور الأرضي",
+    description: "لابتوبات وأجهزة مكتبية وشاشات للأعمال والدراسة، مع صيانة وتجهيز حسب الطلب.",
+  },
+  {
+    id: "demo-shop-3",
+    name: "محل تجريبي: الواحة للتقنية",
+    ownerName: "خالد الشمري",
+    phone: "0533344455",
+    email: "oasis@example.com",
+    city: "الدمام",
+    address: "حي الشاطئ، شارع الأمير محمد بن فهد، مبنى 8",
+    description: "ملحقات الكمبيوتر وأجهزة الشبكات والطابعات بأسعار منافسة وعروض أسبوعية.",
+  },
 ];
 const COMPARE_DEMO_SPECS: Record<Lang, ProductSpec[]> = {
   ar: [
@@ -120,6 +164,15 @@ const LAPTOP_DEMO_OFFERS: Array<{ shopId: string; price: number }> = [
   { shopId: "demo-shop-1", price: 4449 },
   { shopId: "demo-shop-3", price: 4299 },
 ];
+// Sample Urdu text for products that have none yet (description, highlights, spec table). Preview text, not a review.
+const URDU_SAMPLE_FEATURES = ["دو سال کی مقامی وارنٹی", "قیمت آرڈر سے پہلے ظاہر ہوتی ہے", "آسان اور تیز ترسیل"];
+const URDU_SAMPLE_SPECS: ProductSpec[] = [
+  { label: "حالت", value: "نیا" },
+  { label: "وارنٹی", value: "دو سال" },
+  { label: "ترسیل", value: "تیز" },
+];
+const urduSampleDescription = (name: string) => `${name}۔ معیاری مصنوعہ، مقامی وارنٹی اور تیز ترسیل کے ساتھ دستیاب ہے۔`;
+
 const COMPARE_DEMO_PRICES = [1749, 1689, 1799];
 const COMPARE_DEMO_PRODUCTS: ProductRow[] = COMPARE_DEMO_SHOPS.map((shop, index) => ({
   id: `demo-compare-${index + 1}`,
@@ -132,6 +185,8 @@ const COMPARE_DEMO_PRODUCTS: ProductRow[] = COMPARE_DEMO_SHOPS.map((shop, index)
   onHome: false,
   nameAr: COMPARE_DEMO_AR_NAME,
   nameEn: "[Demo data] 11-inch tablet · 256 GB · Gray · New",
+  nameUr: COMPARE_DEMO_UR.name,
+  categoryUr: COMPARE_DEMO_UR.category,
   categoryAr: "أجهزة لوحية",
   categoryEn: "Tablets",
   categoryId: "tablets",
@@ -141,6 +196,9 @@ const COMPARE_DEMO_PRODUCTS: ProductRow[] = COMPARE_DEMO_SHOPS.map((shop, index)
   shopId: shop.id,
   specsAr: COMPARE_DEMO_SPECS.ar,
   specsEn: COMPARE_DEMO_SPECS.en,
+  descriptionUr: urduSampleDescription(COMPARE_DEMO_UR.name),
+  featuresUr: URDU_SAMPLE_FEATURES,
+  specsUr: COMPARE_DEMO_SPECS.ur,
 }));
 
 const LAPTOP_DEMO_PRODUCTS: ProductRow[] = LAPTOP_DEMO_OFFERS.map((offer, index) => ({
@@ -154,6 +212,8 @@ const LAPTOP_DEMO_PRODUCTS: ProductRow[] = LAPTOP_DEMO_OFFERS.map((offer, index)
   onHome: false,
   nameAr: LAPTOP_DEMO_AR_NAME,
   nameEn: "[Demo data] Servo 15 laptop · 16 GB · 512 GB · Gray · New",
+  nameUr: "[آزمائشی ڈیٹا] سروو 15 لیپ ٹاپ · 16 جی بی · 512 جی بی · سرمئی · نیا",
+  categoryUr: "اسٹوڈنٹ لیپ ٹاپس",
   categoryAr: "لابتوبات دراسة",
   categoryEn: "Student laptops",
   categoryId: "student-laptops",
@@ -163,6 +223,9 @@ const LAPTOP_DEMO_PRODUCTS: ProductRow[] = LAPTOP_DEMO_OFFERS.map((offer, index)
   shopId: offer.shopId,
   specsAr: LAPTOP_DEMO_SPECS.ar,
   specsEn: LAPTOP_DEMO_SPECS.en,
+  descriptionUr: urduSampleDescription("[آزمائشی ڈیٹا] سروو 15 لیپ ٹاپ · 16 جی بی · 512 جی بی · سرمئی · نیا"),
+  featuresUr: URDU_SAMPLE_FEATURES,
+  specsUr: LAPTOP_DEMO_SPECS.ur,
 }));
 const ALL_DEMO_PRODUCTS = [...COMPARE_DEMO_PRODUCTS, ...LAPTOP_DEMO_PRODUCTS];
 
@@ -185,7 +248,8 @@ function withCompareDemo(content: SiteContent): SiteContent {
 const RETIRED_DEMO_IDS: ReadonlySet<string> = new Set(["demo-tablet"]);
 
 function demoRow(item: DemoProduct): ProductRow {
-  return { ...item, mark: "", rating: 0, reviews: 0, hidden: RETIRED_DEMO_IDS.has(item.id), onHome: false, source: "demo" };
+  const ur = DEMO_PRODUCTS_UR[item.id];
+  return { ...item, nameUr: ur?.name ?? "", categoryUr: ur?.category ?? "", descriptionUr: urduSampleDescription(ur?.name ?? item.nameAr), featuresUr: URDU_SAMPLE_FEATURES, specsUr: URDU_SAMPLE_SPECS, mark: "", rating: 0, reviews: 0, hidden: RETIRED_DEMO_IDS.has(item.id), onHome: false, source: "demo" };
 }
 
 /** Home page sections the dashboard can switch off. The footer always shows. */
@@ -225,6 +289,8 @@ export type SiteContent = {
   sectionHidden: SectionKey[];
   /** Departments added from the dashboard; they show in the store menus next to the built-in tree. */
   addedCategories: CatalogCategory[];
+  /** Order the dashboard gave to departments on this browser (category id -> sort); empty means the built-in order. */
+  categoryOrder: Record<string, number>;
   /** Order of the home page sections, built-in and custom. */
   homeOrder: HomeBlock[];
   customSections: CustomSection[];
@@ -259,7 +325,7 @@ export type Brand = {
   logo: string;
 };
 
-export type NewCategory = Pick<CatalogCategory, "nameAr" | "nameEn" | "descriptionAr" | "descriptionEn" | "parentId" | "featured">;
+export type NewCategory = Pick<CatalogCategory, "nameAr" | "nameEn" | "nameUr" | "descriptionAr" | "descriptionEn" | "descriptionUr" | "parentId" | "featured">;
 
 type BlockKey = "catalog" | "deals" | "bestsellers" | "addons" | "setups" | "footer";
 
@@ -279,8 +345,11 @@ function defaults(): SiteContent {
     onHome: index < HOME_LIMIT,
     nameAr: textOf("ar", item.id)?.name ?? item.id,
     nameEn: textOf("en", item.id)?.name ?? item.id,
+    nameUr: textOf("ur", item.id)?.name ?? "",
+    descriptionUr: urduSampleDescription(textOf("ur", item.id)?.name ?? item.id),
     categoryAr: textOf("ar", item.id)?.category ?? "",
     categoryEn: textOf("en", item.id)?.category ?? "",
+    categoryUr: textOf("ur", item.id)?.category ?? "",
   }));
   products.push(...DEMO_PRODUCTS.map(demoRow));
 
@@ -339,6 +408,7 @@ function defaults(): SiteContent {
     heroArchived: [],
     sectionHidden: [...DEFAULT_SECTION_HIDDEN],
     addedCategories: [],
+    categoryOrder: {},
     homeOrder: [...DEFAULT_ORDER],
     customSections: [],
     brand: {
@@ -371,6 +441,31 @@ function loadSaved(): SiteContent {
     if (!Array.isArray(parsed.products) || OFFER_PRODUCTS.some((item) => !parsed.products.some((row) => row.id === item.id))) return defaults();
     // Demo products ship with the code, so older saved content picks up any it is missing.
     parsed.products = [...parsed.products, ...DEMO_PRODUCTS.filter((item) => !parsed.products.some((row) => row.id === item.id)).map(demoRow)];
+    // Sample Urdu text for rows saved before Urdu existed; a row that already has its own Urdu text keeps it.
+    parsed.products = parsed.products.map((row) => {
+      if (row.nameUr?.trim()) {
+        // The Urdu name is already there; a row still without Urdu description, highlights or specs gets the samples.
+        const demo = row.source === "demo";
+        return {
+          ...row,
+          descriptionUr: row.descriptionUr?.trim() ? row.descriptionUr : urduSampleDescription(row.nameUr),
+          featuresUr: row.featuresUr ?? (demo ? URDU_SAMPLE_FEATURES : null),
+          specsUr: row.specsUr ?? (demo ? (ALL_DEMO_PRODUCTS.find((item) => item.id === row.id)?.specsUr ?? URDU_SAMPLE_SPECS) : null),
+        };
+      }
+      const shown = ALL_DEMO_PRODUCTS.find((item) => item.id === row.id);
+      const sample = shown?.nameUr ? { name: shown.nameUr, category: shown.categoryUr ?? "" } : row.source === "demo" ? DEMO_PRODUCTS_UR[row.id] : !row.source ? textOf("ur", row.id) : undefined;
+      if (!sample) return row;
+      const demo = row.source === "demo";
+      return {
+        ...row,
+        nameUr: sample.name,
+        categoryUr: row.categoryUr?.trim() || sample.category,
+        descriptionUr: row.descriptionUr?.trim() ? row.descriptionUr : urduSampleDescription(sample.name),
+        featuresUr: row.featuresUr ?? (demo ? URDU_SAMPLE_FEATURES : null),
+        specsUr: row.specsUr ?? (demo ? (shown?.specsUr ?? URDU_SAMPLE_SPECS) : null),
+      };
+    });
     // A retired demo product that was saved earlier in this browser is hidden too (only that exact id).
     parsed.products = parsed.products.map((row) => (RETIRED_DEMO_IDS.has(row.id) && row.source === "demo" && !row.hidden ? { ...row, hidden: true } : row));
     if (!parsed.hero?.ar?.length || !parsed.deals?.en || !parsed.footer?.ar) return defaults();
@@ -380,6 +475,7 @@ function loadSaved(): SiteContent {
     if (!Array.isArray(parsed.heroArchived)) parsed.heroArchived = [];
     if (!Array.isArray(parsed.sectionHidden)) parsed.sectionHidden = [...DEFAULT_SECTION_HIDDEN];
     if (!Array.isArray(parsed.addedCategories)) parsed.addedCategories = [];
+    if (!parsed.categoryOrder || typeof parsed.categoryOrder !== "object") parsed.categoryOrder = {};
     if (!Array.isArray(parsed.customSections)) parsed.customSections = [];
     parsed.homeOrder = normalOrder(parsed.homeOrder, parsed.customSections);
     const fresh = defaults();
@@ -505,14 +601,19 @@ type ApiProduct = {
   id: string;
   nameAr: string;
   nameEn: string;
+  nameUr?: string;
   labelAr: string;
   labelEn: string;
+  labelUr?: string;
   descriptionAr?: string;
   descriptionEn?: string;
+  descriptionUr?: string;
   featuresAr?: string[] | null;
   featuresEn?: string[] | null;
+  featuresUr?: string[] | null;
   specsAr?: ProductSpec[] | null;
   specsEn?: ProductSpec[] | null;
+  specsUr?: ProductSpec[] | null;
   price: string;
   compareAtPrice: string | null;
   /** Optional per-piece wholesale price, set by the server; null when the listing has none. */
@@ -529,14 +630,17 @@ type ApiProduct = {
 };
 
 type ApiShop = Shop & { products?: number };
+const shopFromApi = ({ id, name, ownerName, phone, email, city, address, description }: ApiShop): Shop => ({ id, name, ownerName, phone, email, city, address, description });
 
 type ApiCategory = {
   id: string;
   slug: string;
   nameAr: string;
   nameEn: string;
+  nameUr?: string;
   descriptionAr: string;
   descriptionEn: string;
+  descriptionUr?: string;
   imageUrl: string | null;
   icon: string;
   parentId: string | null;
@@ -577,8 +681,10 @@ function productFromApi(item: ApiProduct): ProductRow {
     onHome: item.showInHomeOffers,
     nameAr: item.nameAr,
     nameEn: item.nameEn,
+    nameUr: item.nameUr ?? "",
     categoryAr: item.labelAr,
     categoryEn: item.labelEn,
+    categoryUr: item.labelUr ?? "",
     archived: Boolean(item.archivedAt),
     categoryId: item.categoryId ?? undefined,
     // Built-in products keep their own photo files (/showcase and /card-photos) until a photo is uploaded from
@@ -590,10 +696,13 @@ function productFromApi(item: ApiProduct): ProductRow {
     shop: item.shop ?? null,
     descriptionAr: item.descriptionAr ?? "",
     descriptionEn: item.descriptionEn ?? "",
+    descriptionUr: item.descriptionUr ?? "",
     featuresAr: item.featuresAr ?? null,
     featuresEn: item.featuresEn ?? null,
+    featuresUr: item.featuresUr ?? null,
     specsAr: item.specsAr ?? null,
     specsEn: item.specsEn ?? null,
+    specsUr: item.specsUr ?? null,
   };
 }
 
@@ -603,8 +712,10 @@ function categoryFromApi(item: ApiCategory): CatalogCategory & { archivedAt: str
     slug: item.slug,
     nameAr: item.nameAr,
     nameEn: item.nameEn,
+    nameUr: item.nameUr ?? "",
     descriptionAr: item.descriptionAr,
     descriptionEn: item.descriptionEn,
+    descriptionUr: item.descriptionUr ?? "",
     image: item.imageUrl ?? "",
     icon: item.icon,
     parentId: item.parentId,
@@ -635,7 +746,7 @@ function remoteFromApi(mode: Remote["mode"], data: { categories: ApiCategory[]; 
     archived: [],
     lowStock: data.settings?.lowStock ?? 5,
     canEdit: Boolean(data.canEdit),
-    shops: (data.shops ?? []).map(({ id, name }) => ({ id, name })),
+    shops: (data.shops ?? []).map(({ id, name, ownerName, phone, email, city, address, description }) => ({ id, name, ownerName, phone, email, city, address, description })),
   };
   return withCategoryLists(base, data.categories.map(categoryFromApi));
 }
@@ -658,14 +769,22 @@ type ContentApi = {
   /** Shops listed in the dashboard: from the database when connected, otherwise this browser's own list (preview). */
   shops: Shop[];
   /** Adds a shop and resolves with its id once it is saved. */
-  addShop: (name: string) => Promise<string>;
+  /** Adds a shop (a name, or the full details) and resolves with its id once it is saved. */
+  addShop: (input: string | ShopInput) => Promise<string>;
   renameShop: (id: string, name: string) => Promise<void>;
+  /** Saves a shop's details. */
+  updateShop: (id: string, patch: Partial<ShopInput>) => Promise<void>;
   /** The shop that owns a product, or null when the product is not linked to a shop. */
   shopOf: (productId: string) => Shop | null;
   /** Every visible listing of the same product (same explicit matchKey), with its shop; empty when it has no matchKey. */
   offersOf: (productId: string) => Array<{ id: string; price: number; shop: Shop | null }>;
   /** Adds a product and resolves with its id once it is saved. */
   addProduct: (input: NewProduct) => Promise<string>;
+  /** A shop sends a new product from its dashboard: it stays hidden from the store until the admin approves it. */
+  submitProduct: (input: NewProduct) => Promise<string>;
+  /** The admin approves a pending product (it goes live) or refuses it with a reason the shop can read. */
+  approveProduct: (id: string) => void;
+  rejectProduct: (id: string, reason: string) => void;
   updateHero: (lang: Lang, index: number, patch: Partial<SlideCopy>) => void;
   updateBlock: <K extends BlockKey>(key: K, lang: Lang, patch: Partial<SiteContent[K][Lang]>) => void;
   reset: () => void;
@@ -673,6 +792,8 @@ type ContentApi = {
   visibleProducts: (mode: "home" | "all") => OfferProduct[];
   productById: (id: string) => OfferProduct | undefined;
   setCategoryHidden: (id: string, hidden: boolean) => void;
+  /** Saves a new order for sibling categories (the first id comes first). */
+  reorderCategories: (orderedIds: string[]) => Promise<void>;
   setCategoryArchived: (id: string, archived: boolean) => void;
   setSlideHidden: (index: number, hidden: boolean) => void;
   setSlideArchived: (index: number, archived: boolean) => void;
@@ -723,7 +844,13 @@ function loadLocalShops(): Shop[] {
     const parsed: unknown = JSON.parse(localStorage.getItem(SHOPS_KEY) ?? "[]");
     const saved = Array.isArray(parsed) ? parsed.filter((item): item is Shop => typeof item?.id === "string" && typeof item?.name === "string") : [];
     // Preview: the demo shops are added once per id; renamed or existing shops are left as they are.
-    return PREVIEW ? [...saved, ...COMPARE_DEMO_SHOPS.filter((demo) => !saved.some((shop) => shop.id === demo.id))] : saved;
+    if (!PREVIEW) return saved;
+    // A demo shop saved before it had details gets the sample details; anything already written is kept.
+    const filled = saved.map((shop) => {
+      const demo = COMPARE_DEMO_SHOPS.find((item) => item.id === shop.id);
+      return demo ? { ...demo, ...Object.fromEntries(Object.entries(shop).filter(([, value]) => typeof value === "string" ? value.trim() !== "" : value !== undefined)) } as Shop : shop;
+    });
+    return [...filled, ...COMPARE_DEMO_SHOPS.filter((demo) => !saved.some((shop) => shop.id === demo.id))];
   } catch {
     return PREVIEW ? [...COMPARE_DEMO_SHOPS] : [];
   }
@@ -733,9 +860,12 @@ function loadLocalShops(): Shop[] {
 function productPatchBody(patch: Partial<ProductRow>): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   if (patch.nameAr !== undefined && patch.nameAr.trim()) body.nameAr = patch.nameAr;
-  if (patch.nameEn !== undefined && patch.nameEn.trim()) body.nameEn = patch.nameEn;
+  // English and Urdu are optional, so they may be cleared; the Arabic name may not.
+  if (patch.nameEn !== undefined) body.nameEn = patch.nameEn;
+  if (patch.nameUr !== undefined) body.nameUr = patch.nameUr;
   if (patch.categoryAr !== undefined) body.labelAr = patch.categoryAr;
   if (patch.categoryEn !== undefined) body.labelEn = patch.categoryEn;
+  if (patch.categoryUr !== undefined) body.labelUr = patch.categoryUr;
   if (patch.price !== undefined && patch.price > 0) body.price = patch.price;
   if (patch.compareAt !== undefined) body.compareAtPrice = patch.compareAt;
   if (patch.wholesalePrice !== undefined) body.wholesalePrice = patch.wholesalePrice;
@@ -744,7 +874,7 @@ function productPatchBody(patch: Partial<ProductRow>): Record<string, unknown> {
   if (patch.categoryId !== undefined) body.categoryId = patch.categoryId || null;
   if (patch.shopId !== undefined) body.shopId = patch.shopId || null;
   if (patch.image?.startsWith("data:")) body.image = patch.image;
-  for (const key of ["descriptionAr", "descriptionEn", "featuresAr", "featuresEn", "specsAr", "specsEn"] as const) {
+  for (const key of ["descriptionAr", "descriptionEn", "descriptionUr", "featuresAr", "featuresEn", "featuresUr", "specsAr", "specsEn", "specsUr"] as const) {
     if (patch[key] !== undefined) body[key] = patch[key];
   }
   return body;
@@ -782,6 +912,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
   // Registered during render so every menu below reads the current list on this same pass.
   registerCatalogue(remote ? remote.categories : null);
   registerAddedCategories(remote ? [] : local.addedCategories);
+  registerCategoryOrder(remote ? {} : local.categoryOrder);
 
   useEffect(() => {
     try {
@@ -874,7 +1005,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
               if (pending.current.has(`product:${row.id}`)) return { ...row, stock: pending.current.has(`stock:${row.id}`) ? row.stock : fresh.stock };
               return pending.current.has(`stock:${row.id}`) ? { ...fresh, stock: row.stock } : fresh;
             })
-          : [...current.products, fresh],
+          : [fresh, ...current.products], // a product that is new to the list goes first
       };
     });
   };
@@ -886,7 +1017,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
       const list = current.categories as Array<ReturnType<typeof categoryFromApi>>;
       const known = list.some((row) => row.id === fresh.id);
       const kept = pending.current.has(`category:${fresh.id}`);
-      return withCategoryLists(current, known ? list.map((row) => (row.id === fresh.id ? (kept ? { ...fresh, nameAr: row.nameAr, nameEn: row.nameEn, descriptionAr: row.descriptionAr, descriptionEn: row.descriptionEn } : fresh) : row)) : [...list, fresh]);
+      return withCategoryLists(current, known ? list.map((row) => (row.id === fresh.id ? (kept ? { ...fresh, nameAr: row.nameAr, nameEn: row.nameEn, nameUr: row.nameUr, descriptionAr: row.descriptionAr, descriptionEn: row.descriptionEn, descriptionUr: row.descriptionUr } : fresh) : row)) : [...list, fresh]);
     });
   };
 
@@ -942,27 +1073,31 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
       await track(sendProduct(id)(body));
     },
     shops: admin ? remote.shops : localShops,
-    async addShop(name) {
-      const clean = name.trim();
-      if (!clean) throw new ApiError(400, "INVALID_INPUT");
+    async addShop(input) {
+      const data: ShopInput = typeof input === "string" ? { name: input } : input;
+      const clean = { ...data, name: data.name.trim() };
+      if (!clean.name) throw new ApiError(400, "INVALID_INPUT");
       if (!admin) {
-        const shop = { id: `shop-${Date.now().toString(36)}`, name: clean };
+        const shop: Shop = { id: `shop-${Date.now().toString(36)}`, ...clean };
         setLocalShops((current) => [...current, shop]);
         return shop.id;
       }
-      const result = await track(api<{ shop: ApiShop }>("/admin/shops", { body: { name: clean } }));
-      setRemote((current) => current && { ...current, shops: [...current.shops, { id: result.shop.id, name: result.shop.name }] });
+      const result = await track(api<{ shop: ApiShop }>("/admin/shops", { body: clean }));
+      setRemote((current) => current && { ...current, shops: [...current.shops, shopFromApi(result.shop)] });
       return result.shop.id;
     },
     async renameShop(id, name) {
-      const clean = name.trim();
-      if (!clean) throw new ApiError(400, "INVALID_INPUT");
+      return this.updateShop(id, { name });
+    },
+    async updateShop(id, patch) {
+      const clean = { ...patch, ...(patch.name !== undefined ? { name: patch.name.trim() } : {}) };
+      if (clean.name !== undefined && !clean.name) throw new ApiError(400, "INVALID_INPUT");
       if (!admin) {
-        setLocalShops((current) => current.map((shop) => (shop.id === id ? { ...shop, name: clean } : shop)));
+        setLocalShops((current) => current.map((shop) => (shop.id === id ? { ...shop, ...clean } : shop)));
         return;
       }
-      const result = await track(api<{ shop: ApiShop }>(`/admin/shops/${encodeURIComponent(id)}`, { method: "PATCH", body: { name: clean } }));
-      setRemote((current) => current && { ...current, shops: current.shops.map((shop) => (shop.id === id ? { id, name: result.shop.name } : shop)) });
+      const result = await track(api<{ shop: ApiShop }>(`/admin/shops/${encodeURIComponent(id)}`, { method: "PATCH", body: clean }));
+      setRemote((current) => current && { ...current, shops: current.shops.map((shop) => (shop.id === id ? shopFromApi(result.shop) : shop)) });
     },
     shopOf(productId) {
       const row = content.products.find((item) => item.id === productId);
@@ -978,11 +1113,32 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         .filter((item) => item.matchKey === key && !item.hidden && !item.archived)
         .map((item) => ({ id: item.id, price: item.price, shop: (item.shopId && list.find((shop) => shop.id === item.shopId)) || item.shop || null }));
     },
+    async submitProduct(input) {
+      // Shop submissions live in this browser's own list for now (a shop has no account on the server yet).
+      if (admin) throw new ApiError(400, "NOT_AVAILABLE");
+      const id = `p-${Date.now().toString(36)}`;
+      const row: ProductRow = { ...input, id, mark: "", rating: 0, reviews: 0, source: "added", hidden: true, onHome: false, approval: "pending", submittedAt: new Date().toISOString() };
+      setContent((current) => ({ ...current, products: [row, ...current.products] }));
+      return id;
+    },
+    approveProduct(id) {
+      setContent((current) => ({
+        ...current,
+        products: current.products.map((row) => {
+          if (row.id !== id) return row;
+          const { approval: _approval, rejectReason: _reason, ...rest } = row;
+          return { ...rest, hidden: false };
+        }),
+      }));
+    },
+    rejectProduct(id, reason) {
+      setContent((current) => ({ ...current, products: current.products.map((row) => (row.id === id ? { ...row, approval: "rejected", rejectReason: reason.trim(), hidden: true } : row)) }));
+    },
     async addProduct(input) {
       if (!admin) {
         const id = `p-${Date.now().toString(36)}`;
         const row: ProductRow = { ...input, id, mark: "", rating: 0, reviews: 0, source: "added" };
-        setContent((current) => ({ ...current, products: [...current.products, row] }));
+        setContent((current) => ({ ...current, products: [row, ...current.products] }));
         return id;
       }
       const result = await track(
@@ -990,13 +1146,24 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
           body: {
             nameAr: input.nameAr,
             nameEn: input.nameEn,
+            nameUr: input.nameUr ?? "",
             labelAr: input.categoryAr,
             labelEn: input.categoryEn,
+            labelUr: input.categoryUr ?? "",
             categoryId: input.categoryId,
             shopId: input.shopId || null,
             price: input.price,
             compareAtPrice: input.compareAt,
             wholesalePrice: input.wholesalePrice ?? null,
+            descriptionAr: input.descriptionAr ?? "",
+            descriptionEn: input.descriptionEn ?? "",
+            descriptionUr: input.descriptionUr ?? "",
+            featuresAr: input.featuresAr ?? undefined,
+            featuresEn: input.featuresEn ?? undefined,
+            featuresUr: input.featuresUr ?? undefined,
+            specsAr: input.specsAr ?? undefined,
+            specsEn: input.specsEn ?? undefined,
+            specsUr: input.specsUr ?? undefined,
             isVisible: !input.hidden,
             showInHomeOffers: input.onHome,
             image: input.image?.startsWith("data:") ? input.image : undefined,
@@ -1046,11 +1213,25 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         },
       }));
     },
+    async reorderCategories(orderedIds) {
+      if (admin) {
+        // Shown at once, then saved; if the server refuses, the list from the database comes back.
+        setRemote((current) => current && withCategoryLists(current, (current.categories as Array<ReturnType<typeof categoryFromApi>>).map((row) => (orderedIds.includes(row.id) ? { ...row, sort: orderedIds.indexOf(row.id) + 1 } : row))));
+        try {
+          await track(api("/admin/categories/order", { method: "PUT", body: { ids: orderedIds } }));
+        } catch (failure) {
+          void loadAdminCatalogue().catch(() => undefined);
+          throw failure;
+        }
+        return;
+      }
+      setContent((current) => ({ ...current, categoryOrder: { ...current.categoryOrder, ...Object.fromEntries(orderedIds.map((id, index) => [id, index + 1])) } }));
+    },
     async addCategory(input) {
       if (admin) {
         const result = await track(
           api<{ category: ApiCategory }>("/admin/categories", {
-            body: { nameAr: input.nameAr, nameEn: input.nameEn, descriptionAr: input.descriptionAr, descriptionEn: input.descriptionEn, parentId: input.parentId, isFeatured: input.featured },
+            body: { nameAr: input.nameAr, nameEn: input.nameEn, nameUr: input.nameUr ?? "", descriptionAr: input.descriptionAr, descriptionEn: input.descriptionEn, descriptionUr: input.descriptionUr ?? "", parentId: input.parentId, isFeatured: input.featured },
           }),
         );
         applyCategory(result.category);
@@ -1069,7 +1250,8 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         featured: level === 1 && input.featured,
         image: "",
         icon: "grid",
-        sort: Math.max(0, ...siblings.map((item) => item.sort)) + 1,
+        // A new department goes first among its siblings.
+        sort: Math.min(1, ...siblings.map((item) => item.sort)) - 1,
         active: true,
       };
       setContent((current) => ({ ...current, addedCategories: [...current.addedCategories, category] }));
@@ -1083,6 +1265,8 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         if (patch.nameEn !== undefined && patch.nameEn.trim()) body.nameEn = patch.nameEn;
         if (patch.descriptionAr !== undefined) body.descriptionAr = patch.descriptionAr;
         if (patch.descriptionEn !== undefined) body.descriptionEn = patch.descriptionEn;
+        if (patch.nameUr !== undefined) body.nameUr = patch.nameUr;
+        if (patch.descriptionUr !== undefined) body.descriptionUr = patch.descriptionUr;
         if (patch.featured !== undefined) body.isFeatured = patch.featured;
         if (Object.keys(body).length) schedule(`category:${id}`, body, sendCategory(id), 600);
         return;
@@ -1111,6 +1295,8 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         if (patch.nameEn !== undefined && patch.nameEn.trim()) body.nameEn = patch.nameEn;
         if (patch.descriptionAr !== undefined) body.descriptionAr = patch.descriptionAr;
         if (patch.descriptionEn !== undefined) body.descriptionEn = patch.descriptionEn;
+        if (patch.nameUr !== undefined) body.nameUr = patch.nameUr;
+        if (patch.descriptionUr !== undefined) body.descriptionUr = patch.descriptionUr;
         if (patch.featured !== undefined) body.isFeatured = patch.featured;
         if (patch.hidden !== undefined) body.isVisible = !patch.hidden;
         if (Object.keys(body).length) await track(sendCategory(id)(body));
@@ -1184,8 +1370,9 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
     copyOf(lang, id) {
       const row = content.products.find((item) => item.id === id);
       if (!row) return undefined;
-      // Catalogue fields are bilingual (ar/en); Urdu uses Arabic names until *Ur columns exist.
-      if (lang === "en") return { name: row.nameEn, category: row.categoryEn };
+      // English and Urdu are optional extras: an empty value falls back to the Arabic text.
+      if (lang === "en") return { name: row.nameEn.trim() || row.nameAr, category: row.categoryEn.trim() || row.categoryAr };
+      if (lang === "ur" && (row.nameUr?.trim() || row.categoryUr?.trim())) return { name: row.nameUr?.trim() || row.nameAr, category: row.categoryUr?.trim() || row.categoryAr };
       if (lang === "ur" && row.source === "demo" && row.nameAr === COMPARE_DEMO_AR_NAME) return { name: COMPARE_DEMO_UR.name, category: COMPARE_DEMO_UR.category };
       if (lang === "ur" && row.source === "demo" && row.nameAr === LAPTOP_DEMO_AR_NAME) return { name: "[آزمائشی ڈیٹا] سروو 15 لیپ ٹاپ · 16 جی بی · 512 جی بی · سرمئی · نیا", category: "اسٹوڈنٹ لیپ ٹاپس" };
       return { name: row.nameAr, category: row.categoryAr };

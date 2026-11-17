@@ -1,16 +1,14 @@
 import { useState } from "react";
 import { CheckCircle2, Clock, Inbox, MapPin, PackageCheck, Plus, Trash2, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { OrderDrawer, OrdersTable } from "./OrdersPage";
+import { OrdersTable, openOrder } from "./OrdersPage";
 import { SHIP_STAGE, shipStage, useOps, type ShipStage, type ShippingMethod } from "./ops";
-import type { Order } from "./orders";
 import { Badge, Button, Confirm, DemoNote, Empty, IconButton, NumberField, PageHead, Panel, StatCard, Switch, Tabs, num, sar } from "./ui";
 
 export function Shipping() {
   const { ops, orders, updateShipping, updateZone, addZone, removeZone } = useOps();
   const [removing, setRemoving] = useState<{ id: string; name: string } | null>(null);
   const [stage, setStage] = useState<Exclude<ShipStage, "cancelled">>("awaiting");
-  const [viewing, setViewing] = useState<Order | null>(null);
 
   const count = (value: ShipStage) => orders.filter((order) => shipStage(order.status) === value).length;
   const rows = orders.filter((order) => shipStage(order.status) === stage);
@@ -108,10 +106,8 @@ export function Shipping() {
             ]}
           />
         </div>
-        {rows.length ? <OrdersTable orders={rows} onView={setViewing} /> : <Empty icon={Inbox} title="ما فيه طلبات هنا" lead="الطلبات تنتقل بين التبويبات حسب حالتها." />}
+        {rows.length ? <OrdersTable orders={rows} onView={openOrder} /> : <Empty icon={Inbox} title="ما فيه طلبات هنا" lead="الطلبات تنتقل بين التبويبات حسب حالتها." />}
       </Panel>
-
-      <OrderDrawer order={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 }

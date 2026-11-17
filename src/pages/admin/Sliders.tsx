@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Archive, ArchiveRestore, ChevronDown } from "lucide-react";
 import { heroDefaultLink } from "@/components/site/Hero";
-import { categoryLabel, childCategories, rootDepartments } from "@/lib/catalog";
+import { categoryLabel, rootDepartments } from "@/lib/catalog";
 import { translations } from "@/lib/i18n";
 import { useSiteContent } from "@/lib/site-content";
 import { cn, publicUrl } from "@/lib/utils";
@@ -17,13 +17,10 @@ export function SlidesEditor() {
   const [archiving, setArchiving] = useState<number | null>(null);
 
   const slides = content.hero.ar.map((slide, index) => ({ index, ar: slide, en: content.hero.en[index] }));
-  // Pages a slide's button can open: the offers page, then every department and the categories inside it.
+  // Pages a slide's button can open: the offers page, then every department.
   const destinations: Array<[string, string]> = [["offers", "صفحة العروض"]];
   for (const root of rootDepartments(content.categoryHidden)) {
     destinations.push([`c/${root.slug}`, categoryLabel(root, "ar")]);
-    for (const child of childCategories(root.id, content.categoryHidden)) {
-      destinations.push([`c/${child.slug}`, `${categoryLabel(root, "ar")} ← ${categoryLabel(child, "ar")}`]);
-    }
   }
   const active = slides.filter(({ index }) => !content.heroArchived.includes(index));
   const archived = slides.filter(({ index }) => content.heroArchived.includes(index));

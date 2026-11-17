@@ -17,6 +17,7 @@ import { OpsProvider } from "./admin/ops";
 import { Orders } from "./admin/OrdersPage";
 import { Overview } from "./admin/Overview";
 import { Payments } from "./admin/Payments";
+import { ProductRequests } from "./admin/ProductRequests";
 import { Products } from "./admin/Products";
 import { Reports } from "./admin/Reports";
 import { Settings } from "./admin/Settings";
@@ -225,8 +226,8 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
   useEffect(load, [load]);
   const [view, setView] = useState<View>(() => readHash().view);
   const [hash, setHash] = useState(() => readHash());
-  const [leaving, setLeaving] = useState<(() => void) | null>(null);
-  useEffect(() => registerLeavePrompt((proceed) => setLeaving(() => proceed)), []);
+  const [leaving, setLeaving] = useState<{ proceed: () => void; save?: () => unknown } | null>(null);
+  useEffect(() => registerLeavePrompt((proceed, save) => setLeaving({ proceed, save })), []);
   const [menuOpen, setMenuOpen] = useState(false);
   const dark = theme === "dark";
 
@@ -348,9 +349,9 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
           </div>
         </header>
 
-        <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:py-8">
+        <main className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:py-6">
           {/* One notice for the whole dashboard instead of a demo badge on every card. */}
-          <p className="mb-6 flex items-center gap-2 rounded-xl border border-(--a-line) bg-(--a-surface) px-3.5 py-2 text-xs text-(--a-muted)">
+          <p className="mb-4 flex items-center gap-2 rounded-lg border border-(--a-line) bg-(--a-surface) px-3 py-1.5 text-[11px] text-(--a-muted)">
             <span className="size-1.5 shrink-0 rounded-full bg-(--a-warn)" aria-hidden="true" />
             المنتجات والأقسام والمخزون والطلبات وإعدادات الشحن والدفع محفوظة في قاعدة البيانات. محتوى الصفحة الرئيسية ما زال محفوظًا على هذا الجهاز.
           </p>
@@ -380,6 +381,8 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
           ) : null}
           {loadState !== "ready" ? null : (
             <>
+              {/* The path only shows once inside a sub-page (a department, a shop's products, an edit form); main sections have none. */}
+              {crumbs.length > 2 ? (
               <nav aria-label="مسار التنقل" className="mb-3 text-sm">
                 {crumbs.map((crumb, index) => (
                   <span key={`${index}-${crumb.label}`}>
@@ -396,6 +399,7 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
                   </span>
                 ))}
               </nav>
+              ) : null}
               <Pages view={view} open={open} theme={theme} onTheme={onTheme} />
             </>
           )}
@@ -404,10 +408,23 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
       <Confirm
         open={leaving !== null}
         onClose={() => setLeaving(null)}
-        onConfirm={() => leaving?.()}
-        title="فيه تعديلات غير مؤكدة"
-        lead="لو خرجت الآن، تضيع التعديلات اللي ما أكدتها. ارجع للصفحة واضغط «تأكيد التعديلات» لو تبي تحفظها."
+        onConfirm={() => leaving?.proceed()}
+        title={leaving?.save ? "تبغى تطلع بدون حفظ؟" : "فيه تعديلات غير مؤكدة"}
+        lead={leaving?.save ? "إذا طلعت الحين، بتفقد التعديلات اللي سويتها. تبغى تحفظها قبل تطلع؟" : "لو خرجت الآن، تضيع التعديلات اللي ما أكدتها. ارجع للصفحة واضغط «تأكيد التعديلات» لو تبي تحفظها."}
         action="خروج بدون حفظ"
+        alt={
+          leaving?.save
+            ? {
+                label: "حفظ التعديلات",
+                // Leaves only when the save worked; a page whose save fails (a missing field) stays open with its message.
+                onClick: () => {
+                  void Promise.resolve(leaving.save?.()).then((saved) => {
+                    if (saved !== false) leaving.proceed();
+                  });
+                },
+              }
+            : undefined
+        }
       />
     </div>
   );
@@ -425,6 +442,7 @@ function Pages({ view, open, theme, onTheme }: { view: View; open: (view: View) 
           {view === "products" ? <Products /> : null}
           {view === "departments" ? <Departments /> : null}
           {view === "shops" ? <Shops /> : null}
+          {view === "productRequests" ? <ProductRequests /> : null}
           {view === "inventory" ? <Inventory /> : null}
           {view === "offers" ? <Offers onOpen={open} /> : null}
           {view === "content" ? <ContentHub onOpen={open} /> : null}

@@ -1,17 +1,49 @@
-import { useState } from "react";
-import { ArchiveRestore, Inbox, Trash2, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { ArchiveRestore, Check, ChevronDown, Inbox, Save, Trash2, X } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
 import { useSiteContent } from "@/lib/site-content";
+import { cn } from "@/lib/utils";
 import { PAYMENT_LABELS, PAYMENT_STATUS, SHIP_STAGE, shipStage, useOps, type ShipStage } from "./ops";
-import { readHash } from "./nav";
+import { onHashMove, pushHash, readHash, registerLeaveGuard } from "./nav";
 import { ORDER_STATUS, type Order, type OrderStatus, type PaymentStatus } from "./orders";
 import { AR_DATE, Badge, Button, Confirm, Drawer, Empty, IconButton, PageHead, Panel, SearchBox, Select, Pager, Tabs, num, rowOpen, sar, usePager } from "./ui";
 
 export const shortDate = (date: string) => new Date(date).toLocaleDateString(AR_DATE, { day: "numeric", month: "short" });
 
+const STATUS_TONE = {
+  accent: "bg-(--a-blue-soft) text-(--a-blue)",
+  blue: "bg-(--a-blue-soft) text-(--a-blue)",
+  ok: "bg-(--a-ok-soft) text-(--a-ok)",
+  warn: "bg-(--a-warn-soft) text-(--a-warn)",
+  danger: "bg-(--a-danger-soft) text-(--a-danger)",
+};
+
+/** The order status as a coloured pill that is also a dropdown, so the status changes straight from the list. */
+function StatusSelect({ order, onChange }: { order: Order; onChange: (status: OrderStatus) => void }) {
+  const status = ORDER_STATUS[order.status];
+  return (
+    <span className={cn("relative inline-flex items-center rounded-full text-xs font-medium", STATUS_TONE[status.tone])}>
+      <span className="pointer-events-none absolute start-2.5 size-1.5 rounded-full bg-current" />
+      <select
+        value={order.status}
+        aria-label={`حالة الطلب ${order.id}`}
+        onChange={(event) => onChange(event.target.value as OrderStatus)}
+        className="h-7 cursor-pointer appearance-none rounded-full bg-transparent ps-6 pe-7 font-medium outline-none focus-visible:ring-2 focus-visible:ring-(--a-blue)/40"
+      >
+        {(Object.keys(ORDER_STATUS) as OrderStatus[]).map((id) => (
+          <option key={id} value={id}>
+            {ORDER_STATUS[id].label}
+          </option>
+        ))}
+      </select>
+      <ChevronDown className="pointer-events-none absolute end-2 size-3.5" />
+    </span>
+  );
+}
+
 export function OrdersTable({ orders, onView, compact, archived }: { orders: Order[]; onView: (order: Order) => void; compact?: boolean; archived?: boolean }) {
   const { content } = useSiteContent();
-  const { ops, archiveOrder, canArchiveOrders } = useOps();
+  const { ops, archiveOrder, canArchiveOrders, updateOrder } = useOps();
   const [archiving, setArchiving] = useState<Order | null>(null);
   const pager = usePager(orders, `${orders.length}|${archived ? "a" : ""}`);
   const nameOf = (id: string) => content.products.find((item) => item.id === id)?.nameAr ?? id;
@@ -45,15 +77,13 @@ export function OrdersTable({ orders, onView, compact, archived }: { orders: Ord
             return (
               <tr key={order.id} onClick={open.onClick} className={`${open.className} border-t border-(--a-line) transition-colors hover:bg-(--a-surface-2)/40`}>
                 <td className={cell}>
-                  <p className="font-semibold tabular-nums" dir="ltr">
-                    #{order.id}
+                  <p className="font-semibold tabular-nums">
+                    <bdi dir="ltr">#{order.id}</bdi>
                   </p>
                   <p className="text-xs text-(--a-muted)">{shortDate(order.date)}</p>
                   {order.source === "store" ? (
                     <span className="mt-1 flex flex-wrap gap-1">
                       <Badge tone="ok">من المتجر</Badge>
-                      {order.account === false ? <Badge tone="accent">بدون حساب</Badge> : null}
-                      {order.account === true ? <Badge tone="blue">بحساب</Badge> : null}
                     </span>
                   ) : null}
                 </td>
@@ -86,11 +116,15 @@ export function OrdersTable({ orders, onView, compact, archived }: { orders: Ord
                   </td>
                 )}
                 {compact ? null : <td className={`${cell} whitespace-nowrap`}>{methodOf(order.shippingMethod)}</td>}
-                <td className={cell}>
-                  <Badge tone={status.tone}>
-                    <span className="size-1.5 rounded-full bg-current" />
-                    {status.label}
-                  </Badge>
+                <td className={cell} onClick={(event) => event.stopPropagation()}>
+                  {archived ? (
+                    <Badge tone={status.tone}>
+                      <span className="size-1.5 rounded-full bg-current" />
+                      {status.label}
+                    </Badge>
+                  ) : (
+                    <StatusSelect order={order} onChange={(next) => updateOrder(order.id, { status: next })} />
+                  )}
                 </td>
                 <td className={`${cell} text-end`}>
                   {archived ? (
@@ -124,33 +158,27 @@ export function OrdersTable({ orders, onView, compact, archived }: { orders: Ord
   );
 }
 
-/** Order details with local edits for status, shipping method and payment status. */
-export function OrderDrawer({ order, onClose }: { order: Order | null; onClose: () => void }) {
-  const { content } = useSiteContent();
-  const { ops, orders, updateOrder } = useOps();
-  const current = order ? (orders.find((item) => item.id === order.id) ?? order) : null;
-  const product = current ? content.products.find((item) => item.id === current.productId) : null;
-  const zone = current ? ops.zones.find((item) => item.id === current.zone) : null;
+/** Opens an order on its own page (#orders/order-<id>). */
+export const openOrder = (order: Order) => pushHash("orders", `order-${order.id}`);
 
+function orderLead(current: Order) {
+  return current.source === "store"
+    ? "طلب من المتجر. تغيير الحالة يتحفظ ويظهر للعميل في حسابه وصفحة التتبع."
+    : "طلب تجريبي. التعديلات تتحفظ على هذا الجهاز فقط وما توصل للعميل.";
+}
+
+/** The order's lines, customer details and status editors; shared by the order page and the shop's drawer. */
+type OrderFields = Pick<Order, "status" | "paymentStatus" | "shippingMethod">;
+
+/** With `draft` + `onDraft` the editors only change the draft (the order page saves it); without them they save at once. */
+function OrderDetail({ current, draft, onDraft }: { current: Order; draft?: OrderFields; onDraft?: (patch: Partial<OrderFields>) => void }) {
+  const { content } = useSiteContent();
+  const { ops, updateOrder } = useOps();
+  const shown: OrderFields = draft ?? current;
+  const change = (patch: Partial<OrderFields>) => (onDraft ? onDraft(patch) : updateOrder(current.id, patch));
+  const product = content.products.find((item) => item.id === current.productId);
+  const zone = ops.zones.find((item) => item.id === current.zone);
   return (
-    <Drawer
-      open={current !== null}
-      onClose={onClose}
-      title={current ? `الطلب #${current.id}` : ""}
-      lead={
-        current?.source === "store"
-          ? current.account
-            ? "طلب من المتجر بحساب عميل. تغيير الحالة يتحفظ ويظهر للعميل في حسابه وصفحة التتبع."
-            : "طلب من المتجر بدون حساب. بيانات العميل محفوظة هنا، ويقدر يتابع برقم الطلب والجوال من صفحة التتبع."
-          : "طلب تجريبي. التعديلات تتحفظ على هذا الجهاز فقط وما توصل للعميل."
-      }
-      footer={
-        <Button variant="primary" onClick={onClose}>
-          تم
-        </Button>
-      }
-    >
-      {current ? (
         <div className="space-y-5">
           {current.lines?.length ? (
             <div className="rounded-2xl border border-(--a-line)">
@@ -208,16 +236,6 @@ export function OrderDrawer({ order, onClose }: { order: Order | null; onClose: 
             <dt className="text-(--a-muted)">العميل</dt>
             <dd className="font-medium">
               {current.customer}
-              {current.source === "store" && current.account === false ? (
-                <span className="ms-2 inline-block align-middle">
-                  <Badge tone="accent">بدون حساب</Badge>
-                </span>
-              ) : null}
-              {current.source === "store" && current.account === true ? (
-                <span className="ms-2 inline-block align-middle">
-                  <Badge tone="blue">بحساب</Badge>
-                </span>
-              ) : null}
             </dd>
             <dt className="text-(--a-muted)">المدينة</dt>
             <dd>
@@ -260,42 +278,137 @@ export function OrderDrawer({ order, onClose }: { order: Order | null; onClose: 
           <div className="grid gap-4 sm:grid-cols-2">
             <Select<OrderStatus>
               label="حالة الطلب"
-              value={current.status}
-              onChange={(status) => updateOrder(current.id, { status })}
+              value={shown.status}
+              onChange={(status) => change({ status })}
               options={(Object.keys(ORDER_STATUS) as OrderStatus[]).map((id) => [id, ORDER_STATUS[id].label])}
             />
             <Select<PaymentStatus>
               label="حالة الدفع"
-              value={current.paymentStatus}
-              onChange={(paymentStatus) => updateOrder(current.id, { paymentStatus })}
+              value={shown.paymentStatus}
+              onChange={(paymentStatus) => change({ paymentStatus })}
               options={(Object.keys(PAYMENT_STATUS) as PaymentStatus[]).map((id) => [id, PAYMENT_STATUS[id].label])}
             />
             <div className="sm:col-span-2">
               <Select
                 label="طريقة الشحن"
-                value={current.shippingMethod}
-                onChange={(shippingMethod) => updateOrder(current.id, { shippingMethod })}
+                value={shown.shippingMethod}
+                onChange={(shippingMethod) => change({ shippingMethod })}
                 options={ops.shipping.map((item) => [item.id, item.enabled ? item.nameAr : `${item.nameAr} (موقوفة)`])}
               />
             </div>
           </div>
           <p className="text-xs leading-6 text-(--a-muted)">بوليصة الشحن ورقم التتبع يتفعّلون بعد ربط شركة شحن. حاليًا ما فيه ربط مع أي مزود.</p>
         </div>
-      ) : null}
+  );
+}
+
+/** Order details in a drawer (used by the shop dashboard). */
+export function OrderDrawer({ order, onClose }: { order: Order | null; onClose: () => void }) {
+  const { orders } = useOps();
+  const current = order ? (orders.find((item) => item.id === order.id) ?? order) : null;
+  return (
+    <Drawer
+      open={current !== null}
+      onClose={onClose}
+      title={current ? `الطلب #${current.id}` : ""}
+      lead={current ? orderLead(current) : undefined}
+      footer={
+        <Button variant="primary" onClick={onClose}>
+          تم
+        </Button>
+      }
+    >
+      {current ? <OrderDetail current={current} /> : null}
     </Drawer>
+  );
+}
+
+/** One order on its own page, opened from any orders table. Edits stay as a draft until Save. */
+function OrderPage({ id }: { id: string }) {
+  const { orders, archivedOrders, updateOrder } = useOps();
+  const current = [...orders, ...archivedOrders].find((item) => item.id === id) ?? null;
+  const [draft, setDraft] = useState<OrderFields | null>(null);
+  const [justSaved, setJustSaved] = useState(false);
+  const base: OrderFields | null = current ? { status: current.status, paymentStatus: current.paymentStatus, shippingMethod: current.shippingMethod } : null;
+  const values = draft ?? base;
+  const dirty = !!(draft && base && (draft.status !== base.status || draft.paymentStatus !== base.paymentStatus || draft.shippingMethod !== base.shippingMethod));
+  const unsaved = useRef(false);
+  unsaved.current = dirty;
+  const saveRef = useRef(() => {});
+  useEffect(() => registerLeaveGuard(() => unsaved.current, { save: () => saveRef.current(), anySub: true }), []);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  function save() {
+    if (!current || !draft || !dirty) return;
+    const patch: Partial<OrderFields> = {};
+    if (draft.status !== current.status) patch.status = draft.status;
+    if (draft.paymentStatus !== current.paymentStatus) patch.paymentStatus = draft.paymentStatus;
+    if (draft.shippingMethod !== current.shippingMethod) patch.shippingMethod = draft.shippingMethod;
+    updateOrder(current.id, patch);
+    setDraft(null);
+    setJustSaved(true);
+  }
+
+  saveRef.current = save;
+
+  return (
+    <div className="space-y-6">
+      <PageHead
+        title={`الطلب #${id}`}
+        lead={dirty ? "فيه تعديلات غير محفوظة. اضغط حفظ عشان تتسجل." : current ? orderLead(current) : undefined}
+        actions={
+          current ? (
+            <Button variant="primary" icon={justSaved && !dirty ? Check : Save} onClick={save} disabled={!dirty}>
+              {justSaved && !dirty ? "تم الحفظ" : "حفظ"}
+            </Button>
+          ) : null
+        }
+      />
+      {current && values ? (
+        <Panel className="max-w-3xl p-5">
+          <OrderDetail
+            current={current}
+            draft={values}
+            onDraft={(patch) => {
+              setJustSaved(false);
+              setDraft({ ...values, ...patch });
+            }}
+          />
+        </Panel>
+      ) : (
+        <Panel>
+          <Empty icon={Inbox} title="ما لقينا هذا الطلب" lead="يمكن انحذف أو الرقم غلط. ارجع لقائمة الطلبات." />
+        </Panel>
+      )}
+    </div>
   );
 }
 
 type ShipFilter = "all" | ShipStage | "archived";
 
 export function Orders({ initialShip = "all" }: { initialShip?: ShipFilter }) {
+  const [sub, setSub] = useState(() => readHash().sub);
+  useEffect(() => onHashMove(() => setSub(readHash().sub)), []);
+  const orderId = sub?.startsWith("order-") ? sub.slice(6) : null;
+  if (orderId) return <OrderPage id={orderId} />;
+  return <OrdersList initialShip={initialShip} />;
+}
+
+function OrdersList({ initialShip }: { initialShip: ShipFilter }) {
   const { orders, archivedOrders, canArchiveOrders, ops } = useOps();
   const [ship, setShip] = useState<ShipFilter>(initialShip);
   const [payMethod, setPayMethod] = useState<"all" | Order["paymentMethod"]>("all");
   const [payStatus, setPayStatus] = useState<"all" | PaymentStatus>("all");
   const [method, setMethod] = useState("all");
   const [query, setQuery] = useState("");
-  const [viewing, setViewing] = useState<Order | null>(null);
   // "New orders" from the overview's quick actions arrives as #orders/new.
   const [onlyNew, setOnlyNew] = useState(() => readHash().view === "orders" && readHash().sub === "new");
 
@@ -366,13 +479,12 @@ export function Orders({ initialShip = "all" }: { initialShip?: ShipFilter }) {
 
       <Panel>
         {rows.length ? (
-          <OrdersTable orders={rows} onView={setViewing} archived={inArchive} />
+          <OrdersTable orders={rows} onView={openOrder} archived={inArchive} />
         ) : (
           <Empty icon={Inbox} title={inArchive ? "الأرشيف فاضي" : "ما فيه طلبات بهذي الفلاتر"} lead={inArchive ? "الطلبات اللي تحذفها من القائمة تنتقل هنا وتقدر تسترجعها." : "غيّر الفلتر أو امسح البحث لعرض كل الطلبات."} />
         )}
       </Panel>
 
-      <OrderDrawer order={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 }

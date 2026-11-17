@@ -25,8 +25,8 @@ export const PREVIEW = import.meta.env.DEV && import.meta.env.VITE_ADMIN_PREVIEW
 
 const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
 const DEMO_CUSTOMERS = [
-  ["c1", "أحمد", "العتيبي", "0501234567", "ahmed@example.com", 3, 2, "2450.00", 2],
-  ["c2", "سارة", "القحطاني", "0559876543", "sara@example.com", 1, 1, "899.00", 5],
+  ["c1", "أحمد", "العتيبي", "0501234567", "ahmed@example.com", 3, 2, "3233.00", 2],
+  ["c2", "سارة", "القحطاني", "0559876543", "sara@example.com", 2, 2, "1898.00", 5],
   ["c3", "خالد", "الشمري", "0533344455", "khaled@example.com", 0, 0, "0.00", 9],
 ].map(([id, firstName, lastName, phone, email, orders, addresses, spent, ago]) => ({
   id, firstName, lastName, phone, email, avatar: null, createdAt: day(Number(ago) + 20), lastLoginAt: day(Number(ago)), orders, addresses, spent,
@@ -36,7 +36,17 @@ const DEMO_CUSTOMERS = [
 function previewApi(path: string): unknown {
   if (path.startsWith("/admin/customers/")) {
     const id = decodeURIComponent(path.split("/")[3].split("?")[0]);
-    return { customer: DEMO_CUSTOMERS.find((row) => row.id === id) ?? DEMO_CUSTOMERS[0], addresses: [], orders: [] };
+    // The demo customers own some of the sample orders (same numbers), so their page can list them with products and shops.
+    const owned: Record<string, number[]> = { c1: [1048, 1045, 1042], c2: [1047, 1046] };
+    const orders = (owned[id] ?? []).map((number) => ({ number, status: "NEW", paymentStatus: "PENDING", paymentMethod: "COD", total: "0", placedAt: day(number - 1040), lines: 1 }));
+    const addresses =
+      id === "c2"
+        ? [
+            { id: "a1", label: "المنزل", zoneName: "المنطقة الوسطى", city: "الرياض", line1: "حي النرجس، شارع الأمير سلطان، مبنى 12", notes: "", isDefault: true },
+            { id: "a2", label: "العمل", zoneName: "المنطقة الوسطى", city: "الرياض", line1: "حي العليا، طريق الملك فهد، برج 4", notes: "الدور الثالث", isDefault: false },
+          ]
+        : [];
+    return { customer: DEMO_CUSTOMERS.find((row) => row.id === id) ?? DEMO_CUSTOMERS[0], addresses, orders };
   }
   if (path.startsWith("/admin/customers")) return { customers: DEMO_CUSTOMERS, total: DEMO_CUSTOMERS.length, guestOrders: 2 };
   throw new ApiError(0, "NO_API");
@@ -87,7 +97,7 @@ const MESSAGES: Record<string, string> = {
   INVALID_WHOLESALE_PRICE: "سعر الجملة لازم يكون رقمًا أكبر من صفر وأقل من سعر البيع الحالي.",
   CATEGORY_NOT_FOUND: "القسم غير موجود.",
   CATEGORY_ARCHIVED: "القسم مؤرشف. استرجعه أول أو اختر قسم ثاني.",
-  CATEGORY_TOO_DEEP: "الأقسام الجديدة تكون قسم رئيسي أو قسم فرعي داخله فقط.",
+  CATEGORY_TOO_DEEP: "المتجر فيه أقسام رئيسية فقط، فما تقدر تضيف قسم داخل قسم.",
   PARENT_ARCHIVED: "القسم الرئيسي مؤرشف. استرجعه أول.",
   STOCK_CHANGED: "الكمية تغيّرت (طلب جديد أو تعديل من مكان ثاني). حدّثنا الأرقام، أدخل الكمية مرة ثانية.",
   TOO_MANY_ATTEMPTS: "محاولات كثيرة. انتظر شوي وحاول مرة ثانية.",

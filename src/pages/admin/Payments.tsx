@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Banknote, CircleDollarSign, CreditCard, Inbox, Landmark, ShieldCheck, Undo2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { OrderDrawer, OrdersTable } from "./OrdersPage";
+import { OrdersTable, openOrder } from "./OrdersPage";
 import { PAYMENT_LABELS, PAYMENT_STATUS, useOps, type PaymentMethod, type PaymentMethodId } from "./ops";
 import type { Order, PaymentStatus } from "./orders";
 import { Badge, DemoNote, Empty, Field, NumberField, PageHead, Panel, Select, StatCard, Switch, Tabs, num, sar, type IconType } from "./ui";
@@ -12,7 +12,6 @@ export function Payments() {
   const { ops, orders, updatePayment, updateBank } = useOps();
   const [status, setStatus] = useState<"all" | PaymentStatus>("all");
   const [method, setMethod] = useState<"all" | Order["paymentMethod"]>("all");
-  const [viewing, setViewing] = useState<Order | null>(null);
 
   const byStatus = (value: PaymentStatus) => orders.filter((order) => order.paymentStatus === value);
   const total = (list: Order[]) => list.reduce((sum, order) => sum + order.total, 0);
@@ -74,10 +73,8 @@ export function Payments() {
             />
           </div>
         </div>
-        {rows.length ? <OrdersTable orders={rows} onView={setViewing} /> : <Empty icon={Inbox} title="ما فيه طلبات بهذي الحالة" lead="غيّر الفلتر لعرض طلبات ثانية." />}
+        {rows.length ? <OrdersTable orders={rows} onView={openOrder} /> : <Empty icon={Inbox} title="ما فيه طلبات بهذي الحالة" lead="غيّر الفلتر لعرض طلبات ثانية." />}
       </Panel>
-
-      <OrderDrawer order={viewing} onClose={() => setViewing(null)} />
     </div>
   );
 }

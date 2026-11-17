@@ -1,6 +1,7 @@
 import {
   BarChart3,
   Boxes,
+  ClipboardCheck,
   ClipboardList,
   CreditCard,
   LayoutDashboard,
@@ -26,6 +27,7 @@ export type View =
   | "products"
   | "departments"
   | "shops"
+  | "productRequests"
   | "inventory"
   | "offers"
   | "content"
@@ -55,6 +57,7 @@ export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
       { id: "products", label: "المنتجات", icon: Package },
       { id: "departments", label: "الأقسام", icon: LayoutGrid },
       { id: "shops", label: "المحلات", icon: Store },
+      { id: "productRequests", label: "طلبات المنتجات", icon: ClipboardCheck },
       { id: "inventory", label: "المخزون", icon: Boxes },
       { id: "offers", label: "العروض والخصومات", icon: Percent },
     ],
@@ -88,18 +91,25 @@ export function readHash(): { view: View; sub: string | null } {
 // prompt that asks whether to leave. Every move to another dashboard section goes through pushHash (links, sidebar,
 // breadcrumbs) or the browser's back and forward gestures; both ask first while the guard reports unsaved edits.
 let leaveGuard: (() => boolean) | null = null;
-let leavePrompt: ((proceed: () => void) => void) | null = null;
+// save: the page can save its edits, so the prompt offers "save and leave"; anySub: moving to another sub-page of the
+// same section (e.g. from an order back to the orders list) also counts as leaving.
+let leaveOptions: { save?: () => unknown; anySub?: boolean } = {};
+let leavePrompt: ((proceed: () => void, save?: () => unknown) => void) | null = null;
 let committedUrl = typeof window === "undefined" ? "" : window.location.href;
 let passing = false;
 
-export function registerLeaveGuard(hasUnsaved: () => boolean) {
+export function registerLeaveGuard(hasUnsaved: () => boolean, options: { save?: () => unknown; anySub?: boolean } = {}) {
   leaveGuard = hasUnsaved;
+  leaveOptions = options;
   return () => {
-    if (leaveGuard === hasUnsaved) leaveGuard = null;
+    if (leaveGuard === hasUnsaved) {
+      leaveGuard = null;
+      leaveOptions = {};
+    }
   };
 }
 
-export function registerLeavePrompt(prompt: (proceed: () => void) => void) {
+export function registerLeavePrompt(prompt: (proceed: () => void, save?: () => unknown) => void) {
   leavePrompt = prompt;
   return () => {
     if (leavePrompt === prompt) leavePrompt = null;
@@ -111,6 +121,11 @@ const viewOfHash = (hash: string): View => {
   return isView(view) ? view : "overview";
 };
 const viewOfUrl = (url: string) => viewOfHash(new URL(url, "http://x").hash);
+const placeOfUrl = (url: string) => {
+  const [view = "", sub = ""] = new URL(url, "http://x").hash.slice(1).split("/");
+  return `${isView(view) ? view : "overview"}/${sub}`;
+};
+const leavesPage = (from: string, to: string) => (leaveOptions.anySub ? placeOfUrl(from) !== placeOfUrl(to) : viewOfUrl(from) !== viewOfUrl(to));
 
 function pushHashNow(view: View, sub: string | null) {
   const hash = view === "overview" && !sub ? "" : `#${view}${sub ? `/${encodeURIComponent(sub)}` : ""}`;
@@ -124,8 +139,10 @@ function pushHashNow(view: View, sub: string | null) {
 }
 
 export function pushHash(view: View, sub: string | null = null) {
-  if (leaveGuard && leavePrompt && leaveGuard() && view !== readHash().view) {
-    leavePrompt(() => pushHashNow(view, sub));
+  const target = `${view}/${sub ? encodeURIComponent(sub) : ""}`;
+  const here = `${readHash().view}/${readHash().sub ? encodeURIComponent(readHash().sub as string) : ""}`;
+  if (leaveGuard && leavePrompt && leaveGuard() && (leaveOptions.anySub ? target !== here : view !== readHash().view)) {
+    leavePrompt(() => pushHashNow(view, sub), leaveOptions.save);
     return;
   }
   pushHashNow(view, sub);
@@ -137,9 +154,9 @@ if (typeof window !== "undefined") {
   window.addEventListener("popstate", () => {
     if (passing) return;
     const next = readHash();
-    if (leaveGuard && leavePrompt && leaveGuard() && viewOfUrl(committedUrl) !== next.view) {
+    if (leaveGuard && leavePrompt && leaveGuard() && leavesPage(committedUrl, window.location.href)) {
       window.history.pushState(null, "", committedUrl);
-      leavePrompt(() => pushHashNow(next.view, next.sub));
+      leavePrompt(() => pushHashNow(next.view, next.sub), leaveOptions.save);
       return;
     }
     committedUrl = window.location.href;

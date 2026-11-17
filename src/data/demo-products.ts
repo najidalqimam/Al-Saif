@@ -35,3 +35,25 @@ export const DEMO_PRODUCTS: DemoProduct[] = [
   { id: "demo-camera", nameAr: "كاميرا تصوير احترافية", nameEn: "Pro photo camera", categoryAr: "كاميرات", categoryEn: "Cameras", categoryId: "photo-cameras", price: 3999, compareAt: 4599, image: "/departments/photo-cameras.png" },
   { id: "demo-smartwatch", nameAr: "ساعة ذكية", nameEn: "Smartwatch", categoryAr: "ساعات ذكية", categoryEn: "Smartwatches", categoryId: "smartwatches", price: 699, compareAt: 899, image: "/departments/smartwatches.png" },
 ];
+
+/** Sample Urdu names for the demo products (preview text). Until a product has its own Urdu text, Urdu shows the Arabic. */
+export const DEMO_PRODUCTS_UR: Record<string, { name: string; category: string }> = {
+  "demo-laptop-business": { name: "14 انچ بزنس لیپ ٹاپ", category: "بزنس لیپ ٹاپس" },
+  "demo-laptop-student": { name: "15.6 انچ اسٹوڈنٹ لیپ ٹاپ", category: "اسٹوڈنٹ لیپ ٹاپس" },
+  "demo-laptop-creator": { name: "16 انچ کری ایٹر لیپ ٹاپ", category: "کری ایٹر لیپ ٹاپس" },
+  "demo-desktop": { name: "بزنس ڈیسک ٹاپ کمپیوٹر", category: "ڈیسک ٹاپ کمپیوٹرز" },
+  "demo-all-in-one": { name: "24 انچ آل اِن ون کمپیوٹر", category: "آل اِن ون" },
+  "demo-workstation": { name: "پروفیشنل ورک اسٹیشن", category: "ورک اسٹیشنز" },
+  "demo-portable-monitor": { name: "15.6 انچ پورٹیبل مانیٹر", category: "پورٹیبل مانیٹرز" },
+  "demo-keyboard": { name: "مکینیکل کی بورڈ", category: "کی بورڈز" },
+  "demo-mouse": { name: "وائرلیس ماؤس", category: "ماؤس" },
+  "demo-webcam": { name: "1080p ویب کیم", category: "ویب کیمز" },
+  "demo-ssd": { name: "1 ٹی بی ایس ایس ڈی", category: "ایس ایس ڈی ڈرائیوز" },
+  "demo-tablet": { name: "11 انچ ٹیبلیٹ", category: "ٹیبلیٹس" },
+  "demo-printer": { name: "کلر انک جیٹ پرنٹر", category: "انک جیٹ پرنٹرز" },
+  "demo-switch": { name: "8 پورٹ نیٹ ورک سوئچ", category: "نیٹ ورک سوئچز" },
+  "demo-ups": { name: "1500VA یو پی ایس", category: "یو پی ایس" },
+  "demo-tv": { name: "55 انچ 4K ٹی وی", category: "ٹی ویز" },
+  "demo-camera": { name: "پروفیشنل فوٹو کیمرہ", category: "کیمرے" },
+  "demo-smartwatch": { name: "اسمارٹ واچ", category: "اسمارٹ واچز" },
+};

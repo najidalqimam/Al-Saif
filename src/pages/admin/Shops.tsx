@@ -1,46 +1,32 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil, Plus, Store } from "lucide-react";
-import { apiMessage } from "@/lib/api";
 import { useSiteContent, type Shop } from "@/lib/site-content";
-import { pushHash } from "./nav";
-import { Badge, Button, DemoNote, Drawer, Empty, Field, IconButton, num, PageHead, Pager, Panel, rowOpen, usePager } from "./ui";
+import { onHashMove, pushHash, readHash } from "./nav";
+import { Products } from "./Products";
+import { ShopFormPage } from "./ShopForm";
+import { Badge, Button, DemoNote, Empty, IconButton, num, PageHead, Pager, Panel, rowOpen, usePager } from "./ui";
 
-/** Shops that list products on the platform: list, add and rename. No delete yet, and no seller accounts. */
+/** #shops, #shops/add (a new shop), #shops/<id> (its products) or #shops/<id>/edit (its details): each is its own page. */
 export function Shops() {
-  const { content, catalogue, shops, addShop, renameShop } = useSiteContent();
-  const [editing, setEditing] = useState<Shop | "new" | null>(null);
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+  const [sub, setSub] = useState(() => (readHash().view === "shops" ? readHash().sub : null));
+  useEffect(() => onHashMove(() => setSub(readHash().view === "shops" ? readHash().sub : null)), []);
+  if (sub === "add") return <ShopFormPage id={null} />;
+  if (sub?.endsWith("/edit")) return <ShopFormPage id={sub.slice(0, -5)} />;
+  // A shop opens onto its products, still inside the shops section.
+  if (sub) return <Products key={sub} shopScope={sub} />;
+  return <ShopsList />;
+}
+
+/** Shops that list products on the platform: list, add and edit. No delete yet, and no seller accounts. */
+function ShopsList() {
+  const { content, catalogue, shops } = useSiteContent();
   const saved = catalogue.source === "admin";
   const canEdit = !saved || catalogue.canEdit;
   const pager = usePager(shops);
   const countOf = (id: string) => content.products.filter((item) => item.shopId === id && !item.archived).length;
 
-  // The products list, filtered to this shop (#products/shop-<id>).
-  const openProducts = (shop: Shop) => pushHash("products", `shop-${shop.id}`);
-
-  function open(target: Shop | "new") {
-    setEditing(target);
-    setName(target === "new" ? "" : target.name);
-    setError("");
-  }
-
-  async function save() {
-    const clean = name.trim();
-    if (!clean || saving || !editing) return;
-    setSaving(true);
-    setError("");
-    try {
-      if (editing === "new") await addShop(clean);
-      else await renameShop(editing.id, clean);
-      setEditing(null);
-    } catch (failure) {
-      setError(apiMessage(failure));
-    } finally {
-      setSaving(false);
-    }
-  }
+  // The shop's own page (#shops/<id>): its details and products, without leaving the shops section.
+  const openProducts = (shop: Shop) => pushHash("shops", shop.id);
 
   return (
     <div className="space-y-6">
@@ -49,7 +35,7 @@ export function Shops() {
         lead="المحلات اللي تعرض منتجاتها في المنصة. تربط كل منتج بمحله من صفحة تعديل المنتج."
         actions={
           canEdit ? (
-            <Button variant="primary" icon={Plus} onClick={() => open("new")}>
+            <Button variant="primary" icon={Plus} onClick={() => pushHash("shops", "add")}>
               إضافة محل
             </Button>
           ) : null
@@ -76,36 +62,13 @@ export function Shops() {
                 <button type="button" onClick={() => openProducts(shop)} aria-label={`عرض منتجات ${shop.name}`} title="عرض منتجات المحل" className="cursor-pointer rounded-full transition hover:opacity-80">
                   <Badge>{num.format(countOf(shop.id))} منتج</Badge>
                 </button>
-                {canEdit ? <IconButton icon={Pencil} label="تعديل الاسم" onClick={() => open(shop)} /> : null}
+                {canEdit ? <IconButton icon={Pencil} label={`تعديل ${shop.name}`} onClick={() => pushHash("shops", `${shop.id}/edit`)} /> : null}
               </li>
             ))}
           </ul>
         )}
         <Pager pager={pager} />
       </Panel>
-
-      <Drawer
-        open={editing !== null}
-        onClose={() => setEditing(null)}
-        title={editing === "new" ? "إضافة محل" : "تعديل اسم المحل"}
-        footer={
-          <>
-            <Button onClick={() => setEditing(null)}>إلغاء</Button>
-            <Button variant="primary" onClick={save} disabled={!name.trim() || saving}>
-              {saving ? "جاري الحفظ…" : "حفظ"}
-            </Button>
-          </>
-        }
-      >
-        <div className="space-y-4">
-          <Field label="اسم المحل" value={name} onChange={setName} />
-          {error ? (
-            <p role="alert" className="text-sm text-(--a-danger)">
-              {error}
-            </p>
-          ) : null}
-        </div>
-      </Drawer>
     </div>
   );
 }

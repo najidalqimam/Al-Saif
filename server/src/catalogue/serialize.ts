@@ -41,14 +41,19 @@ export function publicProduct(product: ProductWithRelations) {
     slug: product.slug,
     nameAr: product.nameAr,
     nameEn: product.nameEn,
+    nameUr: product.nameUr,
     labelAr: product.labelAr,
     labelEn: product.labelEn,
+    labelUr: product.labelUr,
     descriptionAr: product.descriptionAr,
     descriptionEn: product.descriptionEn,
+    descriptionUr: product.descriptionUr,
     featuresAr: lines(product.featuresAr),
     featuresEn: lines(product.featuresEn),
+    featuresUr: lines(product.featuresUr),
     specsAr: specs(product.specsAr),
     specsEn: specs(product.specsEn),
+    specsUr: specs(product.specsUr),
     price: money(product.price)!,
     compareAtPrice: money(product.compareAtPrice),
     /** Optional per-piece wholesale price (from 5 pieces, signed-in customers); null when the listing has none. */
@@ -104,8 +109,10 @@ export function publicCategory(category: CategoryWithParent, level: number) {
     slug: category.slug,
     nameAr: category.nameAr,
     nameEn: category.nameEn,
+    nameUr: category.nameUr,
     descriptionAr: category.descriptionAr,
     descriptionEn: category.descriptionEn,
+    descriptionUr: category.descriptionUr,
     imageUrl: category.imageUrl,
     icon: category.icon,
     parentId: category.parent ? (category.parent.legacyId ?? category.parent.slug) : null,
@@ -122,6 +129,6 @@ export function adminCategory(category: CategoryWithParent, level: number) {
 
 export const shopOrder: Prisma.ShopOrderByWithRelationInput[] = [{ createdAt: "asc" }];
 
-export function adminShop(shop: Pick<Shop, "id" | "name">, products: number) {
-  return { id: shop.id, name: shop.name, products };
+export function adminShop(shop: Pick<Shop, "id" | "name" | "ownerName" | "phone" | "email" | "city" | "address" | "description">, products: number) {
+  return { id: shop.id, name: shop.name, ownerName: shop.ownerName, phone: shop.phone, email: shop.email, city: shop.city, address: shop.address, description: shop.description, products };
 }

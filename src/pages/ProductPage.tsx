@@ -49,15 +49,19 @@ export function ProductPage({ id }: { id: string }) {
   const wholesalePrice = wholesaleFor(row);
   // Copy saved from the dashboard wins; until then the built-in highlights and specs show.
   const builtIn = offerDetail(lang, product.id);
-  const savedFeatures = lang === "en" ? row?.featuresEn : row?.featuresAr;
-  const savedSpecs = lang === "en" ? row?.specsEn : row?.specsAr;
+  // English and Urdu copy is optional: where it is empty the Arabic copy is shown instead.
+  const pickList = <T,>(own: T[] | null | undefined, arabic: T[] | null | undefined) => (own && own.length ? own : (arabic ?? null));
+  const savedFeatures = lang === "en" ? pickList(row?.featuresEn, row?.featuresAr) : lang === "ur" ? pickList(row?.featuresUr, row?.featuresAr) : row?.featuresAr;
+  const ownSpecs = lang === "en" ? row?.specsEn : lang === "ur" ? row?.specsUr : null;
+  const savedSpecs = lang === "ar" ? row?.specsAr : pickList(ownSpecs, row?.specsAr);
   const detail = {
     features: savedFeatures ?? builtIn?.features ?? [],
-    specs: ((specs) => (lang === "ur" ? specsForUrdu(specs) : specs))(
+    specs: ((specs) => (lang === "ur" && !ownSpecs?.length ? specsForUrdu(specs) : specs))(
       savedSpecs ? savedSpecs.map(({ label, value }): [string, string] => [label, value]) : (builtIn?.specs ?? []),
     ),
   };
-  const description = ((lang === "en" ? row?.descriptionEn : row?.descriptionAr) ?? "").trim();
+  const ownDescription = (lang === "en" ? row?.descriptionEn : lang === "ur" ? row?.descriptionUr : "")?.trim();
+  const description = (ownDescription || row?.descriptionAr || "").trim();
   const categoryId = row ? productCategoryOf(row) : null;
   const trail = categoryId ? categoryTrail(categoryId) : [];
   const saved = product.compareAt - product.price;
@@ -150,7 +154,10 @@ export function ProductPage({ id }: { id: string }) {
             <h1 className="mt-2 text-2xl font-bold leading-snug text-navy sm:text-3xl">{name}</h1>
             {shop ? (
               <p className="mt-2 text-sm text-ink-soft">
-                {t.compare.shopLabel}: <span className="font-semibold text-navy">{shopLabel(shop.name, lang, t)}</span>
+                {t.compare.shopLabel}:{" "}
+                <Link href={`/${lang}/shops/${encodeURIComponent(shop.id)}`} className="font-semibold text-navy underline-offset-2 hover:text-brand-ink hover:underline">
+                  {shopLabel(shop.name, lang, t)}
+                </Link>
               </p>
             ) : null}
             {shop ? <CompareShops productId={product.id} /> : null}
