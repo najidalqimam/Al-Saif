@@ -76,6 +76,12 @@ const COMPARE_DEMO_SPECS: Record<Lang, ProductSpec[]> = {
     { label: "Colour", value: "Gray" },
     { label: "Condition", value: "New" },
   ],
+  ur: [
+    { label: "ڈسپلے", value: "11 انچ" },
+    { label: "اسٹوریج", value: "256 جی بی" },
+    { label: "رنگ", value: "سرمئی" },
+    { label: "حالت", value: "نیا" },
+  ],
 };
 // Urdu copy for the demo rows. Used only while a row still holds the untouched Arabic demo text, so edits made in
 // the dashboard always win. Shop names are brand names and stay as they are.
@@ -101,6 +107,13 @@ const LAPTOP_DEMO_SPECS: Record<Lang, ProductSpec[]> = {
     { label: "Storage", value: "512 GB" },
     { label: "Colour", value: "Gray" },
     { label: "Condition", value: "New" },
+  ],
+  ur: [
+    { label: "ڈسپلے", value: "15.6 انچ" },
+    { label: "میموری", value: "16 جی بی" },
+    { label: "اسٹوریج", value: "512 جی بی" },
+    { label: "رنگ", value: "سرمئی" },
+    { label: "حالت", value: "نیا" },
   ],
 };
 const LAPTOP_DEMO_OFFERS: Array<{ shopId: string; price: number }> = [
@@ -640,6 +653,8 @@ type ContentApi = {
   content: SiteContent;
   catalogue: CatalogueState;
   updateProduct: (id: string, patch: Partial<ProductRow>) => void;
+  /** Saves product fields immediately and waits for the server (or the local catalogue). Used by the edit form's Save button. */
+  saveProduct: (id: string, patch: Partial<ProductRow>) => Promise<void>;
   /** Shops listed in the dashboard: from the database when connected, otherwise this browser's own list (preview). */
   shops: Shop[];
   /** Adds a shop and resolves with its id once it is saved. */
@@ -665,6 +680,8 @@ type ContentApi = {
   /** Adds a department or subcategory and resolves with its id once it is saved. */
   addCategory: (input: NewCategory) => Promise<string>;
   updateAddedCategory: (id: string, patch: Partial<NewCategory>) => void;
+  /** Saves a category's editable fields immediately and waits for the server when connected. */
+  saveCategory: (id: string, patch: Partial<NewCategory> & { hidden?: boolean }) => Promise<void>;
   /** Moves a home section one place up (-1) or down (+1). */
   moveSection: (id: HomeBlock, step: -1 | 1) => void;
   addCustomSection: (kind: CustomSection["kind"]) => CustomSection["id"];
@@ -710,6 +727,27 @@ function loadLocalShops(): Shop[] {
   } catch {
     return PREVIEW ? [...COMPARE_DEMO_SHOPS] : [];
   }
+}
+
+/** Builds the admin PATCH body for a product. Blank names and a zero price are skipped (the server refuses them). */
+function productPatchBody(patch: Partial<ProductRow>): Record<string, unknown> {
+  const body: Record<string, unknown> = {};
+  if (patch.nameAr !== undefined && patch.nameAr.trim()) body.nameAr = patch.nameAr;
+  if (patch.nameEn !== undefined && patch.nameEn.trim()) body.nameEn = patch.nameEn;
+  if (patch.categoryAr !== undefined) body.labelAr = patch.categoryAr;
+  if (patch.categoryEn !== undefined) body.labelEn = patch.categoryEn;
+  if (patch.price !== undefined && patch.price > 0) body.price = patch.price;
+  if (patch.compareAt !== undefined) body.compareAtPrice = patch.compareAt;
+  if (patch.wholesalePrice !== undefined) body.wholesalePrice = patch.wholesalePrice;
+  if (patch.hidden !== undefined) body.isVisible = !patch.hidden;
+  if (patch.onHome !== undefined) body.showInHomeOffers = patch.onHome;
+  if (patch.categoryId !== undefined) body.categoryId = patch.categoryId || null;
+  if (patch.shopId !== undefined) body.shopId = patch.shopId || null;
+  if (patch.image?.startsWith("data:")) body.image = patch.image;
+  for (const key of ["descriptionAr", "descriptionEn", "featuresAr", "featuresEn", "specsAr", "specsEn"] as const) {
+    if (patch[key] !== undefined) body[key] = patch[key];
+  }
+  return body;
 }
 
 const SiteContentContext = createContext<ContentApi | null>(null);
@@ -873,24 +911,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         return;
       }
       setRemote((current) => current && { ...current, products: current.products.map((item) => (item.id === id ? { ...item, ...patch, id: item.id } : item)) });
-      const body: Record<string, unknown> = {};
-      // Blank names and a zero price are not saved (the server refuses them); they stay on screen until fixed.
-      if (patch.nameAr !== undefined && patch.nameAr.trim()) body.nameAr = patch.nameAr;
-      if (patch.nameEn !== undefined && patch.nameEn.trim()) body.nameEn = patch.nameEn;
-      if (patch.categoryAr !== undefined) body.labelAr = patch.categoryAr;
-      if (patch.categoryEn !== undefined) body.labelEn = patch.categoryEn;
-      if (patch.price !== undefined && patch.price > 0) body.price = patch.price;
-      if (patch.compareAt !== undefined) body.compareAtPrice = patch.compareAt;
-      // Saved by the server, which checks it against the selling price; an empty value is null, never zero.
-      if (patch.wholesalePrice !== undefined) body.wholesalePrice = patch.wholesalePrice;
-      if (patch.hidden !== undefined) body.isVisible = !patch.hidden;
-      if (patch.onHome !== undefined) body.showInHomeOffers = patch.onHome;
-      if (patch.categoryId !== undefined) body.categoryId = patch.categoryId || null;
-      if (patch.shopId !== undefined) body.shopId = patch.shopId || null;
-      if (patch.image?.startsWith("data:")) body.image = patch.image;
-      for (const key of ["descriptionAr", "descriptionEn", "featuresAr", "featuresEn", "specsAr", "specsEn"] as const) {
-        if (patch[key] !== undefined) body[key] = patch[key];
-      }
+      const body = productPatchBody(patch);
       const immediate = patch.hidden !== undefined || patch.onHome !== undefined || patch.categoryId !== undefined || patch.shopId !== undefined || body.image !== undefined;
       if (Object.keys(body).length) schedule(`product:${id}`, body, sendProduct(id), immediate ? 0 : 600);
       if (patch.archived !== undefined) {
@@ -899,6 +920,26 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
           .then((result) => applyProduct(result.product))
           .catch(fail);
       }
+    },
+    async saveProduct(id, patch) {
+      if (!admin) {
+        setContent((current) => ({
+          ...current,
+          products: current.products.map((item) => (item.id === id ? { ...item, ...patch, id: item.id } : item)),
+        }));
+        return;
+      }
+      // Drop any typing debounce for this product so Save is the only write.
+      const pendingKey = `product:${id}`;
+      const queued = pending.current.get(pendingKey);
+      if (queued) {
+        window.clearTimeout(queued.timer);
+        pending.current.delete(pendingKey);
+      }
+      setRemote((current) => current && { ...current, products: current.products.map((item) => (item.id === id ? { ...item, ...patch, id: item.id } : item)) });
+      const body = productPatchBody(patch);
+      if (!Object.keys(body).length) return;
+      await track(sendProduct(id)(body));
     },
     shops: admin ? remote.shops : localShops,
     async addShop(name) {
@@ -1051,6 +1092,41 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         addedCategories: current.addedCategories.map((item) =>
           item.id === id ? { ...item, ...patch, featured: item.level === 1 && (patch.featured ?? item.featured), parentId: item.parentId } : item,
         ),
+      }));
+    },
+    async saveCategory(id, patch) {
+      if (admin) {
+        const pendingKey = `category:${id}`;
+        const queued = pending.current.get(pendingKey);
+        if (queued) {
+          window.clearTimeout(queued.timer);
+          pending.current.delete(pendingKey);
+        }
+        patchCategoryLocally(id, {
+          ...patch,
+          ...(patch.hidden !== undefined ? { isVisible: !patch.hidden } : {}),
+        });
+        const body: Record<string, unknown> = {};
+        if (patch.nameAr !== undefined && patch.nameAr.trim()) body.nameAr = patch.nameAr;
+        if (patch.nameEn !== undefined && patch.nameEn.trim()) body.nameEn = patch.nameEn;
+        if (patch.descriptionAr !== undefined) body.descriptionAr = patch.descriptionAr;
+        if (patch.descriptionEn !== undefined) body.descriptionEn = patch.descriptionEn;
+        if (patch.featured !== undefined) body.isFeatured = patch.featured;
+        if (patch.hidden !== undefined) body.isVisible = !patch.hidden;
+        if (Object.keys(body).length) await track(sendCategory(id)(body));
+        return;
+      }
+      setContent((current) => ({
+        ...current,
+        addedCategories: current.addedCategories.map((item) =>
+          item.id === id ? { ...item, ...patch, featured: item.level === 1 && (patch.featured ?? item.featured), parentId: item.parentId } : item,
+        ),
+        categoryHidden:
+          patch.hidden === undefined
+            ? current.categoryHidden
+            : patch.hidden
+              ? [...new Set([...current.categoryHidden, id])]
+              : current.categoryHidden.filter((value) => value !== id),
       }));
     },
     moveSection(id, step) {

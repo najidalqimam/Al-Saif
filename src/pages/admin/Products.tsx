@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Archive, ArchiveRestore, ChevronDown, ExternalLink, ImagePlus, PackageSearch, Pencil, Plus, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Archive, ArchiveRestore, Check, ChevronDown, ExternalLink, ImagePlus, PackageSearch, Pencil, Plus, Save, Trash2, X } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
 import { categoryById, categoryTrail } from "@/lib/catalog";
 import { apiMessage } from "@/lib/api";
@@ -8,14 +8,13 @@ import { useSiteContent, type NewProduct, type ProductRow, type ProductSpec, typ
 import { cn } from "@/lib/utils";
 import { validWholesale } from "@/lib/wholesale";
 import { departmentTree, productCategoryOf, productInCategory } from "@/lib/product-categories";
-import { onHashMove, pushHash, readHash, replaceHash } from "./nav";
+import { onHashMove, pushHash, readHash, registerLeaveGuard, replaceHash } from "./nav";
 import { Badge, BilingualField, Button, Confirm, control, Drawer, Empty, Field, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, SearchBox, Select, Switch, Tabs, usePager } from "./ui";
 
 type Filter = "all" | "live" | "hidden" | "archived";
 
 export function Products() {
-  const { content, updateProduct, shops, catalogue } = useSiteContent();
-  const connected = catalogue.source === "admin";
+  const { content, updateProduct, shops } = useSiteContent();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   // The departments page links here as #products/<category>, optionally with /add or /edit-<id>.
@@ -529,40 +528,43 @@ function AddProduct({ open, onClose, onAdded, defaultCategory }: { open: boolean
 type Lang = "ar" | "en";
 const LANGS: Lang[] = ["ar", "en"];
 
-/** Product page copy: description, highlights and the spec table, in both languages. */
-function ProductPageFields({ product }: { product: ProductRow }) {
-  const { updateProduct } = useSiteContent();
-  // The lists are drafts kept here, so a half-typed row survives the server's answer; only complete rows are saved.
+/** Product page copy drafts: description, highlights and the spec table. Only complete rows are kept for Save. */
+function ProductPageFields({
+  draft,
+  onChange,
+}: {
+  draft: ProductRow;
+  onChange: (patch: Partial<ProductRow>) => void;
+}) {
   const [features, setFeatures] = useState<Record<Lang, string[]>>(() => ({
-    ar: product.featuresAr ?? offerDetail("ar", product.id)?.features ?? [],
-    en: product.featuresEn ?? offerDetail("en", product.id)?.features ?? [],
+    ar: draft.featuresAr ?? offerDetail("ar", draft.id)?.features ?? [],
+    en: draft.featuresEn ?? offerDetail("en", draft.id)?.features ?? [],
   }));
   const [specs, setSpecs] = useState<Record<Lang, ProductSpec[]>>(() => ({
-    ar: product.specsAr ?? offerDetail("ar", product.id)?.specs.map(([label, value]) => ({ label, value })) ?? [],
-    en: product.specsEn ?? offerDetail("en", product.id)?.specs.map(([label, value]) => ({ label, value })) ?? [],
+    ar: draft.specsAr ?? offerDetail("ar", draft.id)?.specs.map(([label, value]) => ({ label, value })) ?? [],
+    en: draft.specsEn ?? offerDetail("en", draft.id)?.specs.map(([label, value]) => ({ label, value })) ?? [],
   }));
 
-  function saveFeatures(lang: Lang, list: string[]) {
+  function changeFeatures(lang: Lang, list: string[]) {
     setFeatures((current) => ({ ...current, [lang]: list }));
     const clean = list.map((item) => item.trim()).filter(Boolean);
-    updateProduct(product.id, lang === "ar" ? { featuresAr: clean } : { featuresEn: clean });
+    onChange(lang === "ar" ? { featuresAr: clean } : { featuresEn: clean });
   }
 
-  function saveSpecs(lang: Lang, list: ProductSpec[]) {
+  function changeSpecs(lang: Lang, list: ProductSpec[]) {
     setSpecs((current) => ({ ...current, [lang]: list }));
     const clean = list.map((row) => ({ label: row.label.trim(), value: row.value.trim() })).filter((row) => row.label && row.value);
-    updateProduct(product.id, lang === "ar" ? { specsAr: clean } : { specsEn: clean });
+    onChange(lang === "ar" ? { specsAr: clean } : { specsEn: clean });
   }
 
   return (
     <div className="space-y-5">
-
       <BilingualField
         label="وصف المنتج (اختياري)"
-        ar={product.descriptionAr ?? ""}
-        en={product.descriptionEn ?? ""}
-        onAr={(value) => updateProduct(product.id, { descriptionAr: value })}
-        onEn={(value) => updateProduct(product.id, { descriptionEn: value })}
+        ar={draft.descriptionAr ?? ""}
+        en={draft.descriptionEn ?? ""}
+        onAr={(descriptionAr) => onChange({ descriptionAr })}
+        onEn={(descriptionEn) => onChange({ descriptionEn })}
         multiline
       />
 
@@ -576,11 +578,11 @@ function ProductPageFields({ product }: { product: ProductRow }) {
                 <div key={index} className="flex items-center gap-2">
                   <input
                     value={item}
-                    onChange={(event) => saveFeatures(lang, features[lang].map((old, at) => (at === index ? event.target.value : old)))}
+                    onChange={(event) => changeFeatures(lang, features[lang].map((old, at) => (at === index ? event.target.value : old)))}
                     placeholder={lang === "ar" ? "مثال: ضمان محلي لمدة سنتين" : "e.g. Two-year local warranty"}
                     className={cn(control, "h-10")}
                   />
-                  <IconButton icon={Trash2} tone="danger" label="حذف السطر" onClick={() => saveFeatures(lang, features[lang].filter((_, at) => at !== index))} />
+                  <IconButton icon={Trash2} tone="danger" label="حذف السطر" onClick={() => changeFeatures(lang, features[lang].filter((_, at) => at !== index))} />
                 </div>
               ))}
               <Button icon={Plus} onClick={() => setFeatures((current) => ({ ...current, [lang]: [...current[lang], ""] }))}>
@@ -601,19 +603,19 @@ function ProductPageFields({ product }: { product: ProductRow }) {
                 <div key={index} className="flex items-center gap-2">
                   <input
                     value={row.label}
-                    onChange={(event) => saveSpecs(lang, specs[lang].map((old, at) => (at === index ? { ...old, label: event.target.value } : old)))}
+                    onChange={(event) => changeSpecs(lang, specs[lang].map((old, at) => (at === index ? { ...old, label: event.target.value } : old)))}
                     placeholder={lang === "ar" ? "البند" : "Label"}
                     aria-label={lang === "ar" ? "البند" : "Label"}
                     className={cn(control, "h-10 w-2/5")}
                   />
                   <input
                     value={row.value}
-                    onChange={(event) => saveSpecs(lang, specs[lang].map((old, at) => (at === index ? { ...old, value: event.target.value } : old)))}
+                    onChange={(event) => changeSpecs(lang, specs[lang].map((old, at) => (at === index ? { ...old, value: event.target.value } : old)))}
                     placeholder={lang === "ar" ? "القيمة" : "Value"}
                     aria-label={lang === "ar" ? "القيمة" : "Value"}
                     className={cn(control, "h-10 flex-1")}
                   />
-                  <IconButton icon={Trash2} tone="danger" label="حذف الصف" onClick={() => saveSpecs(lang, specs[lang].filter((_, at) => at !== index))} />
+                  <IconButton icon={Trash2} tone="danger" label="حذف الصف" onClick={() => changeSpecs(lang, specs[lang].filter((_, at) => at !== index))} />
                 </div>
               ))}
               <Button icon={Plus} onClick={() => setSpecs((current) => ({ ...current, [lang]: [...current[lang], { label: "", value: "" }] }))}>
@@ -641,63 +643,170 @@ function LangTag({ lang }: { lang: Lang }) {
   );
 }
 
-/** Full-page product editor: basic details and visibility, the photo, and the product page copy. */
+/** Fields the edit form can change; used to detect unsaved drafts. */
+const EDIT_KEYS = [
+  "nameAr",
+  "nameEn",
+  "categoryAr",
+  "categoryEn",
+  "categoryId",
+  "shopId",
+  "price",
+  "compareAt",
+  "wholesalePrice",
+  "hidden",
+  "onHome",
+  "image",
+  "descriptionAr",
+  "descriptionEn",
+  "featuresAr",
+  "featuresEn",
+  "specsAr",
+  "specsEn",
+] as const;
+
+function productDraftDirty(draft: ProductRow, saved: ProductRow) {
+  return EDIT_KEYS.some((key) => JSON.stringify(draft[key] ?? null) !== JSON.stringify(saved[key] ?? null));
+}
+
+/** Full-page product editor: edits stay as a draft until Save. */
 function ProductEditor({ product }: { product: ProductRow }) {
-  const { content, updateProduct, shops, catalogue } = useSiteContent();
+  const { content, saveProduct, shops, catalogue } = useSiteContent();
   const connected = catalogue.source === "admin";
-  const update = (patch: Partial<ProductRow>) => updateProduct(product.id, patch);
+  const [draft, setDraft] = useState(product);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [justSaved, setJustSaved] = useState(false);
+  const dirty = useMemo(() => productDraftDirty(draft, product), [draft, product]);
+  const unsaved = useRef(false);
+  unsaved.current = dirty;
+
+  useEffect(() => {
+    setDraft(product);
+    setError("");
+    setJustSaved(false);
+  }, [product.id]);
+
+  // After a successful save the parent product updates from the server; keep the draft in sync while clean.
+  useEffect(() => {
+    if (!dirty) setDraft(product);
+  }, [product, dirty]);
+
+  useEffect(() => registerLeaveGuard(() => unsaved.current), []);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
+
+  const patch = (next: Partial<ProductRow>) => {
+    setJustSaved(false);
+    setDraft((current) => ({ ...current, ...next }));
+  };
+
+  async function save() {
+    if (!dirty || saving) return;
+    if (!draft.nameAr.trim() || !draft.nameEn.trim() || !(draft.price > 0)) {
+      setError("الاسم بالعربي والإنجليزي والسعر مطلوبة قبل الحفظ.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await saveProduct(product.id, {
+        nameAr: draft.nameAr.trim(),
+        nameEn: draft.nameEn.trim(),
+        categoryAr: draft.categoryAr,
+        categoryEn: draft.categoryEn,
+        categoryId: draft.categoryId,
+        shopId: draft.shopId ?? null,
+        price: draft.price,
+        compareAt: draft.compareAt > draft.price ? draft.compareAt : draft.price,
+        wholesalePrice: validWholesale({ price: draft.price, wholesalePrice: draft.wholesalePrice }),
+        hidden: draft.hidden,
+        onHome: draft.onHome,
+        image: draft.image,
+        descriptionAr: draft.descriptionAr ?? "",
+        descriptionEn: draft.descriptionEn ?? "",
+        featuresAr: draft.featuresAr ?? null,
+        featuresEn: draft.featuresEn ?? null,
+        specsAr: draft.specsAr ?? null,
+        specsEn: draft.specsEn ?? null,
+      });
+      setJustSaved(true);
+    } catch (failure) {
+      setError(apiMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  }
 
   return (
     <div className="space-y-6">
       <PageHead
         title={`تعديل: ${product.nameAr}`}
-        lead="التعديل يتحفظ تلقائيًا ويظهر على الموقع."
+        lead={dirty ? "فيه تعديلات غير محفوظة. اضغط حفظ عشان تظهر على الموقع." : "عدّل البيانات ثم اضغط حفظ."}
         actions={
-          <a
-            href={`/ar/p/${encodeURIComponent(product.id)}`}
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex h-10 items-center gap-2 rounded-xl border border-(--a-line) bg-(--a-surface) px-4 text-sm font-medium hover:bg-(--a-surface-2)"
-          >
-            <ExternalLink className="size-4" />
-            عرض صفحة المنتج
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <a
+              href={`/ar/p/${encodeURIComponent(product.id)}`}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex h-10 items-center gap-2 rounded-xl border border-(--a-line) bg-(--a-surface) px-4 text-sm font-medium hover:bg-(--a-surface-2)"
+            >
+              <ExternalLink className="size-4" />
+              عرض صفحة المنتج
+            </a>
+            <Button variant="primary" icon={justSaved && !dirty ? Check : Save} onClick={save} disabled={!dirty || saving}>
+              {saving ? "جاري الحفظ…" : justSaved && !dirty ? "تم الحفظ" : "حفظ"}
+            </Button>
+          </div>
         }
       />
+
+      {error ? (
+        <p role="alert" className="rounded-xl border border-(--a-danger)/30 px-4 py-3 text-sm text-(--a-danger)">
+          {error}
+        </p>
+      ) : null}
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
         <div className="min-w-0 space-y-6">
           <Panel title="البيانات الأساسية">
             <div className="space-y-5 p-5">
-              <BilingualField label="اسم المنتج" ar={product.nameAr} en={product.nameEn} onAr={(nameAr) => update({ nameAr })} onEn={(nameEn) => update({ nameEn })} />
+              <BilingualField label="اسم المنتج" ar={draft.nameAr} en={draft.nameEn} onAr={(nameAr) => patch({ nameAr })} onEn={(nameEn) => patch({ nameEn })} />
               <Select
                 label="القسم في المتجر"
-                value={productCategoryOf(product) ?? ""}
-                onChange={(categoryId) => update({ categoryId })}
+                value={productCategoryOf(draft) ?? ""}
+                onChange={(categoryId) => patch({ categoryId })}
                 options={[
-                  ...(productCategoryOf(product) ? [] : ([["", "بدون قسم"]] as Array<[string, string]>)),
+                  ...(productCategoryOf(draft) ? [] : ([["", "بدون قسم"]] as Array<[string, string]>)),
                   ...departmentTree(content.categoryHidden).map((item): [string, string] => [item.id, `${"\u00a0\u00a0\u00a0".repeat(item.level - 1)}${item.nameAr}`]),
                 ]}
               />
-              <Select label="المحل" value={product.shopId ?? ""} onChange={(shopId) => update({ shopId: shopId || null })} options={shopOptions(shops, product.shopId)} />
+              <Select label="المحل" value={draft.shopId ?? ""} onChange={(shopId) => patch({ shopId: shopId || null })} options={shopOptions(shops, draft.shopId)} />
               <BilingualField
                 label="اسم القسم الظاهر على المنتج"
-                ar={product.categoryAr}
-                en={product.categoryEn}
-                onAr={(categoryAr) => update({ categoryAr })}
-                onEn={(categoryEn) => update({ categoryEn })}
+                ar={draft.categoryAr}
+                en={draft.categoryEn}
+                onAr={(categoryAr) => patch({ categoryAr })}
+                onEn={(categoryEn) => patch({ categoryEn })}
               />
               <div className="grid gap-3 sm:grid-cols-2">
-                <PriceField label="السعر (ر.س)" value={product.price} onChange={(price) => update({ price })} />
-                <WholesaleField value={product.wholesalePrice} price={product.price} hasShop={Boolean(product.shopId)} connected={connected} onChange={(wholesalePrice) => update({ wholesalePrice })} />
-                <PriceField label="السعر قبل الخصم (ر.س)" value={product.compareAt} onChange={(compareAt) => update({ compareAt })} />
+                <PriceField label="السعر (ر.س)" value={draft.price} onChange={(price) => patch({ price })} />
+                <WholesaleField key={product.id} value={draft.wholesalePrice} price={draft.price} hasShop={Boolean(draft.shopId)} connected={connected} onChange={(wholesalePrice) => patch({ wholesalePrice })} />
+                <PriceField label="السعر قبل الخصم (ر.س)" value={draft.compareAt} onChange={(compareAt) => patch({ compareAt })} />
               </div>
             </div>
           </Panel>
 
           <Panel title="صفحة المنتج" lead="اللي يظهر للعميل لما يفتح صفحة المنتج. الأسطر الفاضية ما تتحفظ.">
             <div className="p-5">
-              <ProductPageFields key={product.id} product={product} />
+              <ProductPageFields key={product.id} draft={draft} onChange={patch} />
             </div>
           </Panel>
         </div>
@@ -706,18 +815,23 @@ function ProductEditor({ product }: { product: ProductRow }) {
           <Panel title="الصورة">
             <div className="grid place-items-center gap-3 p-5">
               <div className="grid w-full place-items-center rounded-2xl bg-(--a-surface-2) py-6">
-                <ProductArt id={product.id} className="size-40" />
+                {draft.image?.startsWith("data:") ? <img src={draft.image} alt="" className="size-40 object-contain" /> : <ProductArt id={product.id} className="size-40" />}
               </div>
-              <ImagePicker label={product.image || !product.source ? "تغيير الصورة" : "إضافة صورة"} onPick={(image) => update({ image })} />
+              <ImagePicker label={draft.image || !product.source ? "تغيير الصورة" : "إضافة صورة"} onPick={(image) => patch({ image })} />
               <p className="text-center text-xs leading-6 text-(--a-muted)">PNG أو JPG أو WebP. الصورة تتصغّر تلقائيًا، وأفضل تكون بخلفية بيضاء أو شفافة.</p>
             </div>
           </Panel>
           <Panel title="الظهور">
             <div className="space-y-3 p-5">
-              <ToggleRow label="معروض في المتجر" checked={!product.hidden} onChange={(next) => update({ hidden: !next })} />
-              <ToggleRow label="في عروض الصفحة الرئيسية" checked={product.onHome} disabled={product.hidden} onChange={(onHome) => update({ onHome })} />
+              <ToggleRow label="معروض في المتجر" checked={!draft.hidden} onChange={(next) => patch({ hidden: !next })} />
+              <ToggleRow label="في عروض الصفحة الرئيسية" checked={draft.onHome} disabled={draft.hidden} onChange={(onHome) => patch({ onHome })} />
             </div>
           </Panel>
+          <div className="sticky bottom-4">
+            <Button variant="primary" icon={justSaved && !dirty ? Check : Save} onClick={save} disabled={!dirty || saving} className="w-full">
+              {saving ? "جاري الحفظ…" : justSaved && !dirty ? "تم الحفظ" : "حفظ التعديلات"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

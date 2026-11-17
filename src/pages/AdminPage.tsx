@@ -11,7 +11,7 @@ import { Customers } from "./admin/Customers";
 import { crumbsFor } from "./admin/crumbs";
 import { Departments } from "./admin/Departments";
 import { Inventory } from "./admin/Inventory";
-import { NAV_GROUPS, NAV_ITEMS, onHashMove, pushHash, readHash, registerLeavePrompt, type View } from "./admin/nav";
+import { NAV_GROUPS, onHashMove, pushHash, readHash, registerLeavePrompt, type View } from "./admin/nav";
 import { Offers } from "./admin/Offers";
 import { OpsProvider } from "./admin/ops";
 import { Orders } from "./admin/OrdersPage";
@@ -228,7 +228,6 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
   const [leaving, setLeaving] = useState<(() => void) | null>(null);
   useEffect(() => registerLeavePrompt((proceed) => setLeaving(() => proceed)), []);
   const [menuOpen, setMenuOpen] = useState(false);
-  const current = NAV_ITEMS.find((item) => item.id === view) ?? NAV_ITEMS[0];
   const dark = theme === "dark";
 
   useEffect(() => {

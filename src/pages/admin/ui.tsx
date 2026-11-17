@@ -571,10 +571,10 @@ export function usePager<T>(items: readonly T[], resetKey: unknown = "") {
   return { rows: items.slice((current - 1) * size, current * size), page: current, pages, size, total: items.length, setPage, setSize };
 }
 
-export type Pager = ReturnType<typeof usePager<never>>;
+export type Pager<T = unknown> = ReturnType<typeof usePager<T>>;
 
 /** Page controls under a list: where you are, previous and next, and how many rows each page shows. Hidden while everything fits on one page. */
-export function Pager({ pager }: { pager: Pager }) {
+export function Pager({ pager }: { pager: Pager<unknown> }) {
   if (pager.total <= PAGE_SIZE) return null;
   const from = (pager.page - 1) * pager.size + 1;
   const to = Math.min(pager.total, pager.page * pager.size);

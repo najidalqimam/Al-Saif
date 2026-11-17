@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
 import { useTheme } from "next-themes";
 import {
@@ -8,6 +8,7 @@ import {
   ChevronUp,
   Megaphone,
   Plus,
+  Save,
   ShoppingBag,
   Trash2,
   Upload,
@@ -475,11 +476,12 @@ function SectionTile({ card, position, onUp, onDown }: { card: OrderedCard; posi
   );
 }
 
-/** Edits a section added from the dashboard: its copy, where the button goes, or which products it shows. */
+/** Edits a section added from the dashboard. Changes stay as a draft until Save. */
 function CustomEditor({ id, onClose }: { id: string | null; onClose: () => void }) {
   const { content, updateCustomSection, updateCustomCopy, removeCustomSection } = useSiteContent();
   const [removing, setRemoving] = useState(false);
-  const section = content.customSections.find((item) => item.id === id) ?? null;
+  const saved = content.customSections.find((item) => item.id === id) ?? null;
+  const [draft, setDraft] = useState<CustomSection | null>(null);
   const products = content.products.filter((item) => !item.archived);
   const links: Array<[string, string]> = [
     ["/offers", "صفحة العروض"],
@@ -487,73 +489,94 @@ function CustomEditor({ id, onClose }: { id: string | null; onClose: () => void 
     ["/favorites", "المفضلة"],
     ...rootDepartments(content.categoryHidden).map((item): [string, string] => [`/c/${item.slug}`, `قسم ${item.nameAr}`]),
   ];
+
+  useEffect(() => {
+    setDraft(saved ? structuredClone(saved) : null);
+  }, [saved]);
+
+  const dirty = useMemo(() => (saved && draft ? JSON.stringify(saved) !== JSON.stringify(draft) : false), [saved, draft]);
+
+  function save() {
+    if (!saved || !draft || !dirty) return;
+    updateCustomSection(saved.id, {
+      hidden: draft.hidden,
+      link: draft.link,
+      productIds: draft.productIds,
+    });
+    updateCustomCopy(saved.id, "ar", draft.ar);
+    updateCustomCopy(saved.id, "en", draft.en);
+    onClose();
+  }
+
   const copyField = (field: keyof CustomSection["ar"], label: string, multiline = false) =>
-    section ? (
+    draft ? (
       <BilingualField
         label={label}
-        ar={section.ar[field]}
-        en={section.en[field]}
+        ar={draft.ar[field]}
+        en={draft.en[field]}
         multiline={multiline}
-        onAr={(value) => updateCustomCopy(section.id, "ar", { [field]: value })}
-        onEn={(value) => updateCustomCopy(section.id, "en", { [field]: value })}
+        onAr={(value) => setDraft({ ...draft, ar: { ...draft.ar, [field]: value } })}
+        onEn={(value) => setDraft({ ...draft, en: { ...draft.en, [field]: value } })}
       />
     ) : null;
 
   return (
     <>
       <Drawer
-        open={section !== null}
+        open={draft !== null}
         onClose={onClose}
-        title={section ? (section.kind === "banner" ? "قسم إعلان" : "قسم منتجات مختارة") : ""}
-        lead="قسم مضاف من اللوحة. التعديل يتحفظ ويظهر في الصفحة الرئيسية مباشرة."
+        title={draft ? (draft.kind === "banner" ? "قسم إعلان" : "قسم منتجات مختارة") : ""}
+        lead="عدّل البيانات ثم اضغط حفظ عشان تظهر في الصفحة الرئيسية."
         footer={
-          section ? (
+          draft ? (
             <>
               <Button variant="danger" icon={Trash2} onClick={() => setRemoving(true)}>
                 حذف القسم
               </Button>
-              <Button variant="primary" onClick={onClose}>
-                تم
+              <Button onClick={onClose}>إلغاء</Button>
+              <Button variant="primary" icon={Save} onClick={save} disabled={!dirty}>
+                حفظ
               </Button>
             </>
           ) : null
         }
       >
-        {section ? (
+        {draft ? (
           <div className="space-y-5">
             <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-(--a-line) p-4">
               <span className="text-sm">القسم ظاهر في الصفحة الرئيسية</span>
-              <Switch checked={!section.hidden} label="إظهار القسم" onChange={(next) => updateCustomSection(section.id, { hidden: !next })} />
+              <Switch checked={!draft.hidden} label="إظهار القسم" onChange={(next) => setDraft({ ...draft, hidden: !next })} />
             </label>
             {copyField("eyebrow", "السطر الصغير")}
             {copyField("title", "العنوان")}
             {copyField("lead", "الوصف", true)}
-            {section.kind === "banner" ? (
+            {draft.kind === "banner" ? (
               <>
                 {copyField("action", "نص الزر")}
                 <Select
                   label="الزر يودّي على"
-                  value={links.some(([value]) => value === section.link) ? section.link : "/offers"}
-                  onChange={(link) => updateCustomSection(section.id, { link })}
+                  value={links.some(([value]) => value === draft.link) ? draft.link : "/offers"}
+                  onChange={(link) => setDraft({ ...draft, link })}
                   options={links}
                 />
               </>
             ) : (
               <fieldset>
                 <legend className="mb-2 text-xs font-medium text-(--a-muted)">
-                  المنتجات ({num.format(section.productIds.length)} مختار) · القسم ما يظهر في الموقع لو ما فيه منتجات
+                  المنتجات ({num.format(draft.productIds.length)} مختار) · القسم ما يظهر في الموقع لو ما فيه منتجات
                 </legend>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {products.map((item) => {
-                    const picked = section.productIds.includes(item.id);
+                    const picked = draft.productIds.includes(item.id);
                     return (
                       <button
                         key={item.id}
                         type="button"
                         aria-pressed={picked}
                         onClick={() =>
-                          updateCustomSection(section.id, {
-                            productIds: picked ? section.productIds.filter((value) => value !== item.id) : [...section.productIds, item.id],
+                          setDraft({
+                            ...draft,
+                            productIds: picked ? draft.productIds.filter((value) => value !== item.id) : [...draft.productIds, item.id],
                           })
                         }
                         className={cn(
@@ -590,7 +613,7 @@ function CustomEditor({ id, onClose }: { id: string | null; onClose: () => void 
         open={removing}
         onClose={() => setRemoving(false)}
         onConfirm={() => {
-          if (section) removeCustomSection(section.id);
+          if (saved) removeCustomSection(saved.id);
           onClose();
         }}
         title="حذف القسم؟"

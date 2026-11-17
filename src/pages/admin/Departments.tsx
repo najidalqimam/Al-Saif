@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "wouter";
-import { Archive, ArchiveRestore, ChevronLeft, ExternalLink, FolderSearch, PackageSearch, Pencil, Plus } from "lucide-react";
+import { Archive, ArchiveRestore, ChevronLeft, ExternalLink, FolderSearch, PackageSearch, Pencil, Plus, Save } from "lucide-react";
 import { allCategories, categoryById, rootDepartments, type CatalogCategory } from "@/lib/catalog";
 import { apiMessage } from "@/lib/api";
 import { useSiteContent, type NewCategory } from "@/lib/site-content";
@@ -24,7 +24,7 @@ function inTreeOrder(list: CatalogCategory[]) {
 }
 
 export function Departments() {
-  const { content, setCategoryHidden, setCategoryArchived, updateAddedCategory, updateProduct } = useSiteContent();
+  const { content, setCategoryHidden, setCategoryArchived, updateProduct } = useSiteContent();
   // The store works in two levels: main departments, then subcategories that hold the products.
   // Deeper categories from the original tree stay in the data, and their products count toward the subcategory above.
   const catalog = inTreeOrder(allCategories()).filter((item) => item.level <= 2);
@@ -232,61 +232,12 @@ export function Departments() {
         <Pager pager={showingProducts ? productsPager : rowsPager} />
       </Panel>
 
-      <Drawer
-        open={editing !== null}
+      <EditDepartment
+        category={editing}
+        hidden={editing ? content.categoryHidden.includes(editing.id) : false}
+        canRename={editing ? isAdded(editing.id) : false}
         onClose={() => setEditingId(null)}
-        title={editing ? `قسم ${editing.nameAr}` : ""}
-        lead={editing && isAdded(editing.id) ? "قسم مضاف من اللوحة. التعديل يتحفظ ويظهر في الموقع مباشرة." : "قسم أساسي من الموقع. الظهور يتحفظ مباشرة، وتعديل الاسم والصورة يتفعّل مع قاعدة البيانات."}
-        footer={
-          editing ? (
-            <>
-              <Link href={`/ar/c/${editing.slug}`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-(--a-line) px-4 text-sm">
-                <ExternalLink className="size-4" />
-                فتح في المتجر
-              </Link>
-              <Button variant="primary" onClick={() => setEditingId(null)}>
-                تم
-              </Button>
-            </>
-          ) : null
-        }
-      >
-        {editing ? (
-          <div className="space-y-5">
-            {editing.image ? (
-              <div className="grid place-items-center rounded-2xl bg-(--a-surface-2) py-6">
-                <img src={publicUrl(editing.image)} alt="" className="size-32 object-contain" />
-              </div>
-            ) : null}
-            <BilingualField
-              label="اسم القسم"
-              ar={editing.nameAr}
-              en={editing.nameEn}
-              onAr={(nameAr) => updateAddedCategory(editing.id, { nameAr })}
-              onEn={(nameEn) => updateAddedCategory(editing.id, { nameEn })}
-              disabled={!isAdded(editing.id)}
-            />
-            <BilingualField
-              label="الوصف"
-              ar={editing.descriptionAr}
-              en={editing.descriptionEn}
-              onAr={(descriptionAr) => updateAddedCategory(editing.id, { descriptionAr })}
-              onEn={(descriptionEn) => updateAddedCategory(editing.id, { descriptionEn })}
-              multiline
-              disabled={!isAdded(editing.id)}
-            />
-            <Field label="الرابط" value={editing.slug} onChange={() => {}} dir="ltr" disabled />
-            <div className="rounded-xl border border-(--a-line) p-4">
-              <ToggleRow
-                label="ظاهر في المتجر"
-                checked={editing.active && !content.categoryHidden.includes(editing.id)}
-                disabled={!editing.active}
-                onChange={(next) => setCategoryHidden(editing.id, !next)}
-              />
-            </div>
-          </div>
-        ) : null}
-      </Drawer>
+      />
 
       <AddDepartment
         open={adding}
@@ -310,6 +261,131 @@ export function Departments() {
 }
 
 const EMPTY: NewCategory = { nameAr: "", nameEn: "", descriptionAr: "", descriptionEn: "", parentId: null, featured: false };
+
+/** Edit drawer for a department: changes stay as a draft until Save. */
+function EditDepartment({
+  category,
+  hidden,
+  canRename,
+  onClose,
+}: {
+  category: CatalogCategory | null;
+  hidden: boolean;
+  canRename: boolean;
+  onClose: () => void;
+}) {
+  const { saveCategory } = useSiteContent();
+  const [draft, setDraft] = useState({ nameAr: "", nameEn: "", descriptionAr: "", descriptionEn: "", hidden: false });
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!category) return;
+    setDraft({
+      nameAr: category.nameAr,
+      nameEn: category.nameEn,
+      descriptionAr: category.descriptionAr,
+      descriptionEn: category.descriptionEn,
+      hidden,
+    });
+    setError("");
+  }, [category, hidden]);
+
+  const dirty = useMemo(() => {
+    if (!category) return false;
+    return (
+      draft.nameAr !== category.nameAr ||
+      draft.nameEn !== category.nameEn ||
+      draft.descriptionAr !== category.descriptionAr ||
+      draft.descriptionEn !== category.descriptionEn ||
+      draft.hidden !== hidden
+    );
+  }, [category, draft, hidden]);
+
+  async function save() {
+    if (!category || !dirty || saving) return;
+    setSaving(true);
+    setError("");
+    try {
+      await saveCategory(category.id, {
+        nameAr: draft.nameAr.trim(),
+        nameEn: draft.nameEn.trim(),
+        descriptionAr: draft.descriptionAr.trim(),
+        descriptionEn: draft.descriptionEn.trim(),
+        hidden: draft.hidden,
+      });
+      onClose();
+    } catch (failure) {
+      setError(apiMessage(failure));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Drawer
+      open={category !== null}
+      onClose={onClose}
+      title={category ? `قسم ${category.nameAr}` : ""}
+      lead="عدّل البيانات ثم اضغط حفظ عشان تظهر على الموقع."
+      footer={
+        category ? (
+          <>
+            <Link href={`/ar/c/${category.slug}`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-(--a-line) px-4 text-sm">
+              <ExternalLink className="size-4" />
+              فتح في المتجر
+            </Link>
+            <Button onClick={onClose}>إلغاء</Button>
+            <Button variant="primary" icon={Save} onClick={save} disabled={!dirty || saving}>
+              {saving ? "جاري الحفظ…" : "حفظ"}
+            </Button>
+          </>
+        ) : null
+      }
+    >
+      {category ? (
+        <div className="space-y-5">
+          {category.image ? (
+            <div className="grid place-items-center rounded-2xl bg-(--a-surface-2) py-6">
+              <img src={publicUrl(category.image)} alt="" className="size-32 object-contain" />
+            </div>
+          ) : null}
+          {error ? (
+            <p role="alert" className="text-sm text-(--a-danger)">
+              {error}
+            </p>
+          ) : null}
+          <BilingualField
+            label="اسم القسم"
+            ar={draft.nameAr}
+            en={draft.nameEn}
+            onAr={(nameAr) => setDraft((current) => ({ ...current, nameAr }))}
+            onEn={(nameEn) => setDraft((current) => ({ ...current, nameEn }))}
+            disabled={!canRename}
+          />
+          <BilingualField
+            label="الوصف"
+            ar={draft.descriptionAr}
+            en={draft.descriptionEn}
+            onAr={(descriptionAr) => setDraft((current) => ({ ...current, descriptionAr }))}
+            onEn={(descriptionEn) => setDraft((current) => ({ ...current, descriptionEn }))}
+            multiline
+            disabled={!canRename}
+          />
+          <Field label="الرابط" value={category.slug} onChange={() => {}} dir="ltr" disabled />
+          <div className="rounded-xl border border-(--a-line) p-4">
+            <ToggleRow
+              label="ظاهر في المتجر"
+              checked={category.active && !draft.hidden}
+              disabled={!category.active}
+              onChange={(next) => setDraft((current) => ({ ...current, hidden: !next }))}
+            />
+          </div>
+        </div>
+      ) : null}
+    </Drawer>
+  );
+}
 
 /** Adds a department or a subcategory; it is saved with the site content and shows in the store right away. */
 function AddDepartment({ open, onClose, parentId }: { open: boolean; onClose: () => void; parentId: string | null }) {
