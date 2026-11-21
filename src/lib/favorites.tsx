@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { GUEST, scopedKey, useStorageScope } from "@/lib/storage-scope";
 
 const STORAGE_KEY = "alsaif-favorites";
 
@@ -11,9 +12,9 @@ type FavoritesApi = {
 
 const FavoritesContext = createContext<FavoritesApi | null>(null);
 
-function load(): string[] {
+function read(scope: string): string[] {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(scopedKey(STORAGE_KEY, scope));
     const parsed = raw ? JSON.parse(raw) : [];
     if (!Array.isArray(parsed)) return [];
     return [...new Set(parsed.filter((id): id is string => typeof id === "string"))];
@@ -22,16 +23,40 @@ function load(): string[] {
   }
 }
 
+function write(scope: string, ids: string[]) {
+  try {
+    localStorage.setItem(scopedKey(STORAGE_KEY, scope), JSON.stringify(ids));
+  } catch {
+    // Storage can be unavailable (private mode); favorites then last for the session only.
+  }
+}
+
+/** The account's own favourites plus whatever was saved while signed out, which moves into the account when someone signs in. */
+function load(scope: string): string[] {
+  const own = read(scope);
+  if (scope === GUEST) return own;
+  const guest = read(GUEST);
+  if (!guest.length) return own;
+  const merged = [...new Set([...own, ...guest])];
+  write(scope, merged);
+  write(GUEST, []);
+  return merged;
+}
+
 export function FavoritesProvider({ children }: { children: ReactNode }) {
-  const [ids, setIds] = useState<string[]>(load);
+  const scope = useStorageScope();
+  const [loadedScope, setLoadedScope] = useState(scope);
+  const [ids, setIds] = useState<string[]>(() => load(scope));
+
+  // Signing in or out swaps the list for the one that belongs to the new owner.
+  if (loadedScope !== scope) {
+    setLoadedScope(scope);
+    setIds(load(scope));
+  }
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(ids));
-    } catch {
-      // Storage can be unavailable (private mode); favorites then last for the session only.
-    }
-  }, [ids]);
+    if (loadedScope === scope) write(scope, ids);
+  }, [ids, scope, loadedScope]);
 
   const api = useMemo<FavoritesApi>(
     () => ({

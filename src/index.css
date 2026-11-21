@@ -2233,3 +2233,96 @@ html[data-admin-theme="dark"] .admin {
   --focus-ring: #25d9e6;
   color-scheme: dark;
 }
+
+/* Sign-in card that opens over the page from the header: drops in from above, leaves upwards, and turns 180° around its vertical axis between sign in and register. */
+.auth-backdrop {
+  background: rgb(11 18 32 / 0);
+  backdrop-filter: blur(0);
+  transition: background-color 0.35s ease, backdrop-filter 0.35s ease;
+}
+.auth-backdrop[data-shown="true"] {
+  background: rgb(11 18 32 / 0.42);
+  backdrop-filter: blur(5px);
+}
+.auth-card {
+  opacity: 0;
+  transform: translateY(-120vh);
+  transition: transform 0.38s cubic-bezier(0.55, 0, 0.8, 0.4), opacity 0.3s ease;
+}
+.auth-card[data-shown="true"] {
+  opacity: 1;
+  transform: translateY(0);
+  transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.25s ease;
+}
+.auth-card:not([data-shown="true"]) .auth-close {
+  transform: rotate(90deg) scale(0.6);
+}
+.auth-scene {
+  perspective: 1500px;
+}
+.auth-flipper {
+  position: relative;
+  max-height: calc(100svh - 2rem);
+  transform-style: preserve-3d;
+  transition: transform 0.5s cubic-bezier(0.45, 0.05, 0.25, 1);
+}
+.auth-flipper[data-animate="true"] {
+  transition: transform 0.5s cubic-bezier(0.45, 0.05, 0.25, 1), height 0.35s ease;
+}
+.auth-flipper[data-flipped="true"] {
+  transform: rotateY(180deg);
+}
+.auth-face {
+  position: absolute;
+  inset: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+.auth-face--back {
+  transform: rotateY(180deg);
+}
+/* The face turned away is hidden half-way through the turn, so it cannot be seen, clicked or tabbed to. */
+.auth-face[data-active="false"] {
+  visibility: hidden;
+  transition: visibility 0s linear 0.25s;
+}
+.auth-face[data-active="true"] {
+  visibility: visible;
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-backdrop {
+    transition-duration: 0.15s;
+  }
+  .auth-card,
+  .auth-card[data-shown="true"] {
+    transform: none;
+    transition: opacity 0.15s linear;
+  }
+  .auth-card:not([data-shown="true"]) .auth-close {
+    transform: none;
+  }
+  .auth-flipper,
+  .auth-flipper[data-flipped="true"],
+  .auth-flipper[data-animate="true"] {
+    transform: none;
+    transition: height 0.01s;
+  }
+  .auth-face {
+    backface-visibility: visible;
+    -webkit-backface-visibility: visible;
+  }
+  .auth-face--back {
+    transform: none;
+  }
+  .auth-face[data-active="false"] {
+    opacity: 0;
+    transition: opacity 0.15s linear, visibility 0s linear 0.15s;
+  }
+  .auth-face[data-active="true"] {
+    opacity: 1;
+    transition: opacity 0.15s linear;
+  }
+}

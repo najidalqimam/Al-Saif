@@ -1,9 +1,10 @@
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
 import { z } from "zod";
-import { requireAdmin } from "../auth/middleware.js";
+import { requireAdmin, sessionCookieName } from "../auth/middleware.js";
+import { permissionsOf } from "../auth/permissions.js";
 import { dummyPasswordHash, verifyPassword } from "../auth/password.js";
-import { clearedSessionCookie, createSession, revokeSession, sessionCookie } from "../auth/sessions.js";
+import { clearedSessionCookie, cookieFor, createSession, legacyClearedCookie, revokeSession, sessionCookie } from "../auth/sessions.js";
 import { prisma } from "../db.js";
 
 // /api/admin/auth: login, logout and "who am I" for the dashboard.
@@ -38,19 +39,27 @@ adminAuthRouter.post(
       res.status(401).json({ error: "INVALID_CREDENTIALS" });
       return;
     }
+    // A suspended or deleted shop cannot sign in.
+    if (admin.role === "SHOP" && admin.shopId) {
+      const shop = await prisma.shop.findUnique({ where: { id: admin.shopId }, select: { isActive: true, archivedAt: true } });
+      if (!shop || !shop.isActive || shop.archivedAt) {
+        res.status(403).json({ error: "SHOP_SUSPENDED" });
+        return;
+      }
+    }
     const { token, expiresAt } = await createSession(admin.id, { userAgent: req.get("user-agent"), ip: req.ip });
-    res.setHeader("Set-Cookie", sessionCookie(token, expiresAt));
-    res.json({ admin: { email: admin.email, fullName: admin.fullName, role: admin.role }, expiresAt });
+    res.setHeader("Set-Cookie", [sessionCookie(token, expiresAt, cookieFor(admin.role)), legacyClearedCookie()]);
+    res.json({ admin: { email: admin.email, fullName: admin.fullName, role: admin.role, shopId: admin.shopId, permissions: permissionsOf(admin.role, admin.extraPermissions) }, expiresAt });
   },
 );
 
 adminAuthRouter.post("/logout", requireAdmin(), async (req, res) => {
   await revokeSession(req.admin!.sessionId);
-  res.setHeader("Set-Cookie", clearedSessionCookie());
+  res.setHeader("Set-Cookie", clearedSessionCookie(sessionCookieName(req)));
   res.status(204).end();
 });
 
 adminAuthRouter.get("/me", requireAdmin(), (req, res) => {
-  const { email, fullName, role } = req.admin!;
-  res.json({ admin: { email, fullName, role } });
+  const { email, fullName, role, permissions, shopId } = req.admin!;
+  res.json({ admin: { email, fullName, role, shopId, permissions } });
 });

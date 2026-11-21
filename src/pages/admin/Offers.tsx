@@ -3,6 +3,7 @@ import { BadgePercent, Check, PackageSearch, Pencil, Plus, Tag, Ticket } from "l
 import { ProductArt } from "@/components/site/card-art";
 import { useSiteContent, type ProductRow } from "@/lib/site-content";
 import { registerLeaveGuard, type View } from "./nav";
+import { useShopScope } from "./shopScope";
 import { Badge, Button, Drawer, Empty, num, NumberField, PageHead, Pager, Panel, sar, SearchBox, StatCard, Switch, Tabs, usePager } from "./ui";
 
 type Filter = "home" | "discounted" | "all";
@@ -13,6 +14,7 @@ type Draft = Partial<Pick<ProductRow, "price" | "compareAt" | "onHome">>;
 
 export function Offers({ onOpen }: { onOpen: (view: View) => void }) {
   const { content, updateProduct } = useSiteContent();
+  const shopScope = useShopScope();
   const [filter, setFilter] = useState<Filter>("home");
   // Edits made here wait as a draft until "تأكيد التعديلات" saves them to the products.
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
@@ -72,9 +74,11 @@ export function Offers({ onOpen }: { onOpen: (view: View) => void }) {
         title="العروض والخصومات"
         lead="منتجات قسم العروض وأسعارها قبل وبعد الخصم."
         actions={
-          <Button icon={Pencil} onClick={() => onOpen("content")}>
-            نصوص قسم العروض
-          </Button>
+          shopScope ? undefined : (
+            <Button icon={Pencil} onClick={() => onOpen("content")}>
+              نصوص قسم العروض
+            </Button>
+          )
         }
       />
 

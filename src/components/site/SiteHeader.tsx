@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { ArrowLeft, Boxes, Flame, Heart, Moon, ShoppingCart, Sun, Truck, UserRound } from "lucide-react";
 import { useTheme } from "next-themes";
 import { Link, useLocation } from "wouter";
+import { AuthModal } from "@/components/site/AuthModal";
 import { CartDrawer } from "@/components/site/CartDrawer";
 import { CategoryMenu } from "@/components/site/CategoryMenu";
 import { SearchBox } from "@/components/site/SearchBox";
@@ -56,6 +57,10 @@ export function SiteHeader() {
       window.removeEventListener("resize", update);
     };
   }, [location]);
+  const [authOpen, setAuthOpen] = useState(false);
+  useEffect(() => {
+    if (customer) setAuthOpen(false);
+  }, [customer]);
   const [cartPulse, setCartPulse] = useState(false);
   const previousCount = useRef(count);
 
@@ -226,6 +231,13 @@ export function SiteHeader() {
             href={customer ? `/${lang}/account` : `/${lang}/login`}
             aria-label={customer ? accountCopy.myAccount : accountCopy.signIn}
             aria-current={location.startsWith(`/${lang}/account`) || location === `/${lang}/login` ? "page" : undefined}
+            aria-haspopup={customer || location === `/${lang}/login` ? undefined : "dialog"}
+            onClick={(event) => {
+              // Signed out: open the card over this page. Modified clicks and the login page itself keep the normal link.
+              if (customer || location === `/${lang}/login` || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+              event.preventDefault();
+              setAuthOpen(true);
+            }}
             className={`flex h-11 cursor-pointer items-center gap-2 rounded-full border px-3 text-sm font-semibold transition duration-300 ${
               overHero
                 ? "border-white/25 text-white hover:border-mint hover:text-mint"
@@ -339,6 +351,7 @@ export function SiteHeader() {
       </nav>
     </header>
       <CartDrawer />
+      <AuthModal open={authOpen && !customer} onClose={() => setAuthOpen(false)} />
     </>
   );
 }

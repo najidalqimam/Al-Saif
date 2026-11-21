@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Banknote, Check, CreditCard, Landmark, LoaderCircle, ShieldCheck, Truck, UserRound } from "lucide-react";
 import { Link, useLocation } from "wouter";
 import { SiteFooter } from "@/components/site/SiteFooter";
+import { AuthModal } from "@/components/site/AuthModal";
 import { SiteHeader } from "@/components/site/SiteHeader";
 import { ApiError, api } from "@/lib/api";
 import { useCart } from "@/lib/cart";
@@ -40,6 +41,8 @@ export function CheckoutPage() {
   const { lines, clear } = useCart();
   const { productById, copyOf, content } = useSiteContent();
   const { customer } = useCustomer();
+  // "Sign in to fill your details" opens the same sign-in card as the header, and stays on this page afterwards.
+  const [authOpen, setAuthOpen] = useState(false);
   const [, navigate] = useLocation();
   const [options, setOptions] = useState<Options | null>(null);
   const [optionsError, setOptionsError] = useState(false);
@@ -218,9 +221,9 @@ export function CheckoutPage() {
                 <p className="flex flex-wrap items-center gap-2 rounded-2xl border border-navy/10 bg-white px-4 py-3 text-sm text-navy/70">
                   <UserRound className="size-4 text-brand-ink" />
                   {copy.haveAccount}
-                  <Link href={`/${lang}/login?next=${encodeURIComponent(`/${lang}/checkout`)}`} className="font-semibold text-brand-ink hover:underline">
+                  <button type="button" aria-haspopup="dialog" onClick={() => setAuthOpen(true)} className="cursor-pointer font-semibold text-brand-ink hover:underline">
                     {copy.signInToFill}
-                  </Link>
+                  </button>
                 </p>
               ) : null}
               <Card title={copy.customer} step={1}>
@@ -400,6 +403,7 @@ export function CheckoutPage() {
           </form>
         )}
       </main>
+      <AuthModal open={authOpen && !customer} onClose={() => setAuthOpen(false)} next={`/${lang}/checkout`} />
       <SiteFooter />
     </div>
   );

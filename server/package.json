@@ -10,7 +10,9 @@
   "scripts": {
     "dev": "node --env-file=.env --watch --watch-path=src --import tsx src/index.ts",
     "start": "node --env-file=.env --import tsx src/index.ts",
+    "demo:seed": "node --env-file=.env --import tsx src/scripts/seed-demo.ts",
     "admin:create": "node --env-file=.env --import tsx src/scripts/create-admin.ts",
+    "admin:reset-password": "node --env-file=.env --import tsx src/scripts/reset-admin-password.ts",
     "db:up": "docker compose up -d --wait",
     "db:down": "docker compose stop",
     "db:logs": "docker compose logs -f db",

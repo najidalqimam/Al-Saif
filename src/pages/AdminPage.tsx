@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "wouter";
+import { useLiveRefresh } from "@/lib/live-sync";
 import { CircleAlert, ExternalLink, Eye, EyeOff, LoaderCircle, Lock, LogIn, LogOut, Mail, Menu, Moon, RefreshCw, ShieldCheck, Sun, X } from "lucide-react";
 import { BrandMark } from "@/components/site/Brand";
 import { ROLE_LABELS, currentAdmin, loginAdmin, logoutAdmin, type AdminUser } from "@/lib/admin-auth";
@@ -10,10 +11,13 @@ import { ContentHub } from "./admin/ContentHub";
 import { Customers } from "./admin/Customers";
 import { crumbsFor } from "./admin/crumbs";
 import { Departments } from "./admin/Departments";
+import { Archive } from "./admin/Archive";
+import { NotificationBell } from "./admin/NotificationBell";
 import { Inventory } from "./admin/Inventory";
-import { NAV_GROUPS, onHashMove, pushHash, readHash, registerLeavePrompt, type View } from "./admin/nav";
+import { NAV_GROUPS, VIEW_PERMISSION, onHashMove, pushHash, readHash, registerLeavePrompt, type View } from "./admin/nav";
 import { Offers } from "./admin/Offers";
 import { OpsProvider } from "./admin/ops";
+import { markNotificationsRead, useNotifications } from "@/lib/notifications";
 import { Orders } from "./admin/OrdersPage";
 import { Overview } from "./admin/Overview";
 import { Payments } from "./admin/Payments";
@@ -23,6 +27,7 @@ import { Reports } from "./admin/Reports";
 import { Settings } from "./admin/Settings";
 import { SetupRequests } from "./admin/SetupRequests";
 import { Shops } from "./admin/Shops";
+import { Team } from "./admin/Team";
 import { Shipping } from "./admin/Shipping";
 import { useAdminTheme, type AdminTheme } from "./admin/theme";
 import { Button, Confirm } from "./admin/ui";
@@ -37,7 +42,8 @@ export function AdminPage() {
   useEffect(() => {
     const controller = new AbortController();
     currentAdmin(controller.signal)
-      .then(setAdmin)
+      // A shop account's session is for the shop dashboard only.
+      .then((user) => setAdmin(user?.role === "SHOP" ? null : user))
       .catch((error) => {
         if (controller.signal.aborted) return;
         setStartError(apiMessage(error));
@@ -108,7 +114,14 @@ function Login({ onSuccess, initialError }: { onSuccess: (admin: AdminUser) => v
     setBusy(true);
     setError("");
     try {
-      onSuccess(await loginAdmin(email, password));
+      const user = await loginAdmin(email, password);
+      if (user.role === "SHOP") {
+        // A shop account belongs in the shop dashboard; this one is for the store's staff.
+        setError("هذا حساب محل. ادخل من لوحة المحل: /ar/shop");
+        setPassword("");
+        return;
+      }
+      onSuccess(user);
     } catch (failure) {
       setError(apiMessage(failure));
       setPassword("");
@@ -224,12 +237,30 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
       .catch((error) => setLoadState(apiMessage(error)));
   }, [loadAdminCatalogue]);
   useEffect(load, [load]);
+  // A shop that signs up while the dashboard is open shows its "new" mark within a few seconds, without a reload.
+  useLiveRefresh("shops", () => {
+    if (!document.hidden) loadAdminCatalogue().catch(() => {});
+  });
+  const newShops = shops.filter((shop) => shop.status === "PENDING").length;
+  // Products a shop sent that wait for the admin's answer.
+  const pendingRequests = content.products.filter((item) => item.approval === "pending").length;
+  // Orders nobody has opened yet (their notification is unread); opening an order page marks it read.
+  const { unreadOrders: newOrders } = useNotifications();
+  const badges: Partial<Record<View, number>> = { shops: newShops, productRequests: pendingRequests, orders: newOrders };
   const [view, setView] = useState<View>(() => readHash().view);
   const [hash, setHash] = useState(() => readHash());
+  useEffect(() => {
+    if (hash.sub) void markNotificationsRead({ link: `${hash.view}/${hash.sub}` });
+  }, [hash]);
   const [leaving, setLeaving] = useState<{ proceed: () => void; save?: () => unknown } | null>(null);
   useEffect(() => registerLeavePrompt((proceed, save) => setLeaving({ proceed, save })), []);
   const [menuOpen, setMenuOpen] = useState(false);
   const dark = theme === "dark";
+  // Each account sees only the sections its permissions allow (the server checks them too).
+  const can = (target: View) => {
+    const needed = VIEW_PERMISSION[target];
+    return !needed || (admin.permissions ?? []).includes(needed);
+  };
 
   useEffect(() => {
     window.scrollTo({ top: 0 });
@@ -279,7 +310,7 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
             <div key={group.label}>
               <p className="px-3 pb-1.5 text-[11px] font-semibold tracking-wide text-(--a-side-muted)">{group.label}</p>
               <ul className="space-y-0.5">
-                {group.items.map((item) => {
+                {group.items.filter((item) => can(item.id)).map((item) => {
                   const Icon = item.icon;
                   const active = view === item.id;
                   return (
@@ -296,6 +327,11 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
                         {active ? <span className="absolute inset-y-1.5 start-0 w-[3px] rounded-full bg-(--a-accent)" /> : null}
                         <Icon className={cn("size-[18px] shrink-0", active ? "" : "text-(--a-side-muted)")} />
                         <span className="flex-1 truncate">{item.label}</span>
+                        {(badges[item.id] ?? 0) > 0 ? (
+                          <span aria-label={`${badges[item.id]} جديد`} className="grid h-5 min-w-5 place-items-center rounded-full bg-(--a-danger) px-1.5 text-[11px] font-semibold text-white">
+                            {badges[item.id]}
+                          </span>
+                        ) : null}
                       </button>
                     </li>
                   );
@@ -333,6 +369,7 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
                 <span className="hidden sm:inline">جاري الحفظ…</span>
               </span>
             ) : null}
+            <NotificationBell />
             <button
               type="button"
               onClick={() => onTheme(dark ? "light" : "dark")}
@@ -400,7 +437,17 @@ function Dashboard({ admin, onLogout, theme, onTheme }: { admin: AdminUser; onLo
                 ))}
               </nav>
               ) : null}
-              <Pages view={view} open={open} theme={theme} onTheme={onTheme} />
+              {can(view) ? (
+                <Pages view={view} open={open} theme={theme} onTheme={onTheme} />
+              ) : (
+                <div className="rounded-2xl border border-(--a-line) bg-(--a-surface) p-10 text-center">
+                  <p className="text-lg font-bold">ما عندك صلاحية لهذا القسم</p>
+                  <p className="mt-2 text-sm text-(--a-muted)">اطلب من مالك المتجر يضيف لك الصلاحية، أو ارجع للرئيسية.</p>
+                  <button type="button" onClick={() => open("overview")} className="mt-5 inline-flex h-10 cursor-pointer items-center rounded-xl bg-(--a-accent) px-4 text-sm font-medium text-[#0b1220]">
+                    نظرة عامة
+                  </button>
+                </div>
+              )}
             </>
           )}
         </main>
@@ -447,6 +494,8 @@ function Pages({ view, open, theme, onTheme }: { view: View; open: (view: View) 
           {view === "offers" ? <Offers onOpen={open} /> : null}
           {view === "content" ? <ContentHub onOpen={open} /> : null}
           {view === "reports" ? <Reports /> : null}
+          {view === "archive" ? <Archive /> : null}
+          {view === "team" ? <Team /> : null}
           {view === "settings" ? <Settings adminTheme={theme} onAdminTheme={onTheme} /> : null}
     </>
   );

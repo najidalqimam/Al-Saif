@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { api } from "@/lib/api";
+import { PREVIEW, api, inShopScope } from "@/lib/api";
 import { ORDERS_STORAGE_KEY, readPlacedOrders } from "@/lib/orders-store";
 import { useSiteContent } from "@/lib/site-content";
-import { SAMPLE_ORDERS, type Order, type OrderStatus, type PaymentStatus } from "./orders";
+import { DEMO_SHOP_ORDERS, SAMPLE_ORDERS, type Order, type OrderStatus, type PaymentStatus } from "./orders";
 
 // Shipping, payment and order data for the dashboard. Once the dashboard is connected to the store's database
 // (useSiteContent reports source "admin"), shipping zones and methods, payment options and orders are read
@@ -107,7 +107,7 @@ export function readOps(): Ops {
   }
 }
 
-type OpsApi = {
+export type OpsApi = {
   ops: Ops;
   /** Orders shown in the lists. Archived ones are left out (see archivedOrders). */
   orders: Order[];
@@ -128,7 +128,7 @@ type OpsApi = {
   resetOps: () => void;
 };
 
-const OpsContext = createContext<OpsApi | null>(null);
+export const OpsContext = createContext<OpsApi | null>(null);
 
 type Settings = Pick<Ops, "shipping" | "zones" | "payments" | "bank">;
 
@@ -151,6 +151,7 @@ type ApiOrder = {
   total: string;
   locale: string;
   placedAt: string;
+  archivedAt?: string | null;
   shippingMethod: { code: string } | null;
   items: Array<{ productName: string; quantity: number; unitPrice: string; lineTotal: string; product: { legacyId: string | null } | null }>;
 };
@@ -182,6 +183,7 @@ function orderFromApi(order: ApiOrder): Order {
     paymentFee: Number(order.paymentFee),
     lang: order.locale === "en" ? "en" : order.locale === "ur" ? "ur" : "ar",
     account: order.customerId !== null,
+    archived: order.archivedAt != null,
   };
 }
 
@@ -267,8 +269,10 @@ export function OpsProvider({ children }: { children: ReactNode }) {
     // Connected: the real orders from the database (numbered from 1001). Otherwise the browser's store orders
     // and the sample orders, with the dashboard's local edits applied.
     const live = fromDatabase && dbOrders !== null;
-    const everyOrder = live ? dbOrders : [...placed, ...SAMPLE_ORDERS].map((order) => ({ ...order, ...ops.orders[order.id] }));
-    const isArchived = (order: Order) => !live && ops.orders[order.id]?.archived === true;
+    // The demo shop's display-only orders are part of the store's orders in the local preview; with a server only real orders show.
+    const demoOrders = PREVIEW ? DEMO_SHOP_ORDERS : [];
+    const everyOrder = live ? [...dbOrders, ...demoOrders] : [...placed, ...SAMPLE_ORDERS, ...demoOrders].map((order) => ({ ...order, ...ops.orders[order.id] }));
+    const isArchived = (order: Order) => (live ? order.archived === true : ops.orders[order.id]?.archived === true);
     const orders = everyOrder.filter((order) => !isArchived(order));
     const archivedOrders = everyOrder.filter(isArchived);
     const stock: Record<string, number> = {};
@@ -279,9 +283,15 @@ export function OpsProvider({ children }: { children: ReactNode }) {
       ops: fromDatabase ? { ...ops, ...(settings ?? {}), stock, lowStock: catalogue.lowStock } : ops,
       orders,
       archivedOrders,
-      canArchiveOrders: !live,
+      // With the database, archiving is saved on the order itself (admin only: a shop's orders are read only).
+      canArchiveOrders: !live || !inShopScope(),
       archiveOrder: (id, archived) => {
-        if (live) return;
+        if (live) {
+          if (inShopScope()) return;
+          setDbOrders((current) => current && current.map((order) => (order.id === id ? { ...order, archived } : order)));
+          api(`/admin/orders/${encodeURIComponent(id)}/archive`, { method: "PATCH", body: { archived } }).catch(loadOrders);
+          return;
+        }
         setOps((current) => ({ ...current, orders: { ...current.orders, [id]: { ...current.orders[id], archived } } }));
       },
       updateShipping: (id, patch) => edit("shipping", (list) => list.map((item) => (item.id === id ? { ...item, ...patch } : item))),

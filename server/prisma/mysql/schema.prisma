@@ -114,6 +114,11 @@ model Product {
   /// Display order in lists (the storefront keeps the order products were added in).
   sortOrder        Int       @default(0) @map("sort_order")
   archivedAt       DateTime? @map("archived_at")
+  /// A product a shop sent from its own dashboard: PENDING waits for the admin, REJECTED was refused (with rejectReason).
+  /// Null means published (added or approved by the admin, and every product that existed before shops could send products).
+  approvalStatus   ProductApproval? @map("approval_status")
+  rejectReason     String?   @map("reject_reason") @db.VarChar(500)
+  submittedAt      DateTime? @map("submitted_at")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
 
@@ -127,7 +132,23 @@ model Product {
   @@index([isVisible, archivedAt])
   @@index([showInHomeOffers])
   @@index([sortOrder])
+  @@index([approvalStatus])
   @@map("products")
+}
+
+enum ProductApproval {
+  PENDING
+  REJECTED
+
+  @@map("product_approval")
+}
+
+/// PENDING marks a shop that signed up by itself and that the admin has not opened yet (the "new" mark). NULL for every other shop.
+enum ShopApproval {
+  PENDING
+  REJECTED
+
+  @@map("shop_approval")
 }
 
 /// A shop that lists products on the platform. Shops are never deleted in this phase (restrict).
@@ -141,10 +162,26 @@ model Shop {
   city        String @default("") @db.VarChar(120)
   address     String @default("") @db.VarChar(500)
   description String @default("") @db.VarChar(2000)
+  /// How the shop gets paid: shown on the shop's page in the admin dashboard. All optional.
+  bankName            String  @default("") @map("bank_name") @db.VarChar(120)
+  accountHolder       String  @default("") @map("account_holder") @db.VarChar(200)
+  iban                String  @default("") @db.VarChar(40)
+  accountNumber       String  @default("") @map("account_number") @db.VarChar(40)
+  acceptsCod          Boolean @default(true) @map("accepts_cod")
+  acceptsBankTransfer Boolean @default(false) @map("accepts_bank_transfer")
+  paymentNotes        String  @default("") @map("payment_notes") @db.VarChar(1000)
+  /// PENDING = new self-signup the admin has not seen yet. The shop works normally either way.
+  /// false = suspended: the shop and its products are hidden from the store and the shop's login is blocked. Reversible.
+  isActive   Boolean   @default(true) @map("is_active")
+  /// Set when the admin deletes the shop from the list (moves it to the archive); hidden like a suspended shop. Nothing is removed.
+  archivedAt DateTime? @map("archived_at")
+  approvalStatus ShopApproval? @map("approval_status")
+  rejectReason   String?       @map("reject_reason") @db.VarChar(500)
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
   products Product[]
+  admins   AdminUser[]
 
   @@map("shops")
 }
@@ -442,6 +479,8 @@ model Order {
 
   placedAt  DateTime @default(now()) @map("placed_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  /// Set when the dashboard moves the order to its archive ("deleted" from the lists); null otherwise. Nothing is removed.
+  archivedAt DateTime? @map("archived_at")
 
   items          OrderItem[]
   statusHistory  OrderStatusHistory[]
@@ -596,6 +635,8 @@ enum AdminRole {
   EDITOR
   /// Orders and customers.
   SUPPORT
+  /// A shop's own account: sees and edits only its shop (products, orders, stock, payments), never the rest of the store.
+  SHOP
 
   @@map("admin_role")
 }
@@ -609,6 +650,13 @@ model AdminUser {
   passwordHash String    @map("password_hash") @db.VarChar(255)
   role         AdminRole @default(EDITOR)
   isActive     Boolean   @default(true) @map("is_active")
+  phone        String    @default("") @db.VarChar(40)
+  jobTitle     String    @default("") @map("job_title") @db.VarChar(120)
+  /// Permission names granted on top of the role (see src/auth/permissions.ts).
+  extraPermissions Json?  @map("extra_permissions")
+  /// Set for SHOP accounts: the one shop this account belongs to. Null for store staff.
+  shopId       String?   @map("shop_id") @db.Char(36)
+  shop         Shop?     @relation(fields: [shopId], references: [id], onDelete: Restrict)
   lastLoginAt  DateTime? @map("last_login_at")
   createdAt    DateTime  @default(now()) @map("created_at")
   updatedAt    DateTime  @updatedAt @map("updated_at")
@@ -618,6 +666,7 @@ model AdminUser {
   paymentChanges PaymentStatusHistory[]
   stockChanges   StockMovement[]
 
+  @@index([shopId])
   @@map("admin_users")
 }
 
@@ -637,4 +686,21 @@ model AdminSession {
   @@index([adminUserId])
   @@index([expiresAt])
   @@map("admin_sessions")
+}
+
+/// A message for the dashboard's bell. shopId null = for the store's staff; otherwise for that shop's account.
+model Notification {
+  id        String    @id @default(uuid()) @db.Char(36)
+  shopId    String?   @map("shop_id") @db.Char(36)
+  /// What happened, e.g. "product_submitted", "product_approved", "product_rejected", "shop_joined".
+  kind      String    @db.VarChar(40)
+  title     String    @db.VarChar(200)
+  body      String    @default("") @db.VarChar(500)
+  /// Dashboard page to open on click, as a hash without the #: "productRequests/<id>".
+  link      String    @default("") @db.VarChar(200)
+  readAt    DateTime? @map("read_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  @@index([shopId, createdAt])
+  @@map("notifications")
 }

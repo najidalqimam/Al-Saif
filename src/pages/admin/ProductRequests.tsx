@@ -39,9 +39,12 @@ function RequestsList() {
                   <ProductArt id={item.id} className="size-10" />
                 </span>
                 <div className="min-w-48 flex-1">
-                  <p className="font-medium">{item.nameAr}</p>
+                  <p className="flex flex-wrap items-center gap-2 font-medium">
+                    {item.nameAr}
+                    <Badge tone="blue">{shopName(item.shopId)}</Badge>
+                  </p>
                   <p className="mt-0.5 text-xs text-(--a-muted)">
-                    {shopName(item.shopId)} · {item.categoryAr || "بدون قسم"}
+                    {item.categoryAr || "بدون قسم"}
                     {item.submittedAt ? ` · ${new Date(item.submittedAt).toLocaleDateString(AR_DATE, { day: "numeric", month: "short" })}` : ""}
                   </p>
                   {item.approval === "rejected" && item.rejectReason ? <p className="mt-1 text-xs text-(--a-danger)">سبب الرفض: {item.rejectReason}</p> : null}

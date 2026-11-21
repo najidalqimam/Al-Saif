@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ArchiveRestore, Check, ChevronDown, Inbox, Save, Trash2, X } from "lucide-react";
+import { TrashIcon } from "@/components/TrashIcon";
+import { ArchiveRestore, Check, ChevronDown, Inbox, Save, X } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
 import { useSiteContent } from "@/lib/site-content";
 import { cn } from "@/lib/utils";
+import { useNotifications } from "@/lib/notifications";
 import { PAYMENT_LABELS, PAYMENT_STATUS, SHIP_STAGE, shipStage, useOps, type ShipStage } from "./ops";
 import { onHashMove, pushHash, readHash, registerLeaveGuard } from "./nav";
 import { ORDER_STATUS, type Order, type OrderStatus, type PaymentStatus } from "./orders";
@@ -45,8 +47,11 @@ export function OrdersTable({ orders, onView, compact, archived }: { orders: Ord
   const { content } = useSiteContent();
   const { ops, archiveOrder, canArchiveOrders, updateOrder } = useOps();
   const [archiving, setArchiving] = useState<Order | null>(null);
+  // Orders nobody has opened yet carry a "new" mark, like new shops do.
+  const { newOrderIds } = useNotifications();
   const pager = usePager(orders, `${orders.length}|${archived ? "a" : ""}`);
-  const nameOf = (id: string) => content.products.find((item) => item.id === id)?.nameAr ?? id;
+  // The product row if the dashboard knows it; otherwise the name saved on the order line (e.g. a shop dashboard sees only its own products).
+  const nameOf = (id: string, lineName?: string) => content.products.find((item) => item.id === id)?.nameAr ?? lineName ?? id;
   const methodOf = (id: string) => ops.shipping.find((item) => item.id === id)?.nameAr ?? "—";
   const head = "px-4 py-2.5 text-start text-xs font-medium whitespace-nowrap text-(--a-muted) first:ps-5 last:pe-5";
   const cell = "px-4 py-2.5 first:ps-5 last:pe-5";
@@ -74,16 +79,18 @@ export function OrdersTable({ orders, onView, compact, archived }: { orders: Ord
             const status = ORDER_STATUS[order.status];
             const payment = PAYMENT_STATUS[order.paymentStatus];
             const open = rowOpen(() => onView(order));
+            const fresh = !archived && newOrderIds.has(order.id);
             return (
-              <tr key={order.id} onClick={open.onClick} className={`${open.className} border-t border-(--a-line) transition-colors hover:bg-(--a-surface-2)/40`}>
+              <tr key={order.id} onClick={open.onClick} className={`${open.className} border-t border-(--a-line) transition-colors ${fresh ? "bg-[#2563eb]/10 hover:bg-[#2563eb]/15" : "hover:bg-(--a-surface-2)/40"}`}>
                 <td className={cell}>
                   <p className="font-semibold tabular-nums">
                     <bdi dir="ltr">#{order.id}</bdi>
                   </p>
                   <p className="text-xs text-(--a-muted)">{shortDate(order.date)}</p>
-                  {order.source === "store" ? (
+                  {order.source === "store" || fresh ? (
                     <span className="mt-1 flex flex-wrap gap-1">
-                      <Badge tone="ok">من المتجر</Badge>
+                      {fresh ? <Badge tone="blue">جديد</Badge> : null}
+                      {order.source === "store" ? <Badge tone="ok">من المتجر</Badge> : null}
                     </span>
                   ) : null}
                 </td>
@@ -97,7 +104,7 @@ export function OrdersTable({ orders, onView, compact, archived }: { orders: Ord
                       <ProductArt id={order.productId} className="size-7" />
                     </span>
                     <span className="line-clamp-1">
-                      {nameOf(order.productId)}
+                      {nameOf(order.productId, order.lines?.[0]?.name)}
                       {order.lines && order.lines.length > 1 ? (
                         <span className="text-(--a-muted)"> +{num.format(order.lines.length - 1)}</span>
                       ) : order.items > 1 ? (
@@ -131,7 +138,7 @@ export function OrdersTable({ orders, onView, compact, archived }: { orders: Ord
                     <IconButton icon={ArchiveRestore} label={`استرجاع الطلب ${order.id}`} onClick={() => archiveOrder(order.id, false)} />
                   ) : (
                     <IconButton
-                      icon={Trash2}
+                      icon={TrashIcon}
                       tone="danger"
                       label={canArchiveOrders ? `حذف الطلب ${order.id}` : "حذف الطلبات غير متاح أثناء الاتصال بقاعدة البيانات"}
                       disabled={!canArchiveOrders}
@@ -149,7 +156,7 @@ export function OrdersTable({ orders, onView, compact, archived }: { orders: Ord
         onClose={() => setArchiving(null)}
         onConfirm={() => archiving && archiveOrder(archiving.id, true)}
         title={`حذف الطلب #${archiving?.id ?? ""}؟`}
-        lead="الطلب يختفي من قوائم الطلبات والمدفوعات والشحن والنظرة العامة، وينتقل لتبويب الأرشيف في صفحة الطلبات. بياناته تبقى محفوظة وتقدر تسترجعه في أي وقت. الأرشفة على هذا المتصفح فقط."
+        lead="الطلب يختفي من قوائم الطلبات والمدفوعات والشحن والنظرة العامة، وينتقل لتبويب الأرشيف في صفحة الطلبات. بياناته تبقى محفوظة وتقدر تسترجعه في أي وقت."
         action="نقل للأرشيف"
       />
     </div>
@@ -172,9 +179,17 @@ type OrderFields = Pick<Order, "status" | "paymentStatus" | "shippingMethod">;
 
 /** With `draft` + `onDraft` the editors only change the draft (the order page saves it); without them they save at once. */
 function OrderDetail({ current, draft, onDraft }: { current: Order; draft?: OrderFields; onDraft?: (patch: Partial<OrderFields>) => void }) {
-  const { content } = useSiteContent();
+  const { content, shopById, shopOf } = useSiteContent();
   const { ops, updateOrder } = useOps();
   const shown: OrderFields = draft ?? current;
+  // The shop(s) the order was bought from: its own shop (display orders), or the shop of each product in it.
+  const shopNames = [
+    ...new Set(
+      [current.shopId ? shopById(current.shopId) : null, ...(current.lines?.length ? current.lines.map((line) => line.id) : [current.productId]).map((id) => shopOf(id))]
+        .filter((item): item is NonNullable<typeof item> => Boolean(item))
+        .map((item) => item.name),
+    ),
+  ];
   const change = (patch: Partial<OrderFields>) => (onDraft ? onDraft(patch) : updateOrder(current.id, patch));
   const product = content.products.find((item) => item.id === current.productId);
   const zone = ops.zones.find((item) => item.id === current.zone);
@@ -225,7 +240,7 @@ function OrderDetail({ current, draft, onDraft }: { current: Order; draft?: Orde
                 <ProductArt id={current.productId} className="size-12" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="font-semibold">{product?.nameAr ?? current.productId}</p>
+                <p className="font-semibold">{product?.nameAr ?? current.lines?.[0]?.name ?? current.productId}</p>
                 <p className="text-sm text-(--a-muted)">الكمية {num.format(current.items)}</p>
               </div>
               <p className="text-lg font-bold tabular-nums">{sar.format(current.total)}</p>
@@ -241,6 +256,8 @@ function OrderDetail({ current, draft, onDraft }: { current: Order; draft?: Orde
             <dd>
               {current.city} · {zone?.nameAr ?? "—"}
             </dd>
+            <dt className="text-(--a-muted)">المحل</dt>
+            <dd className="font-medium">{shopNames.length ? shopNames.join("، ") : <span className="font-normal text-(--a-muted)">بدون محل</span>}</dd>
             <dt className="text-(--a-muted)">التاريخ</dt>
             <dd>{shortDate(current.date)}</dd>
             <dt className="text-(--a-muted)">طريقة الدفع</dt>

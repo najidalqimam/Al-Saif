@@ -1,19 +1,18 @@
 import { randomBytes } from "node:crypto";
 import { Router, type Request, type Response } from "express";
 import { z } from "zod";
-import { Prisma, type AdminRole } from "@prisma/client";
-import { requireAdmin } from "../auth/middleware.js";
+import { Prisma } from "@prisma/client";
+import { requirePermission } from "../auth/middleware.js";
 import { categoryWhere, isCatalogueId, productWhere, slugify } from "../catalogue/ids.js";
 import { DATA_URL, ImageError, decodeImage, saveProductImage } from "../catalogue/images.js";
 import { adminCategory, adminProduct, adminShop, categoryInclude, categoryLevels, productInclude, productOrder, shopOrder } from "../catalogue/serialize.js";
+import { notifyShop } from "../notifications.js";
 import { prisma } from "../db.js";
 
 // /api/admin/...: catalogue management for the dashboard. Every change is validated here and saved to the
 // database; nothing the browser sends is trusted beyond the fields listed below. There is no delete:
 // products and categories are archived (archived_at) and can be restored.
 
-const READ_ROLES: AdminRole[] = ["OWNER", "MANAGER", "EDITOR", "SUPPORT"];
-const WRITE_ROLES: AdminRole[] = ["OWNER", "MANAGER", "EDITOR"];
 const INVENTORY_SETTING = "inventory";
 const DEFAULT_LOW_STOCK = 5;
 /** The store has main departments only: a new category can no longer be placed inside another one. Older ones stay as they are. */
@@ -61,7 +60,7 @@ const ProductFields = z.object({
   showInHomeOffers: z.boolean(),
 });
 
-const NewProduct = ProductFields.partial({
+export const NewProduct = ProductFields.partial({
   nameEn: true,
   nameUr: true,
   labelAr: true,
@@ -83,11 +82,30 @@ const NewProduct = ProductFields.partial({
 })
   .extend({ categoryId: catalogueId, image: image.optional(), shopId: z.string().uuid().nullable().optional() })
   .strict();
-const ProductPatch = ProductFields.partial()
+export const ProductPatch = ProductFields.partial()
   .extend({ image: image.optional(), shopId: z.string().uuid().nullable().optional() })
   .strict()
   .refine((body) => Object.keys(body).length > 0, "Nothing to change");
-const ShopFields = z.object({
+/** How a shop gets paid. Shown on the shop's page in the dashboard; every part is optional. */
+export const ShopPayment = z
+  .object({
+    bankName: text(120),
+    accountHolder: text(200),
+    iban: text(40).regex(/^[A-Za-z0-9 ]*$/, "Letters and digits only"),
+    accountNumber: text(40).regex(/^[0-9 -]*$/, "Digits only"),
+    acceptsCod: z.boolean(),
+    acceptsBankTransfer: z.boolean(),
+    notes: text(1000),
+  })
+  .partial()
+  .strict();
+/** The payment block as table columns (notes is stored as payment_notes). */
+export function paymentColumns(payment: z.infer<typeof ShopPayment> | undefined) {
+  if (!payment) return {};
+  const { notes, ...rest } = payment;
+  return { ...rest, ...(notes === undefined ? {} : { paymentNotes: notes }) };
+}
+export const ShopFields = z.object({
   name: name(200),
   ownerName: text(200),
   phone: text(40),
@@ -95,12 +113,13 @@ const ShopFields = z.object({
   city: text(120),
   address: text(500),
   description: text(2000),
+  payment: ShopPayment,
 });
 /** A new shop needs a name; the contact details are optional. */
-const ShopBody = ShopFields.partial({ ownerName: true, phone: true, email: true, city: true, address: true, description: true }).strict();
+const ShopBody = ShopFields.partial({ ownerName: true, phone: true, email: true, city: true, address: true, description: true, payment: true }).strict();
 const ShopPatch = ShopFields.partial().strict().refine((body) => Object.keys(body).length > 0, "Nothing to change");
 /** Prisma writes a JSON column's SQL NULL as Prisma.DbNull, not as a plain null. */
-function jsonFields<T extends { featuresAr?: unknown; featuresEn?: unknown; featuresUr?: unknown; specsAr?: unknown; specsEn?: unknown; specsUr?: unknown }>(fields: T) {
+export function jsonFields<T extends { featuresAr?: unknown; featuresEn?: unknown; featuresUr?: unknown; specsAr?: unknown; specsEn?: unknown; specsUr?: unknown }>(fields: T) {
   const out: Record<string, unknown> = { ...fields };
   for (const key of ["featuresAr", "featuresEn", "featuresUr", "specsAr", "specsEn", "specsUr"] as const) {
     if (fields[key] === null) out[key] = Prisma.DbNull;
@@ -109,7 +128,7 @@ function jsonFields<T extends { featuresAr?: unknown; featuresEn?: unknown; feat
     Record<"featuresAr" | "featuresEn" | "featuresUr" | "specsAr" | "specsEn" | "specsUr", Prisma.InputJsonValue | typeof Prisma.DbNull | undefined>;
 }
 
-const StockBody = z
+export const StockBody = z
   .object({
     quantity: z.number().int().min(0).max(1_000_000).nullable(),
     /** The quantity the dashboard last saw; the change is refused if it moved meanwhile (an order, another admin). */
@@ -127,8 +146,10 @@ const CategoryFields = z.object({
   descriptionUr: text(2000),
   isVisible: z.boolean(),
   isFeatured: z.boolean(),
+  /** One of the storefront's icon names (see catalog-icons.tsx); the storefront falls back to the grid icon for an unknown one. */
+  icon: z.string().trim().regex(/^[a-z0-9-]{1,40}$/),
 });
-const NewCategory = CategoryFields.partial({ nameUr: true, descriptionAr: true, descriptionEn: true, descriptionUr: true, isVisible: true, isFeatured: true })
+const NewCategory = CategoryFields.partial({ nameUr: true, descriptionAr: true, descriptionEn: true, descriptionUr: true, isVisible: true, isFeatured: true, icon: true })
   .extend({ parentId: catalogueId.nullable().optional() })
   .strict();
 const CategoryPatch = CategoryFields.partial()
@@ -138,7 +159,7 @@ const CategoryPatch = CategoryFields.partial()
 const CategoryOrder = z.object({ ids: z.array(catalogueId).min(1).max(200) }).strict();
 const InventoryBody = z.object({ lowStock: z.number().int().min(0).max(100_000) }).strict();
 
-class ApiProblem extends Error {
+export class ApiProblem extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
@@ -148,12 +169,12 @@ class ApiProblem extends Error {
   }
 }
 
-function invalid(res: Response, error: z.ZodError) {
+export function invalid(res: Response, error: z.ZodError) {
   res.status(400).json({ error: "INVALID_INPUT", issues: error.issues.map((issue) => ({ path: issue.path.join("."), message: issue.message })) });
 }
 
 /** Runs a handler and turns known problems into JSON errors; anything else goes to the app's 500 handler. */
-function handle(run: (req: Request, res: Response) => Promise<void>) {
+export function handle(run: (req: Request, res: Response) => Promise<void>) {
   return async (req: Request, res: Response) => {
     try {
       await run(req, res);
@@ -171,7 +192,7 @@ function handle(run: (req: Request, res: Response) => Promise<void>) {
   };
 }
 
-async function findProduct(id: string) {
+export async function findProduct(id: string) {
   if (!isCatalogueId(id)) throw new ApiProblem(404, "PRODUCT_NOT_FOUND");
   const product = await prisma.product.findUnique({ where: productWhere(id), include: productInclude });
   if (!product) throw new ApiProblem(404, "PRODUCT_NOT_FOUND");
@@ -186,7 +207,7 @@ async function findCategory(id: string) {
 }
 
 /** A category products can be placed in: it must exist and not be archived. */
-async function usableCategory(id: string) {
+export async function usableCategory(id: string) {
   const category = await findCategory(id);
   if (category.archivedAt) throw new ApiProblem(409, "CATEGORY_ARCHIVED");
   return category;
@@ -210,7 +231,7 @@ async function sendCategory(res: Response, id: string, status = 200) {
   res.status(status).json({ category: adminCategory(category, await levelOf(id)) });
 }
 
-async function lowStockSetting() {
+export async function lowStockSetting() {
   const setting = await prisma.storeSetting.findUnique({ where: { key: INVENTORY_SETTING } });
   const value = setting?.value as { lowStock?: unknown } | undefined;
   return typeof value?.lowStock === "number" ? value.lowStock : DEFAULT_LOW_STOCK;
@@ -224,7 +245,7 @@ export const adminCatalogueRouter = Router();
 
 adminCatalogueRouter.get(
   "/catalogue",
-  requireAdmin(READ_ROLES),
+  requirePermission("catalogue.view"),
   handle(async (req, res) => {
     const [categories, products, lowStock, shops] = await Promise.all([
       prisma.category.findMany({ include: categoryInclude, orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }] }),
@@ -239,7 +260,7 @@ adminCatalogueRouter.get(
       products: products.map(adminProduct),
       shops: shops.map((shop) => adminShop(shop, shop._count.products)),
       settings: { lowStock },
-      canEdit: WRITE_ROLES.includes(req.admin!.role),
+      canEdit: req.admin!.permissions.includes("catalogue.edit"),
     });
   }),
 );
@@ -250,7 +271,7 @@ adminCatalogueRouter.get(
 
 adminCatalogueRouter.get(
   "/shops",
-  requireAdmin(READ_ROLES),
+  requirePermission("catalogue.view"),
   handle(async (_req, res) => {
     const shops = await prisma.shop.findMany({ orderBy: shopOrder, include: { _count: { select: { products: true } } } });
     res.setHeader("Cache-Control", "no-store");
@@ -260,24 +281,65 @@ adminCatalogueRouter.get(
 
 adminCatalogueRouter.post(
   "/shops",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = ShopBody.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
-    const shop = await prisma.shop.create({ data: body.data });
+    const { payment, ...shopFields } = body.data;
+    const shop = await prisma.shop.create({ data: { ...shopFields, ...paymentColumns(payment) } });
     res.status(201).json({ shop: adminShop(shop, 0) });
   }),
 );
 
 adminCatalogueRouter.patch(
   "/shops/:id",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = ShopPatch.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
     const id = z.string().uuid().safeParse(req.params.id);
     if (!id.success || !(await prisma.shop.findUnique({ where: { id: id.data }, select: { id: true } }))) throw new ApiProblem(404, "SHOP_NOT_FOUND");
-    const shop = await prisma.shop.update({ where: { id: id.data }, data: body.data, include: { _count: { select: { products: true } } } });
+    const { payment, ...shopFields } = body.data;
+    const shop = await prisma.shop.update({ where: { id: id.data }, data: { ...shopFields, ...paymentColumns(payment) }, include: { _count: { select: { products: true } } } });
+    res.json({ shop: adminShop(shop, shop._count.products) });
+  }),
+);
+
+const ShopState = z.object({ isActive: z.boolean().optional(), archived: z.boolean().optional() }).strict().refine((body) => body.isActive !== undefined || body.archived !== undefined, "Nothing to change");
+
+/** Suspend / reactivate a shop, or move it to the archive / restore it. Its products follow: hidden from the store while it is suspended or archived. */
+adminCatalogueRouter.patch(
+  "/shops/:id/state",
+  requirePermission("catalogue.edit"),
+  handle(async (req, res) => {
+    const body = ShopState.safeParse(req.body);
+    if (!body.success) return invalid(res, body.error);
+    const id = z.string().uuid().safeParse(req.params.id);
+    if (!id.success || !(await prisma.shop.findUnique({ where: { id: id.data }, select: { id: true } }))) throw new ApiProblem(404, "SHOP_NOT_FOUND");
+    const data = { ...(body.data.isActive === undefined ? {} : { isActive: body.data.isActive }), ...(body.data.archived === undefined ? {} : { archivedAt: body.data.archived ? new Date() : null }) };
+    const shop = await prisma.$transaction(async (tx) => {
+      const updated = await tx.shop.update({ where: { id: id.data }, data, include: { _count: { select: { products: true } } } });
+      // A suspended or archived shop cannot stay signed in.
+      if (!updated.isActive || updated.archivedAt) await tx.adminSession.updateMany({ where: { adminUser: { shopId: updated.id }, revokedAt: null }, data: { revokedAt: new Date() } });
+      return updated;
+    });
+    res.json({ shop: adminShop(shop, shop._count.products) });
+  }),
+);
+
+const ShopReview = z.discriminatedUnion("decision", [z.object({ decision: z.literal("approve") }).strict(), z.object({ decision: z.literal("reject"), reason: z.string().trim().min(1).max(500) }).strict()]);
+
+/** The admin answers a seller's request to join: approve (the shop and its login go live) or refuse with a reason. */
+adminCatalogueRouter.post(
+  "/shops/:id/review",
+  requirePermission("catalogue.edit"),
+  handle(async (req, res) => {
+    const body = ShopReview.safeParse(req.body);
+    if (!body.success) return invalid(res, body.error);
+    const id = z.string().uuid().safeParse(req.params.id);
+    if (!id.success || !(await prisma.shop.findUnique({ where: { id: id.data }, select: { id: true } }))) throw new ApiProblem(404, "SHOP_NOT_FOUND");
+    const data = body.data.decision === "approve" ? { approvalStatus: null, rejectReason: null } : { approvalStatus: "REJECTED" as const, rejectReason: body.data.reason };
+    const shop = await prisma.shop.update({ where: { id: id.data }, data, include: { _count: { select: { products: true } } } });
     res.json({ shop: adminShop(shop, shop._count.products) });
   }),
 );
@@ -288,7 +350,7 @@ adminCatalogueRouter.patch(
 
 adminCatalogueRouter.post(
   "/products",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = NewProduct.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
@@ -320,7 +382,7 @@ adminCatalogueRouter.post(
 
 adminCatalogueRouter.patch(
   "/products/:id",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = ProductPatch.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
@@ -350,9 +412,36 @@ adminCatalogueRouter.patch(
   }),
 );
 
+/** A product a shop sent: publishing it makes it visible in the store; refusing it keeps it hidden and stores the reason for the shop. */
+adminCatalogueRouter.post(
+  "/products/:id/approve",
+  requirePermission("catalogue.edit"),
+  handle(async (req, res) => {
+    const product = await findProduct(String(req.params.id));
+    if (!product.approvalStatus) throw new ApiProblem(409, "NOT_PENDING");
+    const updated = await prisma.product.update({ where: { id: product.id }, data: { approvalStatus: null, rejectReason: null, isVisible: true }, include: productInclude });
+    if (updated.shopId) await notifyShop(updated.shopId, { kind: "product_approved", title: "تمت الموافقة على منتجك", body: `${updated.nameAr} صار ظاهر في المتجر.`, link: "products" });
+    res.json({ product: adminProduct(updated) });
+  }),
+);
+
+adminCatalogueRouter.post(
+  "/products/:id/reject",
+  requirePermission("catalogue.edit"),
+  handle(async (req, res) => {
+    const body = z.object({ reason: text(500).min(1) }).strict().safeParse(req.body);
+    if (!body.success) return invalid(res, body.error);
+    const product = await findProduct(String(req.params.id));
+    if (!product.approvalStatus) throw new ApiProblem(409, "NOT_PENDING");
+    const updated = await prisma.product.update({ where: { id: product.id }, data: { approvalStatus: "REJECTED", rejectReason: body.data.reason, isVisible: false }, include: productInclude });
+    if (updated.shopId) await notifyShop(updated.shopId, { kind: "product_rejected", title: "تم رفض منتجك", body: `${updated.nameAr}: ${body.data.reason}`, link: "productRequests" });
+    res.json({ product: adminProduct(updated) });
+  }),
+);
+
 adminCatalogueRouter.post(
   "/products/:id/archive",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const product = await findProduct(String(req.params.id));
     // Images, stock history and past orders stay linked to the product; it only leaves the storefront.
@@ -363,7 +452,7 @@ adminCatalogueRouter.post(
 
 adminCatalogueRouter.post(
   "/products/:id/restore",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const product = await findProduct(String(req.params.id));
     if (product.categoryId) {
@@ -377,7 +466,7 @@ adminCatalogueRouter.post(
 
 adminCatalogueRouter.put(
   "/products/:id/stock",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = StockBody.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
@@ -407,7 +496,7 @@ adminCatalogueRouter.put(
 
 adminCatalogueRouter.post(
   "/categories",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = NewCategory.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
@@ -429,7 +518,7 @@ adminCatalogueRouter.post(
 
 adminCatalogueRouter.put(
   "/categories/order",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = CategoryOrder.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
@@ -443,7 +532,7 @@ adminCatalogueRouter.put(
 
 adminCatalogueRouter.patch(
   "/categories/:id",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = CategoryPatch.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
@@ -457,7 +546,7 @@ adminCatalogueRouter.patch(
 
 adminCatalogueRouter.post(
   "/categories/:id/archive",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const category = await findCategory(String(req.params.id));
     // Archiving a category that still holds live subcategories or products would strand them, so it is refused
@@ -474,7 +563,7 @@ adminCatalogueRouter.post(
 
 adminCatalogueRouter.post(
   "/categories/:id/restore",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const category = await findCategory(String(req.params.id));
     if (category.parentId) {
@@ -492,7 +581,7 @@ adminCatalogueRouter.post(
 
 adminCatalogueRouter.put(
   "/settings/inventory",
-  requireAdmin(WRITE_ROLES),
+  requirePermission("catalogue.edit"),
   handle(async (req, res) => {
     const body = InventoryBody.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);

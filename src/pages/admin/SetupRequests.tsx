@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Phone } from "lucide-react";
 import { INQUIRIES_KEY, inquiryId, loadInquiries, statusOf, updateInquiry, type InquiryStatus, type SetupInquiry } from "@/lib/setup-inquiries";
-import { AR_DATE, Badge, Button, DemoNote, Drawer, Empty, Field, PageHead, Pager, Panel, Select, Tabs, usePager } from "./ui";
+import { onHashMove, pushHash, readHash } from "./nav";
+import { AR_DATE, Badge, Button, DemoNote, Empty, Field, PageHead, Pager, Panel, Select, Tabs, usePager } from "./ui";
 
 const STATUS: Record<InquiryStatus, { label: string; tone: "blue" | "warn" | "ok" }> = {
   new: { label: "جديد", tone: "blue" },
@@ -15,11 +16,15 @@ const formatTime = (iso: string) => {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleString(AR_DATE, { dateStyle: "medium", timeStyle: "short" });
 };
 
-/** "Ask us to prepare your order" requests sent from the storefront form: list, open, set the status, keep internal notes. */
+const REQUEST_PREFIX = "request-";
+/** The id of the request the address (#setupRequests/request-<id>) points at, or null for the list. */
+const openIdOf = (sub: string | null) => (sub?.startsWith(REQUEST_PREFIX) ? sub.slice(REQUEST_PREFIX.length) : null);
+
+/** "Ask us to prepare your order" requests sent from the storefront form: list, open a request as its own page, set the status, keep internal notes. */
 export function SetupRequests() {
   const [rows, setRows] = useState<SetupInquiry[]>(() => loadInquiries());
   const [filter, setFilter] = useState<"all" | InquiryStatus>("all");
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [openId, setOpenId] = useState<string | null>(() => openIdOf(readHash().sub));
   const [status, setStatus] = useState<InquiryStatus>("new");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState("");
@@ -33,6 +38,9 @@ export function SetupRequests() {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+  // The open request lives in the address, so a refresh and the back gesture keep the place.
+  useEffect(() => onHashMove(() => setOpenId(openIdOf(readHash().sub))), []);
+
   const counts = useMemo(() => {
     const result = { new: 0, contacting: 0, done: 0 };
     for (const row of rows) result[statusOf(row)] += 1;
@@ -42,12 +50,16 @@ export function SetupRequests() {
   const pager = usePager(shown, filter);
   const open = openId ? rows.find((row) => inquiryId(row) === openId) : undefined;
 
-  function show(row: SetupInquiry) {
-    setOpenId(inquiryId(row));
-    setStatus(statusOf(row));
-    setNotes(row.adminNotes ?? "");
+  // Each time a request opens, the form starts from what is saved for it.
+  useEffect(() => {
+    const row = openId ? loadInquiries().find((item) => inquiryId(item) === openId) : undefined;
+    setStatus(row ? statusOf(row) : "new");
+    setNotes(row?.adminNotes ?? "");
     setError("");
-  }
+  }, [openId]);
+
+  const show = (row: SetupInquiry) => pushHash("setupRequests", `${REQUEST_PREFIX}${inquiryId(row)}`);
+  const backToList = () => pushHash("setupRequests");
 
   function save() {
     if (!open) return;
@@ -56,7 +68,58 @@ export function SetupRequests() {
       return;
     }
     setRows(loadInquiries());
-    setOpenId(null);
+    backToList();
+  }
+
+  if (openId) {
+    return (
+      <div className="space-y-6">
+        <PageHead title={open ? `تفاصيل طلب التجهيز: ${open.name}` : "تفاصيل طلب التجهيز"} lead={open ? formatTime(open.at) : undefined} />
+        {open ? (
+          <Panel className="max-w-2xl">
+            <div className="space-y-5 p-5">
+              <div className="flex items-start justify-between gap-4 text-sm">
+                <dl>
+                  <dt className="text-xs font-medium text-(--a-muted)">الاسم</dt>
+                  <dd className="mt-1 font-medium">{open.name}</dd>
+                </dl>
+                <div className="w-32 shrink-0">
+                  <Select label="الحالة" value={status} onChange={setStatus} options={STATUS_OPTIONS} />
+                </div>
+              </div>
+              <dl className="space-y-3 text-sm">
+                <div>
+                  <dt className="text-xs font-medium text-(--a-muted)">رقم الجوال</dt>
+                  <dd dir="ltr" className="mt-1 text-end font-medium">
+                    {open.phone}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-medium text-(--a-muted)">تفاصيل التجهيز</dt>
+                  <dd className="mt-1 whitespace-pre-line leading-7">{open.note}</dd>
+                </div>
+              </dl>
+              <Field label="ملاحظات داخلية (للإدارة فقط، لا تظهر للعميل)" value={notes} onChange={setNotes} multiline />
+              {error ? (
+                <p role="alert" className="text-sm text-(--a-danger)">
+                  {error}
+                </p>
+              ) : null}
+              <div className="flex items-center gap-2 border-t border-(--a-line) pt-5">
+                <Button variant="primary" onClick={save}>
+                  حفظ
+                </Button>
+                <Button onClick={backToList}>إلغاء</Button>
+              </div>
+            </div>
+          </Panel>
+        ) : (
+          <Panel>
+            <Empty icon={ClipboardList} title="ما لقينا هذا الطلب" lead="يمكن إنه انحذف أو انفتح من متصفح ثاني. ارجع لقائمة طلبات التجهيز." />
+          </Panel>
+        )}
+      </div>
+    );
   }
 
   return (
@@ -115,48 +178,6 @@ export function SetupRequests() {
         <Pager pager={pager} />
       </Panel>
 
-      <Drawer
-        open={open !== undefined}
-        onClose={() => setOpenId(null)}
-        title="تفاصيل طلب التجهيز"
-        lead={open ? formatTime(open.at) : undefined}
-        footer={
-          <>
-            <Button onClick={() => setOpenId(null)}>إلغاء</Button>
-            <Button variant="primary" onClick={save}>
-              حفظ
-            </Button>
-          </>
-        }
-      >
-        {open ? (
-          <div className="space-y-5">
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-xs font-medium text-(--a-muted)">الاسم</dt>
-                <dd className="mt-1 font-medium">{open.name}</dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium text-(--a-muted)">رقم الجوال</dt>
-                <dd dir="ltr" className="mt-1 text-end font-medium">
-                  {open.phone}
-                </dd>
-              </div>
-              <div>
-                <dt className="text-xs font-medium text-(--a-muted)">تفاصيل التجهيز</dt>
-                <dd className="mt-1 whitespace-pre-line leading-7">{open.note}</dd>
-              </div>
-            </dl>
-            <Select label="الحالة" value={status} onChange={setStatus} options={STATUS_OPTIONS} />
-            <Field label="ملاحظات داخلية (للإدارة فقط، لا تظهر للعميل)" value={notes} onChange={setNotes} multiline />
-            {error ? (
-              <p role="alert" className="text-sm text-(--a-danger)">
-                {error}
-              </p>
-            ) : null}
-          </div>
-        ) : null}
-      </Drawer>
     </div>
   );
 }

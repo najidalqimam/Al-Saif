@@ -1,17 +1,48 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Boxes, PackageCheck, PackageSearch, PackageX, TriangleAlert } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
 import { useSiteContent } from "@/lib/site-content";
 import { STOCK_LEVEL, stockLevel, useOps, type StockLevel } from "./ops";
-import { Badge, DemoNote, Empty, num, NumberField, PageHead, Pager, Panel, SearchBox, StatCard, Tabs, usePager } from "./ui";
+import { registerLeaveGuard } from "./nav";
+import { useShopScope } from "./shopScope";
+import { Badge, Button, DemoNote, Empty, num, NumberField, PageHead, Pager, Panel, SearchBox, StatCard, Tabs, usePager } from "./ui";
 
 type Filter = "all" | StockLevel;
 
 export function Inventory() {
   const { content } = useSiteContent();
   const { ops, setStock, setLowStock } = useOps();
+  // The alert threshold is the store's: a shop can read it but not change it.
+  const inShop = useShopScope() !== null;
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
+  // Typed quantities wait here until "حفظ" is pressed; nothing is written to the store before that.
+  const [draftStock, setDraftStock] = useState<Record<string, number | null>>({});
+  const [draftLow, setDraftLow] = useState<number | null | undefined>(undefined);
+  const [saved, setSaved] = useState(false);
+
+  const changed = Object.entries(draftStock).filter(([id, qty]) => qty !== (ops.stock[id] ?? null));
+  const lowChanged = draftLow !== undefined && (draftLow ?? 0) !== ops.lowStock;
+  const dirty = changed.length > 0 || lowChanged;
+
+  function save() {
+    for (const [id, qty] of changed) setStock(id, qty);
+    if (lowChanged) setLowStock(draftLow ?? 0);
+    setDraftStock({});
+    setDraftLow(undefined);
+    setSaved(true);
+  }
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  // Leaving the page with unsaved quantities asks first.
+  useEffect(() => registerLeaveGuard(() => dirtyRef.current, { save: () => saveRef.current() }), []);
+  useEffect(() => {
+    if (!saved) return;
+    const timer = window.setTimeout(() => setSaved(false), 2500);
+    return () => window.clearTimeout(timer);
+  }, [saved]);
 
   const products = content.products.filter((item) => !item.archived);
   const levelOf = (id: string) => stockLevel(ops.stock[id], ops.lowStock);
@@ -31,9 +62,35 @@ export function Inventory() {
         title="المخزون"
         lead="الكمية المتوفرة لكل منتج، مع تنبيه لما تقل عن الحد."
         actions={
-          <div className="w-44">
-            <NumberField label="حد التنبيه (قطع)" value={ops.lowStock} onChange={(value) => setLowStock(value ?? 0)} />
-          </div>
+          <>
+            <div className="w-44">
+              <NumberField
+                label="حد التنبيه (قطع)"
+                disabled={inShop}
+                value={draftLow !== undefined ? draftLow : ops.lowStock}
+                onChange={(value) => {
+                  setSaved(false);
+                  setDraftLow(value);
+                }}
+              />
+            </div>
+            <div className="flex items-center gap-2 self-end">
+              {saved && !dirty ? <span className="text-xs font-medium text-(--a-ok)">تم الحفظ</span> : null}
+              {dirty ? (
+                <Button
+                  onClick={() => {
+                    setDraftStock({});
+                    setDraftLow(undefined);
+                  }}
+                >
+                  تراجع
+                </Button>
+              ) : null}
+              <Button variant="primary" onClick={save} disabled={!dirty}>
+                حفظ
+              </Button>
+            </div>
+          </>
         }
       />
       <DemoNote title="تنبيه">
@@ -80,7 +137,12 @@ export function Inventory() {
                   </div>
                   <Badge tone={level.tone}>{level.label}</Badge>
                   <div className="w-32">
-                    <NumberField label={`كمية ${item.nameAr}`} hideLabel placeholder="—" suffix="قطعة" value={ops.stock[item.id] ?? null} onChange={(value) => setStock(item.id, value)} />
+                    <NumberField label={`كمية ${item.nameAr}`} hideLabel placeholder="—" suffix="قطعة" value={item.id in draftStock ? draftStock[item.id] : (ops.stock[item.id] ?? null)}
+                      onChange={(value) => {
+                        setSaved(false);
+                        setDraftStock((current) => ({ ...current, [item.id]: value }));
+                      }}
+                    />
                   </div>
                 </li>
               );

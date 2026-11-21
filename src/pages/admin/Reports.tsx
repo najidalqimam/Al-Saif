@@ -25,7 +25,8 @@ export function Reports() {
 
   const byMethod = (["cod", "bank"] as const).map((id) => ({ id, total: kept.filter((order) => order.paymentMethod === id).reduce((sum, order) => sum + order.total, 0) }));
   const byZone = ops.zones.map((zone) => ({ ...zone, count: kept.filter((order) => order.zone === zone.id).length }));
-  const nameOf = (id: string) => content.products.find((item) => item.id === id)?.nameAr ?? id;
+  const lineNames = new Map(orders.flatMap((order) => (order.lines ?? []).map((line) => [line.id, line.name] as const)));
+  const nameOf = (id: string) => content.products.find((item) => item.id === id)?.nameAr ?? lineNames.get(id) ?? id;
 
   return (
     <div className="space-y-6">

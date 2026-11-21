@@ -7,10 +7,15 @@ import { accountRouter } from "./routes/account.js";
 import { adminAuthRouter } from "./routes/admin-auth.js";
 import { adminCatalogueRouter } from "./routes/admin-catalogue.js";
 import { adminCustomersRouter } from "./routes/admin-customers.js";
+import { adminTeamRouter } from "./routes/admin-team.js";
 import { adminOrdersRouter } from "./routes/admin-orders.js";
 import { catalogueRouter } from "./routes/catalogue.js";
 import { adminCheckoutRouter, checkoutRouter } from "./routes/checkout-settings.js";
 import { ordersRouter } from "./routes/orders.js";
+import { shopRouter } from "./routes/shop.js";
+import { shopSignupRouter } from "./routes/shop-signup.js";
+import { requireAdmin } from "./auth/middleware.js";
+import { notificationRoutes } from "./notifications.js";
 
 export function createApp() {
   const app = express();
@@ -19,7 +24,7 @@ export function createApp() {
   // Only the configured frontends may call the API from a browser, with cookies for the admin routes.
   app.use(cors({ origin: config.corsOrigins, credentials: true }));
   // Product photos are sent as data URLs, so only the product create/edit routes accept larger bodies.
-  app.use(["/api/admin/products"], express.json({ limit: "2mb" }));
+  app.use(["/api/admin/products", "/api/shop/products"], express.json({ limit: "2mb" }));
   app.use(express.json({ limit: "50kb" }));
 
   app.get("/api/health", async (_req, res) => {
@@ -44,8 +49,12 @@ export function createApp() {
   app.use("/api/checkout", checkoutRouter);
   app.use("/api/account", accountRouter);
   app.use("/api/admin/auth", adminAuthRouter);
+  app.use("/api/shop-signup", shopSignupRouter);
+  app.use("/api/shop", shopRouter);
   app.use("/api/admin/orders", adminOrdersRouter);
   app.use("/api/admin/customers", adminCustomersRouter);
+  app.use("/api/admin/team", adminTeamRouter);
+  app.use("/api/admin/notifications", requireAdmin(["OWNER", "MANAGER", "EDITOR", "SUPPORT"]), notificationRoutes(() => null));
   app.use("/api/admin", adminCheckoutRouter);
   app.use("/api/admin", adminCatalogueRouter);
 

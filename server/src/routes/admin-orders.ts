@@ -1,12 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
 import { OrderStatus, PaymentStatus, Prisma } from "@prisma/client";
-import { requireAdmin } from "../auth/middleware.js";
+import { requirePermission } from "../auth/middleware.js";
 import { prisma, withTransactionRetry } from "../db.js";
 
 // /api/admin/orders: order list and status changes for staff who handle orders.
 
-const ORDER_ROLES = ["OWNER", "MANAGER", "SUPPORT"] as const;
 
 const ListQuery = z.object({
   status: z.enum(OrderStatus).optional(),
@@ -23,7 +22,10 @@ const StatusBody = z
   .refine((body) => body.status || body.paymentStatus, "Send status, paymentStatus or both");
 
 export const adminOrdersRouter = Router();
-adminOrdersRouter.use(requireAdmin([...ORDER_ROLES]));
+// Reading orders and changing them are separate permissions.
+const canViewOrders = requirePermission("orders.view");
+const canEditOrders = requirePermission("orders.edit");
+adminOrdersRouter.use((req, res, next) => (req.method === "GET" || req.method === "HEAD" ? canViewOrders : canEditOrders)(req, res, next));
 
 adminOrdersRouter.get("/", async (req, res) => {
   const query = ListQuery.safeParse(req.query);
@@ -42,6 +44,22 @@ adminOrdersRouter.get("/", async (req, res) => {
   });
   res.setHeader("Cache-Control", "no-store");
   res.json({ orders });
+});
+
+// Archive ("delete" from the lists) or restore an order. The order is kept as it is; only archived_at changes.
+adminOrdersRouter.patch("/:number/archive", async (req, res) => {
+  const number = Number(req.params.number);
+  const body = z.object({ archived: z.boolean() }).strict().safeParse(req.body);
+  if (!Number.isInteger(number) || number < 1 || !body.success) {
+    res.status(400).json({ error: "INVALID_INPUT" });
+    return;
+  }
+  const result = await prisma.order.updateMany({ where: { number }, data: { archivedAt: body.data.archived ? new Date() : null } });
+  if (result.count === 0) {
+    res.status(404).json({ error: "ORDER_NOT_FOUND" });
+    return;
+  }
+  res.json({ order: { number, archived: body.data.archived } });
 });
 
 adminOrdersRouter.patch("/:number/status", async (req, res) => {

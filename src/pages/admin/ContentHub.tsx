@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { TrashIcon } from "@/components/TrashIcon";
 import { Link } from "wouter";
 import { useTheme } from "next-themes";
 import {
@@ -10,7 +11,6 @@ import {
   Plus,
   Save,
   ShoppingBag,
-  Trash2,
   Upload,
   Building2,
   Eye,
@@ -530,7 +530,7 @@ function CustomEditor({ id, onClose }: { id: string | null; onClose: () => void 
         footer={
           draft ? (
             <>
-              <Button variant="danger" icon={Trash2} onClick={() => setRemoving(true)}>
+              <Button variant="danger" icon={TrashIcon} onClick={() => setRemoving(true)}>
                 حذف القسم
               </Button>
               <Button onClick={onClose}>إلغاء</Button>
@@ -684,7 +684,7 @@ function BrandTab() {
                 <input type="file" accept="image/*" className="sr-only" onChange={(event) => upload(event.target.files?.[0])} />
               </label>
               {brand.logo ? (
-                <Button icon={Trash2} onClick={() => updateBrand({ logo: "" })}>
+                <Button icon={TrashIcon} onClick={() => updateBrand({ logo: "" })}>
                   إزالة الصورة
                 </Button>
               ) : null}

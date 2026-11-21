@@ -95,7 +95,13 @@ export function WholesaleCard({ product, row, shop, wholesale }: { product: Offe
           </span>
         </p>
         <p className="mt-1 text-xs leading-5 text-ink-soft">{w.cardCondition.replace("{count}", String(WHOLESALE_MIN))}</p>
-        <p className="mt-2 text-xs leading-5 text-ink-mute">{w.cardRetail.replace("{price}", money(product.price)).replace("{currency}", cur)}</p>
+        <p className="mt-2 text-xs leading-5 text-ink-mute">
+          {/* Only the single-piece price is struck through, like the price before a discount. */}
+          {w.cardRetail.split(/\{price\}[^{]*\{currency\}|\{price\}/)[0]}
+          <s className="tabular-nums">
+            {money(product.price)} {cur}
+          </s>
+        </p>
       </div>
 
       <div className="mt-3 flex items-baseline justify-between gap-3 border-t border-[#e6e9ef] pt-3">

@@ -10,6 +10,7 @@ export const ACCOUNT_COPY: Record<
     signInLead: string;
     registerTitle: string;
     registerLead: string;
+    addressTitle: string;
     firstName: string;
     lastName: string;
     phone: string;
@@ -46,6 +47,9 @@ export const ACCOUNT_COPY: Record<
     noAddresses: string;
     label: string;
     labelHint: string;
+    labelPresets: string[];
+    confirmAddress: string;
+    mainShort: string;
     zone: string;
     chooseZone: string;
     city: string;
@@ -62,6 +66,11 @@ export const ACCOUNT_COPY: Record<
     save: string;
     cancel: string;
     saved: string;
+    unsaved: string;
+    leaveTitle: string;
+    leaveLead: string;
+    leaveDiscard: string;
+    leaveSave: string;
     profile: string;
     avatar: string;
     avatarLead: string;
@@ -86,6 +95,7 @@ export const ACCOUNT_COPY: Record<
     signInLead: "ادخل برقم جوالك أو بريدك الإلكتروني، وكلمة السر.",
     registerTitle: "إنشاء حساب",
     registerLead: "سجّل مرة وحدة، وتابع طلباتك واحفظ عناوينك.",
+    addressTitle: "عنوان التوصيل",
     firstName: "الاسم الأول",
     lastName: "اسم العائلة",
     phone: "رقم الجوال",
@@ -122,6 +132,9 @@ export const ACCOUNT_COPY: Record<
     noAddresses: "ما فيه عناوين محفوظة. أضف عنوان علشان يتعبى تلقائيًا وقت الطلب.",
     label: "اسم العنوان",
     labelHint: "مثال: البيت، العمل",
+    labelPresets: ["البيت", "العمل", "أخرى"],
+    confirmAddress: "تأكيد العنوان",
+    mainShort: "الأساسي",
     zone: "المنطقة",
     chooseZone: "اختر المنطقة",
     city: "المدينة",
@@ -138,6 +151,11 @@ export const ACCOUNT_COPY: Record<
     save: "حفظ",
     cancel: "إلغاء",
     saved: "تم الحفظ",
+    unsaved: "فيه تعديلات غير محفوظة. اضغط حفظ عشان تتسجل.",
+    leaveTitle: "تبغى تطلع بدون حفظ؟",
+    leaveLead: "إذا طلعت الحين، بتفقد التعديلات اللي سويتها. تبغى تحفظها قبل تطلع؟",
+    leaveDiscard: "خروج بدون حفظ",
+    leaveSave: "حفظ التعديلات",
     profile: "بيانات الحساب",
     avatar: "الصورة الرمزية",
     avatarLead: "اختر الشكل اللي يظهر جنب اسمك.",
@@ -177,6 +195,7 @@ export const ACCOUNT_COPY: Record<
     signInLead: "Use your mobile number or email, and your password.",
     registerTitle: "Create an account",
     registerLead: "Register once to follow your orders and keep your addresses.",
+    addressTitle: "Delivery address",
     firstName: "First name",
     lastName: "Last name",
     phone: "Mobile number",
@@ -213,6 +232,9 @@ export const ACCOUNT_COPY: Record<
     noAddresses: "No saved addresses. Add one and it fills in automatically at checkout.",
     label: "Address name",
     labelHint: "e.g. Home, Work",
+    labelPresets: ["Home", "Work", "Other"],
+    confirmAddress: "Confirm address",
+    mainShort: "Main",
     zone: "Region",
     chooseZone: "Choose a region",
     city: "City",
@@ -229,6 +251,11 @@ export const ACCOUNT_COPY: Record<
     save: "Save",
     cancel: "Cancel",
     saved: "Saved",
+    unsaved: "You have unsaved changes. Press Save to keep them.",
+    leaveTitle: "Leave without saving?",
+    leaveLead: "If you leave now, you will lose the changes you made. Save them before leaving?",
+    leaveDiscard: "Leave without saving",
+    leaveSave: "Save changes",
     profile: "Account details",
     avatar: "Avatar",
     avatarLead: "Pick what shows next to your name.",
@@ -268,6 +295,7 @@ export const ACCOUNT_COPY: Record<
     signInLead: "اپنا موبائل نمبر یا ای میل، اور پاس ورڈ درج کریں۔",
     registerTitle: "اکاؤنٹ بنائیں",
     registerLead: "ایک بار رجسٹر کریں، آرڈرز دیکھیں اور پتے محفوظ رکھیں۔",
+    addressTitle: "ڈیلیوری کا پتہ",
     firstName: "پہلا نام",
     lastName: "آخری نام",
     phone: "موبائل نمبر",
@@ -304,6 +332,9 @@ export const ACCOUNT_COPY: Record<
     noAddresses: "کوئی محفوظ پتہ نہیں۔ ایک شامل کریں تاکہ چیک آؤٹ پر خود بھرجائے۔",
     label: "پتہ کا نام",
     labelHint: "مثال: گھر، دفتر",
+    labelPresets: ["گھر", "دفتر", "دیگر"],
+    confirmAddress: "پتہ کی تصدیق",
+    mainShort: "مرکزی",
     zone: "علاقہ",
     chooseZone: "علاقہ منتخب کریں",
     city: "شہر",
@@ -320,6 +351,11 @@ export const ACCOUNT_COPY: Record<
     save: "محفوظ",
     cancel: "منسوخ",
     saved: "محفوظ ہو گیا",
+    unsaved: "کچھ تبدیلیاں محفوظ نہیں ہوئیں۔ محفوظ کرنے کے لیے Save دبائیں۔",
+    leaveTitle: "بغیر محفوظ کیے باہر جائیں؟",
+    leaveLead: "اگر ابھی باہر گئے تو آپ کی تبدیلیاں ضائع ہو جائیں گی۔ باہر جانے سے پہلے محفوظ کریں؟",
+    leaveDiscard: "بغیر محفوظ کیے باہر جائیں",
+    leaveSave: "تبدیلیاں محفوظ کریں",
     profile: "اکاؤنٹ کی تفصیلات",
     avatar: "اواتار",
     avatarLead: "نام کے ساتھ کیا دکھے، منتخب کریں۔",

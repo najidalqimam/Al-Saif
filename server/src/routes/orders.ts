@@ -4,6 +4,7 @@ import { z } from "zod";
 import { optionalCustomer } from "../auth/middleware.js";
 import { isCatalogueId } from "../catalogue/ids.js";
 import { prisma } from "../db.js";
+import { notifyShop, notifyStaff } from "../notifications.js";
 import { OrderError, placeOrder } from "../orders/place-order.js";
 
 // POST /api/orders: the storefront checkout. The body may only say what to buy, who is buying and where to
@@ -58,6 +59,20 @@ const ORDER_ERROR_STATUS: Record<OrderError["code"], number> = {
   PRICE_CHANGED: 409,
 };
 
+/** Tells the store's staff about a new order, and each shop whose products are in it. Never fails the order itself. */
+async function announceOrder(order: Awaited<ReturnType<typeof placeOrder>>) {
+  try {
+    const link = `orders/order-${order.number}`;
+    await notifyStaff({ kind: "order_placed", title: `طلب جديد #${order.number}`, body: `${order.customerName} · ${order.total.toFixed(2)} ر.س`, link });
+    const products = await prisma.product.findMany({ where: { id: { in: order.items.flatMap((item) => (item.productId ? [item.productId] : [])) } }, select: { shopId: true } });
+    for (const shopId of new Set(products.flatMap((product) => (product.shopId ? [product.shopId] : [])))) {
+      await notifyShop(shopId, { kind: "order_placed", title: `طلب جديد #${order.number}`, body: "طلب فيه منتجات من محلك.", link });
+    }
+  } catch {
+    // The order is already saved; a missing notification must not turn it into an error.
+  }
+}
+
 export const ordersRouter = Router();
 
 ordersRouter.post(
@@ -74,6 +89,7 @@ ordersRouter.post(
     try {
       const order = await placeOrder({ ...input, customerId: req.customer?.id });
       if (req.customer && saveAddress) await keepAddress(req.customer.id, input.address, saveAddress);
+      await announceOrder(order);
       // The order number is for the store's staff (dashboard); the customer follows orders from the account.
       res.status(201).json({
         order: {

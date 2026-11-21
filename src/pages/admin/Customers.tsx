@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
-import { ArchiveRestore, Mail, Package, RefreshCw, Store, Trash2, UserCheck, Users, UserX } from "lucide-react";
+import { TrashIcon } from "@/components/TrashIcon";
+import { useLiveRefresh } from "@/lib/live-sync";
+import { ArchiveRestore, Mail, Package, RefreshCw, Store, UserCheck, Users, UserX } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
 import { PREVIEW, api, apiMessage } from "@/lib/api";
 import { Avatar } from "@/lib/avatars";
@@ -74,6 +76,8 @@ function CustomersList() {
   const [archived, setArchived] = useState<string[]>(readArchived);
   const [tab, setTab] = useState<"all" | "archived">("all");
   const [archiving, setArchiving] = useState<CustomerRow | null>(null);
+  const [tick, setTick] = useState(0);
+  useLiveRefresh("customers", () => setTick((value) => value + 1));
   const canArchive = PREVIEW;
   const setArchivedIds = (next: string[]) => {
     try {
@@ -103,7 +107,7 @@ function CustomersList() {
       controller.abort();
       window.clearTimeout(timer);
     };
-  }, [query]);
+  }, [query, tick]);
 
   const inArchive = canArchive && tab === "archived";
   const archivedRows = rows?.filter((row) => archived.includes(row.id)) ?? [];
@@ -197,7 +201,7 @@ function CustomersList() {
                         <IconButton icon={ArchiveRestore} label={`استرجاع ${row.firstName} ${row.lastName}`} onClick={() => setArchivedIds(archived.filter((id) => id !== row.id))} />
                       ) : (
                         <IconButton
-                          icon={Trash2}
+                          icon={TrashIcon}
                           tone="danger"
                           label={canArchive ? `حذف ${row.firstName} ${row.lastName}` : "حذف العملاء غير متاح أثناء الاتصال بقاعدة البيانات"}
                           disabled={!canArchive}
@@ -233,18 +237,28 @@ function CustomerPage({ id }: { id: string }) {
   const [error, setError] = useState("");
   const [resend, setResend] = useState<"idle" | "busy" | "done" | "error">("idle");
 
+  const [tick, setTick] = useState(0);
+  useLiveRefresh("customers", () => setTick((value) => value + 1));
+
   useEffect(() => {
     setDetail(null);
     setError("");
     setResend("idle");
+  }, [id]);
+
+  // Fetched again whenever the account is saved elsewhere, without clearing what is on screen.
+  useEffect(() => {
     const controller = new AbortController();
     api<Detail>(`/admin/customers/${encodeURIComponent(id)}`, { signal: controller.signal })
-      .then(setDetail)
+      .then((result) => {
+        setDetail(result);
+        setError("");
+      })
       .catch((failure) => {
         if (!controller.signal.aborted) setError(apiMessage(failure));
       });
     return () => controller.abort();
-  }, [id]);
+  }, [id, tick]);
 
   async function sendWelcome() {
     setResend("busy");

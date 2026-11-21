@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { ApiError, api } from "@/lib/api";
+import { announceChange } from "@/lib/live-sync";
 
 // The signed-in store customer. The session itself is an httpOnly cookie set by the API; the browser only
 // keeps the profile in memory and asks the server again on every visit.
@@ -15,7 +16,7 @@ export type Customer = {
   createdAt: string;
   welcomeEmail: WelcomeEmail;
 };
-export type Registration = { firstName: string; lastName: string; phone: string; email: string; password: string; locale: "ar" | "en" | "ur" };
+export type Registration = { firstName: string; lastName: string; phone: string; email: string; password: string; locale: "ar" | "en" | "ur"; address?: { zoneCode: string; city: string; line1: string } };
 
 type CustomerApi = {
   customer: Customer | null;
@@ -62,6 +63,7 @@ export function CustomerProvider({ children }: { children: ReactNode }) {
       body: { ...input, phone: input.phone.replace(/[\s-]/g, ""), firstName: input.firstName.trim(), lastName: input.lastName.trim(), email: input.email.trim() },
     });
     setCustomer(result.customer);
+    announceChange("customers");
     return result.customer;
   }, []);
 

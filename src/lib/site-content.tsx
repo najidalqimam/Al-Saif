@@ -63,8 +63,10 @@ export type ProductRow = {
 export type ProductSpec = { label: string; value: string };
 
 /** A shop; the contact details are optional (empty means not filled in). */
-export type Shop = { id: string; name: string; ownerName?: string; phone?: string; email?: string; city?: string; address?: string; description?: string };
-export type ShopInput = Omit<Shop, "id">;
+/** How a shop gets paid; shown on the shop's page in the admin dashboard. */
+export type ShopPayment = { bankName?: string; accountHolder?: string; iban?: string; accountNumber?: string; acceptsCod?: boolean; acceptsBankTransfer?: boolean; notes?: string };
+export type Shop = { id: string; name: string; ownerName?: string; phone?: string; email?: string; city?: string; address?: string; description?: string; payment?: ShopPayment; /** "PENDING" / "REJECTED" for a seller that signed up by itself; otherwise approved. */ status?: "APPROVED" | "PENDING" | "REJECTED"; rejectReason?: string; createdAt?: string; /** false = suspended: hidden from the store with its products. */ isActive?: boolean; /** In the dashboard's archive (deleted from the list); hidden like a suspended shop. */ archived?: boolean };
+export type ShopInput = Omit<Shop, "id" | "status" | "rejectReason" | "createdAt" | "isActive" | "archived">;
 
 /** The product page copy (description, highlights, spec table) in the three languages. */
 export type PageCopyKey = "descriptionAr" | "descriptionEn" | "descriptionUr" | "featuresAr" | "featuresEn" | "featuresUr" | "specsAr" | "specsEn" | "specsUr";
@@ -325,7 +327,7 @@ export type Brand = {
   logo: string;
 };
 
-export type NewCategory = Pick<CatalogCategory, "nameAr" | "nameEn" | "nameUr" | "descriptionAr" | "descriptionEn" | "descriptionUr" | "parentId" | "featured">;
+export type NewCategory = Pick<CatalogCategory, "nameAr" | "nameEn" | "nameUr" | "descriptionAr" | "descriptionEn" | "descriptionUr" | "parentId" | "featured"> & { icon?: string };
 
 type BlockKey = "catalog" | "deals" | "bestsellers" | "addons" | "setups" | "footer";
 
@@ -627,10 +629,14 @@ type ApiProduct = {
   archivedAt?: string | null;
   stockQuantity?: number | null;
   shop?: Shop | null;
+  /** A product a shop sent: PENDING or REJECTED; null when it is published. */
+  approval?: "PENDING" | "REJECTED" | null;
+  rejectReason?: string | null;
+  submittedAt?: string | null;
 };
 
 type ApiShop = Shop & { products?: number };
-const shopFromApi = ({ id, name, ownerName, phone, email, city, address, description }: ApiShop): Shop => ({ id, name, ownerName, phone, email, city, address, description });
+const shopFromApi = ({ id, name, ownerName, phone, email, city, address, description, payment, status, rejectReason, createdAt, isActive, archived }: ApiShop): Shop => ({ id, name, ownerName, phone, email, city, address, description, payment, status, rejectReason, createdAt, isActive, archived });
 
 type ApiCategory = {
   id: string;
@@ -694,6 +700,7 @@ function productFromApi(item: ApiProduct): ProductRow {
     stock: item.stockQuantity ?? null,
     shopId: item.shop?.id ?? null,
     shop: item.shop ?? null,
+    ...(item.approval ? { approval: item.approval === "REJECTED" ? ("rejected" as const) : ("pending" as const), rejectReason: item.rejectReason ?? undefined, submittedAt: item.submittedAt ?? undefined } : {}),
     descriptionAr: item.descriptionAr ?? "",
     descriptionEn: item.descriptionEn ?? "",
     descriptionUr: item.descriptionUr ?? "",
@@ -746,7 +753,7 @@ function remoteFromApi(mode: Remote["mode"], data: { categories: ApiCategory[]; 
     archived: [],
     lowStock: data.settings?.lowStock ?? 5,
     canEdit: Boolean(data.canEdit),
-    shops: (data.shops ?? []).map(({ id, name, ownerName, phone, email, city, address, description }) => ({ id, name, ownerName, phone, email, city, address, description })),
+    shops: (data.shops ?? []).map(shopFromApi),
   };
   return withCategoryLists(base, data.categories.map(categoryFromApi));
 }
@@ -760,7 +767,7 @@ export type CatalogueState = {
   canEdit: boolean;
 };
 
-type ContentApi = {
+export type ContentApi = {
   content: SiteContent;
   catalogue: CatalogueState;
   updateProduct: (id: string, patch: Partial<ProductRow>) => void;
@@ -772,10 +779,16 @@ type ContentApi = {
   /** Adds a shop (a name, or the full details) and resolves with its id once it is saved. */
   addShop: (input: string | ShopInput) => Promise<string>;
   renameShop: (id: string, name: string) => Promise<void>;
+  /** Suspends or reactivates a shop (isActive), or moves it to the archive / restores it (archived). Its products leave the store while it is suspended or archived. */
+  setShopState: (id: string, state: { isActive?: boolean; archived?: boolean }) => Promise<void>;
+  /** The admin answers a seller's request to join: approve it, or refuse it with a reason. */
+  reviewShop: (id: string, decision: { approve: true } | { approve: false; reason: string }) => Promise<void>;
   /** Saves a shop's details. */
   updateShop: (id: string, patch: Partial<ShopInput>) => Promise<void>;
   /** The shop that owns a product, or null when the product is not linked to a shop. */
   shopOf: (productId: string) => Shop | null;
+  /** A shop by id: the database's shops, or the preview shops kept in this browser when the database has none with that id. */
+  shopById: (id: string) => Shop | null;
   /** Every visible listing of the same product (same explicit matchKey), with its shop; empty when it has no matchKey. */
   offersOf: (productId: string) => Array<{ id: string; price: number; shop: Shop | null }>;
   /** Adds a product and resolves with its id once it is saved. */
@@ -783,8 +796,8 @@ type ContentApi = {
   /** A shop sends a new product from its dashboard: it stays hidden from the store until the admin approves it. */
   submitProduct: (input: NewProduct) => Promise<string>;
   /** The admin approves a pending product (it goes live) or refuses it with a reason the shop can read. */
-  approveProduct: (id: string) => void;
-  rejectProduct: (id: string, reason: string) => void;
+  approveProduct: (id: string) => void | Promise<void>;
+  rejectProduct: (id: string, reason: string) => void | Promise<void>;
   updateHero: (lang: Lang, index: number, patch: Partial<SlideCopy>) => void;
   updateBlock: <K extends BlockKey>(key: K, lang: Lang, patch: Partial<SiteContent[K][Lang]>) => void;
   reset: () => void;
@@ -880,7 +893,20 @@ function productPatchBody(patch: Partial<ProductRow>): Record<string, unknown> {
   return body;
 }
 
-const SiteContentContext = createContext<ContentApi | null>(null);
+const SYNC_CHANNEL = "alsaif-catalogue";
+
+/** Tells the other open tabs (the storefront) that the dashboard saved something. */
+function notifyOtherTabs() {
+  try {
+    const channel = new BroadcastChannel(SYNC_CHANNEL);
+    channel.postMessage("changed");
+    channel.close();
+  } catch {
+    // Not supported: other tabs refresh when they regain focus.
+  }
+}
+
+export const SiteContentContext = createContext<ContentApi | null>(null);
 
 export function SiteContentProvider({ children }: { children: ReactNode }) {
   // This browser's saved content. Catalogue fields here are only used when the database is not available.
@@ -942,6 +968,42 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
     return () => controller.abort();
   }, []);
 
+  // Live sync: when the dashboard saves in another tab, or this tab comes back into view, the storefront
+  // fetches the catalogue again so the change shows without reloading the page.
+  useEffect(() => {
+    const refresh = () => {
+      if (remoteRef.current?.mode === "admin") return; // the dashboard already holds the newest data
+      api<{ categories: ApiCategory[]; products: ApiProduct[] }>("/catalogue")
+        .then((data) => setRemote((current) => (current?.mode === "admin" ? current : remoteFromApi("public", data))))
+        .catch(() => {});
+    };
+    let channel: BroadcastChannel | null = null;
+    try {
+      channel = new BroadcastChannel(SYNC_CHANNEL);
+      channel.onmessage = refresh;
+    } catch {
+      // No BroadcastChannel: the focus refresh and the timer below still keep the page current.
+    }
+    const onVisible = () => {
+      if (document.visibilityState === "visible") refresh();
+    };
+    // Preview mode (no database) keeps the content in this browser's storage; follow edits made in another tab.
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY && !remoteRef.current) setContent(load());
+    };
+    const timer = window.setInterval(onVisible, 30_000);
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", refresh);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      channel?.close();
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", refresh);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
   const remember = (rows: ProductRow[]) => {
     for (const row of rows) confirmedStock.current.set(row.id, row.stock ?? null);
   };
@@ -971,7 +1033,9 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
   async function track<T>(work: Promise<T>) {
     setSaving((count) => count + 1);
     try {
-      return await work;
+      const result = await work;
+      notifyOtherTabs();
+      return result;
     } finally {
       setSaving((count) => count - 1);
     }
@@ -1026,6 +1090,32 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
   const sendCategory = (id: string) => async (body: Record<string, unknown>) => applyCategory((await api<{ category: ApiCategory }>(`/admin/categories/${encodeURIComponent(id)}`, { method: "PATCH", body })).category);
   const patchCategoryLocally = (id: string, patch: Partial<ReturnType<typeof categoryFromApi>>) =>
     setRemote((current) => current && withCategoryLists(current, (current.categories as Array<ReturnType<typeof categoryFromApi>>).map((row) => (row.id === id ? { ...row, ...patch } : row))));
+
+  /** The body of a new product for the API. A shop account sends no shop and no home-page flag: the server fixes both. */
+  const productBody = (input: NewProduct, asShop: boolean) => ({
+    nameAr: input.nameAr,
+    nameEn: input.nameEn,
+    nameUr: input.nameUr ?? "",
+    labelAr: input.categoryAr,
+    labelEn: input.categoryEn,
+    labelUr: input.categoryUr ?? "",
+    categoryId: input.categoryId,
+    ...(asShop ? {} : { shopId: input.shopId || null, showInHomeOffers: input.onHome }),
+    price: input.price,
+    compareAtPrice: input.compareAt,
+    wholesalePrice: input.wholesalePrice ?? null,
+    descriptionAr: input.descriptionAr ?? "",
+    descriptionEn: input.descriptionEn ?? "",
+    descriptionUr: input.descriptionUr ?? "",
+    featuresAr: input.featuresAr ?? undefined,
+    featuresEn: input.featuresEn ?? undefined,
+    featuresUr: input.featuresUr ?? undefined,
+    specsAr: input.specsAr ?? undefined,
+    specsEn: input.specsEn ?? undefined,
+    specsUr: input.specsUr ?? undefined,
+    isVisible: !input.hidden,
+    image: input.image?.startsWith("data:") ? input.image : undefined,
+  });
 
   const api_: ContentApi = {
     content,
@@ -1086,6 +1176,19 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
       setRemote((current) => current && { ...current, shops: [...current.shops, shopFromApi(result.shop)] });
       return result.shop.id;
     },
+    async setShopState(id, state) {
+      if (!admin) {
+        setLocalShops((current) => current.map((shop) => (shop.id === id ? { ...shop, ...state } : shop)));
+        return;
+      }
+      const result = await track(api<{ shop: ApiShop }>(`/admin/shops/${encodeURIComponent(id)}/state`, { method: "PATCH", body: state }));
+      setRemote((current) => current && { ...current, shops: current.shops.map((shop) => (shop.id === id ? shopFromApi(result.shop) : shop)) });
+    },
+    async reviewShop(id, decision) {
+      if (!admin) return;
+      const result = await track(api<{ shop: ApiShop }>(`/admin/shops/${encodeURIComponent(id)}/review`, { body: decision.approve ? { decision: "approve" } : { decision: "reject", reason: decision.reason } }));
+      setRemote((current) => current && { ...current, shops: current.shops.map((shop) => (shop.id === id ? shopFromApi(result.shop) : shop)) });
+    },
     async renameShop(id, name) {
       return this.updateShop(id, { name });
     },
@@ -1101,9 +1204,16 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
     },
     shopOf(productId) {
       const row = content.products.find((item) => item.id === productId);
-      if (!row?.shopId) return null;
+      if (!row?.shopId) {
+        // The database does not link this product to a shop: use the preview link kept in this browser, if any.
+        const previewShopId = admin ? local.products.find((item) => item.id === productId)?.shopId : null;
+        return previewShopId ? (localShops.find((shop) => shop.id === previewShopId) ?? null) : null;
+      }
       const list = admin ? remote.shops : localShops;
       return list.find((shop) => shop.id === row.shopId) ?? row.shop ?? null;
+    },
+    shopById(id) {
+      return (admin ? remote.shops : localShops).find((shop) => shop.id === id) ?? localShops.find((shop) => shop.id === id) ?? null;
     },
     offersOf(productId) {
       const key = content.products.find((item) => item.id === productId)?.matchKey;
@@ -1114,14 +1224,25 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         .map((item) => ({ id: item.id, price: item.price, shop: (item.shopId && list.find((shop) => shop.id === item.shopId)) || item.shop || null }));
     },
     async submitProduct(input) {
-      // Shop submissions live in this browser's own list for now (a shop has no account on the server yet).
-      if (admin) throw new ApiError(400, "NOT_AVAILABLE");
+      if (admin) {
+        // A shop account: the server stores the product as waiting for the admin and keeps it hidden from the store.
+        const result = await track(api<{ product: ApiProduct }>("/admin/products", { body: productBody(input, true) }));
+        applyProduct(result.product);
+        return result.product.id;
+      }
+      // Preview (no server): the submission lives in this browser's own list.
       const id = `p-${Date.now().toString(36)}`;
       const row: ProductRow = { ...input, id, mark: "", rating: 0, reviews: 0, source: "added", hidden: true, onHome: false, approval: "pending", submittedAt: new Date().toISOString() };
       setContent((current) => ({ ...current, products: [row, ...current.products] }));
       return id;
     },
-    approveProduct(id) {
+    async approveProduct(id) {
+      if (admin) {
+        await track(api<{ product: ApiProduct }>(`/admin/products/${encodeURIComponent(id)}/approve`, { body: {} }))
+          .then((result) => applyProduct(result.product))
+          .catch(fail);
+        return;
+      }
       setContent((current) => ({
         ...current,
         products: current.products.map((row) => {
@@ -1131,7 +1252,13 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         }),
       }));
     },
-    rejectProduct(id, reason) {
+    async rejectProduct(id, reason) {
+      if (admin) {
+        await track(api<{ product: ApiProduct }>(`/admin/products/${encodeURIComponent(id)}/reject`, { body: { reason: reason.trim() } }))
+          .then((result) => applyProduct(result.product))
+          .catch(fail);
+        return;
+      }
       setContent((current) => ({ ...current, products: current.products.map((row) => (row.id === id ? { ...row, approval: "rejected", rejectReason: reason.trim(), hidden: true } : row)) }));
     },
     async addProduct(input) {
@@ -1142,33 +1269,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         return id;
       }
       const result = await track(
-        api<{ product: ApiProduct }>("/admin/products", {
-          body: {
-            nameAr: input.nameAr,
-            nameEn: input.nameEn,
-            nameUr: input.nameUr ?? "",
-            labelAr: input.categoryAr,
-            labelEn: input.categoryEn,
-            labelUr: input.categoryUr ?? "",
-            categoryId: input.categoryId,
-            shopId: input.shopId || null,
-            price: input.price,
-            compareAtPrice: input.compareAt,
-            wholesalePrice: input.wholesalePrice ?? null,
-            descriptionAr: input.descriptionAr ?? "",
-            descriptionEn: input.descriptionEn ?? "",
-            descriptionUr: input.descriptionUr ?? "",
-            featuresAr: input.featuresAr ?? undefined,
-            featuresEn: input.featuresEn ?? undefined,
-            featuresUr: input.featuresUr ?? undefined,
-            specsAr: input.specsAr ?? undefined,
-            specsEn: input.specsEn ?? undefined,
-            specsUr: input.specsUr ?? undefined,
-            isVisible: !input.hidden,
-            showInHomeOffers: input.onHome,
-            image: input.image?.startsWith("data:") ? input.image : undefined,
-          },
-        }),
+        api<{ product: ApiProduct }>("/admin/products", { body: productBody(input, false) }),
       );
       applyProduct(result.product);
       return result.product.id;
@@ -1231,7 +1332,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
       if (admin) {
         const result = await track(
           api<{ category: ApiCategory }>("/admin/categories", {
-            body: { nameAr: input.nameAr, nameEn: input.nameEn, nameUr: input.nameUr ?? "", descriptionAr: input.descriptionAr, descriptionEn: input.descriptionEn, descriptionUr: input.descriptionUr ?? "", parentId: input.parentId, isFeatured: input.featured },
+            body: { nameAr: input.nameAr, nameEn: input.nameEn, nameUr: input.nameUr ?? "", descriptionAr: input.descriptionAr, descriptionEn: input.descriptionEn, descriptionUr: input.descriptionUr ?? "", parentId: input.parentId, isFeatured: input.featured, ...(input.icon ? { icon: input.icon } : {}) },
           }),
         );
         applyCategory(result.category);
@@ -1249,7 +1350,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         level,
         featured: level === 1 && input.featured,
         image: "",
-        icon: "grid",
+        icon: input.icon || "grid",
         // A new department goes first among its siblings.
         sort: Math.min(1, ...siblings.map((item) => item.sort)) - 1,
         active: true,
@@ -1299,6 +1400,7 @@ export function SiteContentProvider({ children }: { children: ReactNode }) {
         if (patch.descriptionUr !== undefined) body.descriptionUr = patch.descriptionUr;
         if (patch.featured !== undefined) body.isFeatured = patch.featured;
         if (patch.hidden !== undefined) body.isVisible = !patch.hidden;
+        if (patch.icon !== undefined && patch.icon) body.icon = patch.icon;
         if (Object.keys(body).length) await track(sendCategory(id)(body));
         return;
       }

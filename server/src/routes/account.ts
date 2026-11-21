@@ -44,7 +44,16 @@ export const AVATARS = [
 ] as const;
 
 const RegisterBody = z
-  .object({ firstName: personName, lastName: personName, phone, email, password, locale: z.enum(["ar", "en", "ur"]).optional() })
+  .object({
+    firstName: personName,
+    lastName: personName,
+    phone,
+    email,
+    password,
+    locale: z.enum(["ar", "en", "ur"]).optional(),
+    // Optional first delivery address, saved as the default one together with the account.
+    address: z.object({ zoneCode: z.string().regex(/^[a-z0-9-]{1,40}$/), city: text(2, 80), line1: text(3, 200) }).strict().optional(),
+  })
   .strict();
 /** Sign in with the mobile number or the email address, whichever the customer types. */
 const LoginBody = z
@@ -149,13 +158,14 @@ accountRouter.post(
   handle(async (req, res) => {
     const body = RegisterBody.safeParse(req.body);
     if (!body.success) return invalid(res, body.error);
-    const { firstName, lastName, phone: mobile, email: address, password: secret, locale = "ar" } = body.data;
+    const { firstName, lastName, phone: mobile, email: address, password: secret, locale = "ar", address: firstAddress } = body.data;
 
     const taken = await prisma.customer.findFirst({ where: { OR: [{ phone: mobile }, { email: address }] }, select: { phone: true } });
     if (taken) {
       res.status(409).json({ error: taken.phone === mobile ? "PHONE_TAKEN" : "EMAIL_TAKEN" });
       return;
     }
+    const zone = firstAddress ? await activeZone(firstAddress.zoneCode) : null;
     const passwordHash = await hashPassword(secret);
     let created: { customerId: string; emailId: string };
     try {
@@ -165,6 +175,7 @@ accountRouter.post(
         const customer = await tx.customer.create({
           data: { firstName, lastName, fullName: `${firstName} ${lastName}`, phone: mobile, email: address, passwordHash },
         });
+        if (firstAddress && zone) await tx.address.create({ data: { customerId: customer.id, zoneId: zone.id, city: firstAddress.city, line1: firstAddress.line1, isDefault: true } });
         const queued = await tx.emailOutbox.create({ data: { customerId: customer.id, kind: "WELCOME", toAddress: address, locale } });
         return { customerId: customer.id, emailId: queued.id };
       });

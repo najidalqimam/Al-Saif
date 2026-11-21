@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { ICON_OPTIONS, catalogIcon } from "@/components/site/catalog-icons";
+import { TrashIcon } from "@/components/TrashIcon";
 import { Link } from "wouter";
-import { Archive, ArchiveRestore, ChevronLeft, ExternalLink, FolderSearch, GripVertical, PackageSearch, Pencil, Plus, Save } from "lucide-react";
+import { ArchiveRestore, ChevronLeft, ExternalLink, FolderSearch, GripVertical, PackageSearch, Pencil, Plus, Save, X } from "lucide-react";
 import { allCategories, categoryBlurb, categoryById, categoryLabel, type CatalogCategory } from "@/lib/catalog";
 import { apiMessage } from "@/lib/api";
-import { useSiteContent, type NewCategory } from "@/lib/site-content";
+import { useSiteContent, type NewCategory, type ProductRow } from "@/lib/site-content";
 import { publicUrl } from "@/lib/utils";
 import { ProductArt } from "@/components/site/card-art";
 import { productInCategory } from "@/lib/product-categories";
 import { onHashMove, pushHash, readHash, registerLeaveGuard } from "./nav";
 import { ToggleRow } from "./Products";
-import { Badge, BilingualField, Button, Confirm, Drawer, Empty, Field, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, SearchBox, Switch, Tabs, usePager } from "./ui";
+import { Badge, BilingualField, Button, Confirm, Empty, Field, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, SearchBox, Switch, Tabs, usePager } from "./ui";
 
 type Filter = "main" | "hidden" | "archived";
 
@@ -18,11 +20,13 @@ function inTreeOrder(list: CatalogCategory[]) {
   return list.filter((item) => item.level === 1).sort((a, b) => a.sort - b.sort);
 }
 
-/** #departments, #departments/<id> (its products) or #departments/add (a new department). */
+/** #departments, #departments/<id> (its products), #departments/<id>/edit (its details) or #departments/add (a new department). */
 function parseRoute(view: string, sub: string | null) {
-  if (view !== "departments" || !sub) return { open: null as string | null, adding: false };
-  if (sub === "add") return { open: null, adding: true };
-  return { open: sub, adding: false };
+  if (view !== "departments" || !sub) return { open: null as string | null, adding: false, edit: null as string | null };
+  if (sub === "add") return { open: null, adding: true, edit: null };
+  // #departments/<id>/edit: the department's own edit page.
+  if (sub.endsWith("/edit")) return { open: null, adding: false, edit: sub.slice(0, -5) };
+  return { open: sub, adding: false, edit: null };
 }
 
 export function Departments() {
@@ -32,8 +36,8 @@ export function Departments() {
   const isAdded = (id: string) => content.addedCategories.some((item) => item.id === id);
   const [filter, setFilter] = useState<Filter>("main");
   const [query, setQuery] = useState("");
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [archiving, setArchiving] = useState<CatalogCategory | null>(null);
+  const [archivingProduct, setArchivingProduct] = useState<ProductRow | null>(null);
   // The department being browsed lives in the URL (#departments/<id>), so back returns to the level above.
   // "Add department" is its own page (#departments/add), also reached from the overview's quick actions.
   const [route, setRoute] = useState(() => parseRoute(readHash().view, readHash().sub));
@@ -49,7 +53,8 @@ export function Departments() {
     hidden: catalog.filter((item) => hiddenOnly(item) || !item.active).length,
     archived: archived.length,
   };
-  const editing = editingId ? categoryById(editingId) : null;
+  const editing = route.edit ? categoryById(route.edit) : null;
+  const editDepartment = (id: string) => pushHash("departments", `${id}/edit`);
   const opened = openId ? categoryById(openId) : null;
   const productsOf = (id: string) => content.products.filter((item) => !item.archived && productInCategory(item, id));
   // A department opens onto its products.
@@ -82,6 +87,7 @@ export function Departments() {
   }
 
   if (adding) return <AddDepartmentPage onClose={() => pushHash("departments")} />;
+  if (route.edit && editing) return <EditDepartmentPage key={editing.id} category={editing} hidden={content.categoryHidden.includes(editing.id)} canRename={isAdded(editing.id)} onClose={() => pushHash("departments")} />;
 
   return (
     <div className="space-y-6">
@@ -151,6 +157,7 @@ export function Departments() {
                     <Switch size="sm" checked={!item.hidden} label={`إظهار ${item.nameAr}`} onChange={(next) => updateProduct(item.id, { hidden: !next })} />
                     <span className="w-2" />
                     <IconButton icon={Pencil} label={`تعديل ${item.nameAr}`} onClick={() => pushHash("products", `${opened.id}/edit-${item.id}`)} />
+                    <IconButton icon={TrashIcon} label={`حذف ${item.nameAr}`} tone="danger" onClick={() => setArchivingProduct(item)} />
                   </div>
                 </li>
               ))}
@@ -194,7 +201,7 @@ export function Departments() {
                         if (opens) {
                           setOpenId(item.id);
                           setQuery("");
-                        } else setEditingId(item.id);
+                        } else editDepartment(item.id);
                       }))}
                   draggable={orderable}
                   onDragStart={(event) => {
@@ -249,8 +256,8 @@ export function Departments() {
                       <>
                         <Switch size="sm" checked={visible} disabled={!item.active} label={`إظهار قسم ${item.nameAr}`} onChange={(next) => setCategoryHidden(item.id, !next)} />
                         <span className="w-2" />
-                        <IconButton icon={Pencil} label={`تعديل ${item.nameAr}`} onClick={() => setEditingId(item.id)} />
-                        <IconButton icon={Archive} label={`حذف ${item.nameAr}`} tone="danger" onClick={() => setArchiving(item)} />
+                        <IconButton icon={Pencil} label={`تعديل ${item.nameAr}`} onClick={() => editDepartment(item.id)} />
+                        <IconButton icon={TrashIcon} label={`حذف ${item.nameAr}`} tone="danger" onClick={() => setArchiving(item)} />
                       </>
                     )}
                   </div>
@@ -264,11 +271,13 @@ export function Departments() {
         {orderable ? null : <Pager pager={showingProducts ? productsPager : rowsPager} />}
       </Panel>
 
-      <EditDepartment
-        category={editing}
-        hidden={editing ? content.categoryHidden.includes(editing.id) : false}
-        canRename={editing ? isAdded(editing.id) : false}
-        onClose={() => setEditingId(null)}
+      <Confirm
+        open={archivingProduct !== null}
+        onClose={() => setArchivingProduct(null)}
+        onConfirm={() => archivingProduct && updateProduct(archivingProduct.id, { archived: true })}
+        title={`حذف ${archivingProduct?.nameAr ?? ""}؟`}
+        lead="المنتج يختفي من المتجر وينتقل للأرشيف في صفحة المنتجات. بياناته تبقى محفوظة وتقدر تسترجعه في أي وقت."
+        action="نقل للأرشيف"
       />
 
       <Confirm
@@ -283,7 +292,7 @@ export function Departments() {
   );
 }
 
-const EMPTY: NewCategory = { nameAr: "", nameEn: "", nameUr: "", descriptionAr: "", descriptionEn: "", descriptionUr: "", parentId: null, featured: false };
+const EMPTY: NewCategory = { nameAr: "", nameEn: "", nameUr: "", descriptionAr: "", descriptionEn: "", descriptionUr: "", parentId: null, featured: false, icon: "grid" };
 
 /** The Urdu name and description a department shows now: its own, else the built-in Urdu copy; empty when it only has the Arabic fallback. */
 function urduOf(category: CatalogCategory) {
@@ -292,26 +301,69 @@ function urduOf(category: CatalogCategory) {
   return { name: name === category.nameAr ? "" : name, description: text === category.descriptionAr ? "" : text };
 }
 
-/** Edit drawer for a department: changes stay as a draft until Save. */
-function EditDepartment({
-  category,
-  hidden,
-  canRename,
-  onClose,
-}: {
-  category: CatalogCategory | null;
-  hidden: boolean;
-  canRename: boolean;
-  onClose: () => void;
-}) {
-  const { saveCategory } = useSiteContent();
-  const [draft, setDraft] = useState({ nameAr: "", nameEn: "", nameUr: "", descriptionAr: "", descriptionEn: "", descriptionUr: "", hidden: false });
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
+/** Shows the department's icon and, on "add / change icon", a grid of every icon the store can use. */
+function IconPicker({ value, onChange, disabled }: { value: string; onChange: (id: string) => void; disabled?: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const Current = catalogIcon(value);
+  const needle = query.trim().toLowerCase();
+  const options = ICON_OPTIONS.filter((item) => !needle || item.label.includes(needle) || item.id.includes(needle));
+  const label = ICON_OPTIONS.find((item) => item.id === value)?.label ?? "عام";
+  return (
+    <div className="space-y-3">
+      <span className="block text-xs font-medium text-(--a-muted)">الأيقونة</span>
+      <div className="flex items-center gap-3">
+        <span className="grid size-14 place-items-center rounded-2xl border border-(--a-line) bg-(--a-surface-2) text-(--a-accent-ink)">
+          <Current className="size-7" />
+        </span>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium">{label}</p>
+          <p className="text-xs text-(--a-muted)">تظهر على كرت القسم في الموقع وفي القائمة.</p>
+        </div>
+      </div>
+      <Button icon={open ? X : Plus} onClick={() => setOpen(!open)} disabled={disabled}>
+        {open ? "إغلاق القائمة" : value && value !== "grid" ? "تغيير الأيقونة" : "إضافة أيقونة"}
+      </Button>
+      {open ? (
+        <div className="space-y-3">
+          <SearchBox value={query} onChange={setQuery} placeholder="ابحث عن أيقونة" />
+          <div className="grid max-h-72 grid-cols-4 gap-2 sm:grid-cols-6 lg:grid-cols-8 overflow-y-auto rounded-xl border border-(--a-line) p-2">
+            {options.map((item) => {
+              const Icon = catalogIcon(item.id);
+              const on = item.id === value;
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  title={item.label}
+                  aria-label={item.label}
+                  aria-pressed={on}
+                  onClick={() => {
+                    onChange(item.id);
+                    setOpen(false);
+                  }}
+                  className={`grid cursor-pointer place-items-center gap-1 rounded-xl border px-1 py-2.5 text-[11px] transition ${on ? "border-(--a-accent) bg-(--a-accent)/10 text-(--a-accent-ink)" : "border-transparent text-(--a-muted) hover:border-(--a-line) hover:text-(--a-text)"}`}
+                >
+                  <Icon className="size-5" />
+                  <span className="line-clamp-1">{item.label}</span>
+                </button>
+              );
+            })}
+            {options.length === 0 ? <p className="col-span-full py-6 text-center text-xs text-(--a-muted)">ما فيه أيقونة بهذا الاسم.</p> : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
-  useEffect(() => {
-    if (!category) return;
-    setDraft({
+/** Edit page for a department (#departments/<id>/edit): changes stay as a draft until Save, and leaving with unsaved changes asks first. */
+function EditDepartmentPage({ category, hidden, canRename, onClose }: { category: CatalogCategory; hidden: boolean; canRename: boolean; onClose: () => void }) {
+  const { saveCategory, catalogue } = useSiteContent();
+  // With the database every department's icon can be changed; in the local preview only departments added here can.
+  const canIcon = catalogue.source === "admin" || canRename;
+  const initial = useMemo(
+    () => ({
       nameAr: category.nameAr,
       nameEn: category.nameEn,
       nameUr: urduOf(category).name,
@@ -319,25 +371,31 @@ function EditDepartment({
       descriptionEn: category.descriptionEn,
       descriptionUr: urduOf(category).description,
       hidden,
-    });
-    setError("");
-  }, [category, hidden]);
+      icon: category.icon || "grid",
+    }),
+    [category, hidden],
+  );
+  const [draft, setDraft] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(initial), [draft, initial]);
+  const unsaved = useRef(false);
+  unsaved.current = dirty;
 
-  const dirty = useMemo(() => {
-    if (!category) return false;
-    return (
-      draft.nameAr !== category.nameAr ||
-      draft.nameEn !== category.nameEn ||
-      draft.nameUr !== urduOf(category).name ||
-      draft.descriptionAr !== category.descriptionAr ||
-      draft.descriptionEn !== category.descriptionEn ||
-      draft.descriptionUr !== urduOf(category).description ||
-      draft.hidden !== hidden
-    );
-  }, [category, draft, hidden]);
+  const saveRef = useRef<(leave: boolean) => Promise<boolean>>(async () => true);
+  useEffect(() => registerLeaveGuard(() => unsaved.current, { save: () => saveRef.current(false), anySub: true }), []);
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
-  async function save() {
-    if (!category || !dirty || saving) return;
+  async function save(leave = true): Promise<boolean> {
+    if (!dirty || saving) return !dirty;
     setSaving(true);
     setError("");
     try {
@@ -349,81 +407,94 @@ function EditDepartment({
         descriptionEn: draft.descriptionEn.trim(),
         descriptionUr: draft.descriptionUr.trim(),
         hidden: draft.hidden,
+        ...(draft.icon !== initial.icon ? { icon: draft.icon } : {}),
       });
-      onClose();
+      unsaved.current = false;
+      if (leave) onClose();
+      return true;
     } catch (failure) {
       setError(apiMessage(failure));
+      return false;
     } finally {
       setSaving(false);
     }
   }
+  saveRef.current = save;
+  const set = (patch: Partial<typeof draft>) => setDraft((current) => ({ ...current, ...patch }));
 
   return (
-    <Drawer
-      open={category !== null}
-      onClose={onClose}
-      title={category ? `قسم ${category.nameAr}` : ""}
-      lead="عدّل البيانات ثم اضغط حفظ عشان تظهر على الموقع."
-      footer={
-        category ? (
+    <div className="space-y-6">
+      <PageHead
+        title={`تعديل قسم ${category.nameAr}`}
+        lead={dirty ? "فيه تعديلات غير محفوظة. اضغط حفظ عشان تظهر على الموقع." : "عدّل البيانات ثم اضغط حفظ عشان تظهر على الموقع."}
+        actions={
           <>
             <Link href={`/ar/c/${category.slug}`} className="inline-flex h-10 items-center gap-2 rounded-xl border border-(--a-line) px-4 text-sm">
               <ExternalLink className="size-4" />
               فتح في المتجر
             </Link>
             <Button onClick={onClose}>إلغاء</Button>
-            <Button variant="primary" icon={Save} onClick={save} disabled={!dirty || saving}>
+            <Button variant="primary" icon={Save} onClick={() => void save()} disabled={!dirty || saving}>
               {saving ? "جاري الحفظ…" : "حفظ"}
             </Button>
           </>
-        ) : null
-      }
-    >
-      {category ? (
-        <div className="space-y-5">
-          {category.image ? (
-            <div className="grid place-items-center rounded-2xl bg-(--a-surface-2) py-6">
-              <img src={publicUrl(category.image)} alt="" className="size-32 object-contain" />
-            </div>
-          ) : null}
-          {error ? (
-            <p role="alert" className="text-sm text-(--a-danger)">
-              {error}
-            </p>
-          ) : null}
-          <BilingualField
-            label="اسم القسم"
-            ar={draft.nameAr}
-            en={draft.nameEn}
-            ur={draft.nameUr}
-            onAr={(nameAr) => setDraft((current) => ({ ...current, nameAr }))}
-            onEn={(nameEn) => setDraft((current) => ({ ...current, nameEn }))}
-            onUr={(nameUr) => setDraft((current) => ({ ...current, nameUr }))}
-            disabled={!canRename}
-          />
-          <BilingualField
-            label="الوصف"
-            ar={draft.descriptionAr}
-            en={draft.descriptionEn}
-            ur={draft.descriptionUr}
-            onAr={(descriptionAr) => setDraft((current) => ({ ...current, descriptionAr }))}
-            onEn={(descriptionEn) => setDraft((current) => ({ ...current, descriptionEn }))}
-            onUr={(descriptionUr) => setDraft((current) => ({ ...current, descriptionUr }))}
-            multiline
-            disabled={!canRename}
-          />
-          <Field label="الرابط" value={category.slug} onChange={() => {}} dir="ltr" disabled />
-          <div className="rounded-xl border border-(--a-line) p-4">
-            <ToggleRow
-              label="ظاهر في المتجر"
-              checked={category.active && !draft.hidden}
-              disabled={!category.active}
-              onChange={(next) => setDraft((current) => ({ ...current, hidden: !next }))}
-            />
-          </div>
-        </div>
+        }
+      />
+
+      {error ? (
+        <p role="alert" className="rounded-xl border border-(--a-danger)/30 px-4 py-3 text-sm text-(--a-danger)">
+          {error}
+        </p>
       ) : null}
-    </Drawer>
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="min-w-0 space-y-6">
+          <Panel title="البيانات الأساسية">
+            <div className="space-y-5 p-5">
+              <BilingualField
+                label="اسم القسم"
+                ar={draft.nameAr}
+                en={draft.nameEn}
+                ur={draft.nameUr}
+                onAr={(nameAr) => set({ nameAr })}
+                onEn={(nameEn) => set({ nameEn })}
+                onUr={(nameUr) => set({ nameUr })}
+                disabled={!canRename}
+              />
+              <BilingualField
+                label="الوصف"
+                ar={draft.descriptionAr}
+                en={draft.descriptionEn}
+                ur={draft.descriptionUr}
+                onAr={(descriptionAr) => set({ descriptionAr })}
+                onEn={(descriptionEn) => set({ descriptionEn })}
+                onUr={(descriptionUr) => set({ descriptionUr })}
+                multiline
+                disabled={!canRename}
+              />
+              <IconPicker value={draft.icon} onChange={(icon) => set({ icon })} disabled={!canIcon} />
+              <Field label="الرابط" value={category.slug} onChange={() => {}} dir="ltr" disabled />
+              {canRename ? null : <p className="text-xs leading-6 text-(--a-muted)">اسم ووصف الأقسام الأساسية ثابتة. تقدر توقف القسم أو تظهره من الجانب.</p>}
+            </div>
+          </Panel>
+        </div>
+
+        <div className="space-y-6 lg:sticky lg:top-24">
+          <Panel title="الصورة">
+            <div className="grid place-items-center p-5">
+              <div className="grid w-full place-items-center rounded-2xl bg-(--a-surface-2) py-6">
+                {category.image ? <img src={publicUrl(category.image)} alt="" className="size-32 object-contain" /> : <span className="grid size-32 place-items-center rounded-2xl border border-dashed border-(--a-line) text-xs text-(--a-muted)">بدون صورة</span>}
+              </div>
+            </div>
+          </Panel>
+          <Panel title="الظهور">
+            <div className="p-5">
+              <ToggleRow label="ظاهر في المتجر" checked={category.active && !draft.hidden} disabled={!category.active} onChange={(next) => set({ hidden: !next })} />
+            </div>
+          </Panel>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -509,6 +580,7 @@ function AddDepartmentPage({ onClose }: { onClose: () => void }) {
                 onUr={(descriptionUr) => set({ descriptionUr })}
                 multiline
               />
+              <IconPicker value={form.icon ?? "grid"} onChange={(icon) => set({ icon })} />
               <p className="text-xs leading-6 text-(--a-muted)">الحقول المطلوبة: اسم القسم بالعربي والإنجليزي. الأوردو اختياري، وإن تُرك فارغًا يظهر الاسم الأوردو الجاهز للأقسام الأساسية أو العربي. القسم يتحفظ في قاعدة بيانات المتجر.</p>
             </div>
           </Panel>

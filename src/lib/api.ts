@@ -20,6 +20,20 @@ export class ApiError extends Error {
 /** Fired when the server says the admin session is gone, so the dashboard can show the login again. */
 export const UNAUTHORIZED_EVENT = "alsaif:unauthorized";
 
+// A shop account signs in through the same login as the dashboard but may only use the /api/shop routes. While a shop
+// dashboard is open, the dashboard's requests (written for /admin/...) are sent to the matching /shop/... route.
+let dashboardScope: "admin" | "shop" = "admin";
+/** True while the shop dashboard is open (a shop account: its orders are read only). */
+export const inShopScope = () => dashboardScope === "shop";
+export function setDashboardScope(scope: "admin" | "shop") {
+  dashboardScope = scope;
+}
+function scopedPath(path: string) {
+  if (dashboardScope !== "shop" || !path.startsWith("/admin/") || path.startsWith("/admin/auth")) return path;
+  if (/^\/admin\/shops\/[^/]+$/.test(path)) return "/shop/shop";
+  return path.replace(/^\/admin\/(catalogue|products|orders|checkout-settings|notifications)/, "/shop/$1");
+}
+
 /** Local preview: no API or database; the dashboard runs on browser data. Only in `pnpm dev` with VITE_ADMIN_PREVIEW=1. */
 export const PREVIEW = import.meta.env.DEV && import.meta.env.VITE_ADMIN_PREVIEW === "1";
 
@@ -28,6 +42,8 @@ const DEMO_CUSTOMERS = [
   ["c1", "أحمد", "العتيبي", "0501234567", "ahmed@example.com", 3, 2, "3233.00", 2],
   ["c2", "سارة", "القحطاني", "0559876543", "sara@example.com", 2, 2, "1898.00", 5],
   ["c3", "خالد", "الشمري", "0533344455", "khaled@example.com", 0, 0, "0.00", 9],
+  // The demo account used while building the store (also saved in the local database).
+  ["c4", "عميل", "تجريبي", "0500000001", "demo.customer@alsaif.local", 0, 1, "0.00", 0],
 ].map(([id, firstName, lastName, phone, email, orders, addresses, spent, ago]) => ({
   id, firstName, lastName, phone, email, avatar: null, createdAt: day(Number(ago) + 20), lastLoginAt: day(Number(ago)), orders, addresses, spent,
   lastOrderAt: Number(orders) ? day(Number(ago)) : null, welcomeEmail: null,
@@ -40,7 +56,9 @@ function previewApi(path: string): unknown {
     const owned: Record<string, number[]> = { c1: [1048, 1045, 1042], c2: [1047, 1046] };
     const orders = (owned[id] ?? []).map((number) => ({ number, status: "NEW", paymentStatus: "PENDING", paymentMethod: "COD", total: "0", placedAt: day(number - 1040), lines: 1 }));
     const addresses =
-      id === "c2"
+      id === "c4"
+        ? [{ id: "a3", label: "العمل", zoneName: "المنطقة الوسطى", city: "جدة", line1: "١١١١", notes: "", isDefault: true }]
+        : id === "c2"
         ? [
             { id: "a1", label: "المنزل", zoneName: "المنطقة الوسطى", city: "الرياض", line1: "حي النرجس، شارع الأمير سلطان، مبنى 12", notes: "", isDefault: true },
             { id: "a2", label: "العمل", zoneName: "المنطقة الوسطى", city: "الرياض", line1: "حي العليا، طريق الملك فهد، برج 4", notes: "الدور الثالث", isDefault: false },
@@ -52,13 +70,43 @@ function previewApi(path: string): unknown {
   throw new ApiError(0, "NO_API");
 }
 
+
+/**
+ * Preview only: the demo customer "c4" is the test account of whoever is signed in to the storefront in this
+ * browser, so its name and addresses follow the real account instead of staying fixed. Without a session the
+ * demo values are kept.
+ */
+async function withLiveTestAccount(path: string, data: unknown): Promise<unknown> {
+  if (!path.startsWith("/admin/customers")) return data;
+  try {
+    const [me, saved] = await Promise.all([
+      fetch(`${BASE}/account/me`, { credentials: "same-origin" }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("no session")))),
+      fetch(`${BASE}/account/addresses`, { credentials: "same-origin" }).then((res) => (res.ok ? res.json() : Promise.reject(new Error("no session")))),
+    ]);
+    const customer = me.customer as Record<string, unknown>;
+    const addresses = saved.addresses as Array<Record<string, unknown>>;
+    const live = { firstName: customer.firstName, lastName: customer.lastName, phone: customer.phone, email: customer.email, avatar: customer.avatar ?? null };
+    const body = data as { customers?: Array<Record<string, unknown>>; customer?: Record<string, unknown>; addresses?: unknown[] };
+    if (body.customers) return { ...body, customers: body.customers.map((row) => (row.id === "c4" ? { ...row, ...live, addresses: addresses.length } : row)) };
+    if (body.customer?.id === "c4") return { ...body, customer: { ...body.customer, ...live, addresses: addresses.length }, addresses };
+  } catch {
+    // Not signed in (or no API): keep the demo values.
+  }
+  return data;
+}
+
 export async function api<T>(path: string, init: { method?: string; body?: unknown; signal?: AbortSignal } = {}): Promise<T> {
-  if (PREVIEW) return previewApi(path) as T;
+  // Preview only stands in for the dashboard; customer accounts and checkout options still use the real API.
+  if (PREVIEW && !path.startsWith("/account") && !path.startsWith("/checkout")) return (await withLiveTestAccount(path, previewApi(path))) as T;
   let res: Response;
   try {
-    res = await fetch(`${BASE}${path}`, {
+    res = await fetch(`${BASE}${scopedPath(path)}`, {
       method: init.method ?? (init.body === undefined ? "GET" : "POST"),
-      headers: init.body === undefined ? undefined : { "Content-Type": "application/json" },
+      headers: {
+        ...(init.body === undefined ? {} : { "Content-Type": "application/json" }),
+        // The shop dashboard keeps its session in its own cookie, so it can be open next to the admin dashboard.
+        ...(dashboardScope === "shop" ? { "X-Dashboard": "shop" } : {}),
+      },
       body: init.body === undefined ? undefined : JSON.stringify(init.body),
       credentials: "same-origin",
       signal: init.signal,
@@ -101,6 +149,11 @@ const MESSAGES: Record<string, string> = {
   PARENT_ARCHIVED: "القسم الرئيسي مؤرشف. استرجعه أول.",
   STOCK_CHANGED: "الكمية تغيّرت (طلب جديد أو تعديل من مكان ثاني). حدّثنا الأرقام، أدخل الكمية مرة ثانية.",
   TOO_MANY_ATTEMPTS: "محاولات كثيرة. انتظر شوي وحاول مرة ثانية.",
+  EMAIL_TAKEN: "هذا البريد مسجّل من قبل. سجّل دخولك أو استخدم بريدًا ثانيًا.",
+  WEAK_PASSWORD: "كلمة السر ضعيفة. استخدم 12 حرفًا على الأقل.",
+  SHOP_PENDING: "طلب انضمام محلك وصل للإدارة وينتظر الموافقة. بنقدر ندخلك بعد ما توافق عليه.",
+  SHOP_SUSPENDED: "هذا المحل موقوف. تواصل مع الإدارة.",
+  SHOP_REJECTED: "للأسف ما تمت الموافقة على طلب انضمام المحل. تواصل مع الإدارة.",
   INVALID_CREDENTIALS: "البريد الإلكتروني أو كلمة السر غير صحيحة.",
 };
 

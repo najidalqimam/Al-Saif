@@ -78,6 +78,10 @@ export function adminProduct(product: ProductWithRelations) {
     stockQuantity: product.stockQuantity,
     allowBackorder: product.allowBackorder,
     sortOrder: product.sortOrder,
+    /** Set for a product a shop sent and the admin has not published yet: PENDING or REJECTED (with the reason). Null: published. */
+    approval: product.approvalStatus,
+    rejectReason: product.rejectReason,
+    submittedAt: product.submittedAt,
     updatedAt: product.updatedAt,
   };
 }
@@ -127,8 +131,37 @@ export function adminCategory(category: CategoryWithParent, level: number) {
   return { ...publicCategory(category, level), uuid: category.id, archivedAt: category.archivedAt, updatedAt: category.updatedAt };
 }
 
+/** Products of a suspended or archived shop are not for sale: this is added to every storefront product query. */
+export const sellingShop: Prisma.ProductWhereInput = { OR: [{ shopId: null }, { shop: { isActive: true, archivedAt: null } }] };
+
 export const shopOrder: Prisma.ShopOrderByWithRelationInput[] = [{ createdAt: "asc" }];
 
-export function adminShop(shop: Pick<Shop, "id" | "name" | "ownerName" | "phone" | "email" | "city" | "address" | "description">, products: number) {
-  return { id: shop.id, name: shop.name, ownerName: shop.ownerName, phone: shop.phone, email: shop.email, city: shop.city, address: shop.address, description: shop.description, products };
+type ShopRow = Pick<Shop, "id" | "name" | "ownerName" | "phone" | "email" | "city" | "address" | "description" | "bankName" | "accountHolder" | "iban" | "accountNumber" | "acceptsCod" | "acceptsBankTransfer" | "paymentNotes" | "approvalStatus" | "rejectReason" | "createdAt" | "isActive" | "archivedAt">;
+
+export function adminShop(shop: ShopRow, products: number) {
+  return {
+    id: shop.id,
+    name: shop.name,
+    ownerName: shop.ownerName,
+    phone: shop.phone,
+    email: shop.email,
+    city: shop.city,
+    address: shop.address,
+    description: shop.description,
+    payment: {
+      bankName: shop.bankName,
+      accountHolder: shop.accountHolder,
+      iban: shop.iban,
+      accountNumber: shop.accountNumber,
+      acceptsCod: shop.acceptsCod,
+      acceptsBankTransfer: shop.acceptsBankTransfer,
+      notes: shop.paymentNotes,
+    },
+    products,
+    isActive: shop.isActive,
+    archived: shop.archivedAt !== null,
+    status: shop.approvalStatus ?? "APPROVED",
+    rejectReason: shop.rejectReason ?? "",
+    createdAt: shop.createdAt.toISOString(),
+  };
 }

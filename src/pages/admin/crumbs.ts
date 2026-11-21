@@ -21,6 +21,12 @@ export function crumbsFor(view: View, sub: string | null, lookups: Lookups): Cru
     return [home, section(() => pushHash("departments")), { label: "إضافة قسم" }];
   }
 
+  if (view === "departments" && sub?.endsWith("/edit")) {
+    const id = sub.slice(0, -5);
+    const trail = categoryTrail(id);
+    return [home, section(() => pushHash("departments")), { label: trail[trail.length - 1]?.nameAr ?? "القسم", go: () => pushHash("departments", id) }, { label: "تعديل" }];
+  }
+
   if (view === "departments" && sub && sub !== "add") {
     const trail = categoryTrail(sub);
     if (trail.length) {
@@ -42,6 +48,14 @@ export function crumbsFor(view: View, sub: string | null, lookups: Lookups): Cru
     const shopId = sub.endsWith("/edit") ? sub.slice(0, -5) : sub;
     const label = lookups.shopName(shopId) ?? "المحل";
     return sub.endsWith("/edit") ? [home, list, { label, go: () => pushHash("shops", shopId) }, { label: "تعديل" }] : [home, list, { label }];
+  }
+
+  if (view === "setupRequests" && sub?.startsWith("request-")) {
+    return [home, section(() => pushHash("setupRequests")), { label: "تفاصيل طلب التجهيز" }];
+  }
+
+  if (view === "team" && sub) {
+    return [home, section(() => pushHash("team")), { label: sub === "add" ? "إضافة موظف" : "تعديل موظف" }];
   }
 
   if (view === "customers" && sub?.startsWith("customer-")) {

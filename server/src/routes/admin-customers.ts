@@ -1,14 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { requireAdmin } from "../auth/middleware.js";
+import { requirePermission } from "../auth/middleware.js";
 import { prisma } from "../db.js";
 import { deliver, requeueWelcome } from "../mail/outbox.js";
 
 // /api/admin/customers: registered store accounts for the staff who handle orders. Read-only apart from
 // re-queuing the welcome email; passwords and session tokens are never part of an answer.
-
-const CUSTOMER_ROLES = ["OWNER", "MANAGER", "SUPPORT"] as const;
 
 const ListQuery = z.object({
   q: z.string().trim().max(100).optional(),
@@ -65,7 +63,7 @@ function summary(customer: Summary, money: Map<string | null, { spent: Prisma.De
 }
 
 export const adminCustomersRouter = Router();
-adminCustomersRouter.use(requireAdmin([...CUSTOMER_ROLES]));
+adminCustomersRouter.use(requirePermission("customers.view"));
 
 adminCustomersRouter.get(
   "/",

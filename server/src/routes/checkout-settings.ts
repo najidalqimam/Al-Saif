@@ -1,7 +1,7 @@
 import { Prisma, type PaymentMethodCode } from "@prisma/client";
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
-import { requireAdmin } from "../auth/middleware.js";
+import { requirePermission } from "../auth/middleware.js";
 import { prisma } from "../db.js";
 
 // Shipping zones, shipping methods and payment options, kept in the database so the checkout on every device
@@ -116,39 +116,44 @@ checkoutRouter.get(
 
 export const adminCheckoutRouter = Router();
 
+/** The store's shipping, payment and bank settings in the dashboard's shape (also read by shop accounts, read only). */
+export async function dashboardSettings() {
+  const { zones, methods, payments } = await readAll();
+  const bank = payments.find((payment) => payment.code === "BANK_TRANSFER");
+  return {
+    configured: zones.length > 0 && methods.length > 0,
+    settings: {
+      zones: zones.map((zone) => ({ id: zone.code, nameAr: zone.nameAr, cities: zone.citiesAr, enabled: zone.isActive })),
+      shipping: methods.map((method) => ({
+        id: method.code,
+        nameAr: method.nameAr,
+        nameEn: method.nameEn,
+        enabled: method.isActive,
+        fee: money(method.fee),
+        freeOver: money(method.freeOverAmount),
+        minOrder: money(method.minOrderAmount),
+        etaMin: method.etaMinDays,
+        etaMax: method.etaMaxDays,
+        zones: method.zones.map((link) => link.zone.code),
+      })),
+      payments: payments.map((payment) => ({ id: PAYMENT_IDS[payment.code], enabled: payment.isActive, fee: money(payment.extraFee) ?? 0, note: payment.instructionsAr })),
+      bank: bank ? bankDetails(bank.publicConfig) : { bankName: "", holder: "" },
+    },
+  };
+}
+
 adminCheckoutRouter.get(
   "/checkout-settings",
-  requireAdmin(["OWNER", "MANAGER", "EDITOR", "SUPPORT"]),
+  requirePermission("checkout.view"),
   handle(async (_req, res) => {
-    const { zones, methods, payments } = await readAll();
-    const bank = payments.find((payment) => payment.code === "BANK_TRANSFER");
     res.setHeader("Cache-Control", "no-store");
-    res.json({
-      configured: zones.length > 0 && methods.length > 0,
-      settings: {
-        zones: zones.map((zone) => ({ id: zone.code, nameAr: zone.nameAr, cities: zone.citiesAr, enabled: zone.isActive })),
-        shipping: methods.map((method) => ({
-          id: method.code,
-          nameAr: method.nameAr,
-          nameEn: method.nameEn,
-          enabled: method.isActive,
-          fee: money(method.fee),
-          freeOver: money(method.freeOverAmount),
-          minOrder: money(method.minOrderAmount),
-          etaMin: method.etaMinDays,
-          etaMax: method.etaMaxDays,
-          zones: method.zones.map((link) => link.zone.code),
-        })),
-        payments: payments.map((payment) => ({ id: PAYMENT_IDS[payment.code], enabled: payment.isActive, fee: money(payment.extraFee) ?? 0, note: payment.instructionsAr })),
-        bank: bank ? bankDetails(bank.publicConfig) : { bankName: "", holder: "" },
-      },
-    });
+    res.json(await dashboardSettings());
   }),
 );
 
 adminCheckoutRouter.put(
   "/checkout-settings",
-  requireAdmin(["OWNER", "MANAGER"]),
+  requirePermission("checkout.edit"),
   handle(async (req, res) => {
     const body = SettingsBody.safeParse(req.body);
     if (!body.success) {

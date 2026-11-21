@@ -8,6 +8,8 @@ export type OrderLine = { id: string; name: string; qty: number; price: number }
 
 export type Order = {
   id: string;
+  /** In the dashboard's archive (saved on the order when it comes from the database). */
+  archived?: boolean;
   customer: string;
   city: string;
   zone: string;
@@ -33,6 +35,8 @@ export type Order = {
   lang?: "ar" | "en" | "ur";
   /** Database orders: placed by a signed-in customer (true) or as a guest (false). */
   account?: boolean;
+  /** Display-only orders of a demo shop: the shop dashboard of that shop shows them next to its real orders. */
+  shopId?: string;
 };
 
 const STORAGE_KEY = "alsaif-orders";

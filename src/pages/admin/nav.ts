@@ -1,4 +1,5 @@
 import {
+  Archive,
   BarChart3,
   Boxes,
   ClipboardCheck,
@@ -12,6 +13,7 @@ import {
   ShoppingCart,
   Store,
   Truck,
+  UserCog,
   Users,
   Images,
 } from "lucide-react";
@@ -32,6 +34,8 @@ export type View =
   | "offers"
   | "content"
   | "reports"
+  | "archive"
+  | "team"
   | "settings";
 
 export type NavItem = { id: View; label: string; icon: IconType; demo?: boolean };
@@ -67,10 +71,29 @@ export const NAV_GROUPS: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { id: "content", label: "المحتوى والوسائط", icon: Images },
       { id: "reports", label: "التقارير", icon: BarChart3, demo: true },
+      { id: "archive", label: "الأرشيف", icon: Archive },
+      { id: "team", label: "فريق العمل", icon: UserCog },
       { id: "settings", label: "إعدادات المتجر", icon: Settings },
     ],
   },
 ];
+
+/** The permission a section needs. Sections not listed here are open to every account. */
+export const VIEW_PERMISSION: Partial<Record<View, string>> = {
+  orders: "orders.view",
+  setupRequests: "orders.view",
+  customers: "customers.view",
+  shipping: "checkout.view",
+  payments: "checkout.view",
+  products: "catalogue.view",
+  departments: "catalogue.view",
+  shops: "catalogue.view",
+  productRequests: "catalogue.view",
+  inventory: "catalogue.view",
+  offers: "catalogue.view",
+  archive: "catalogue.view",
+  team: "team.manage",
+};
 
 export const NAV_ITEMS = NAV_GROUPS.flatMap((group) => group.items);
 

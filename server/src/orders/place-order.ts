@@ -1,5 +1,6 @@
 import { Prisma, type PaymentMethodCode } from "@prisma/client";
 import { prisma, withTransactionRetry } from "../db.js";
+import { sellingShop } from "../catalogue/serialize.js";
 
 // Server-side order placement. Prices, fees and totals are always recomputed from the database; the
 // browser only sends what it wants to buy and where. Everything runs in one transaction, so an order is
@@ -80,7 +81,7 @@ function placeOrderOnce(input: PlaceOrderInput, quantities: Map<string, number>)
   return prisma.$transaction(
     async (tx) => {
       const products = await tx.product.findMany({
-        where: { id: { in: [...quantities.keys()] }, isVisible: true, archivedAt: null },
+        where: { id: { in: [...quantities.keys()] }, isVisible: true, archivedAt: null, approvalStatus: null, ...sellingShop },
         // Stock rows are locked in this order below. A fixed order means two carts with the same products
         // wait for each other instead of deadlocking.
         orderBy: { id: "asc" },

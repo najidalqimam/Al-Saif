@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { CheckCircle2, Clock, Inbox, MapPin, PackageCheck, Plus, Trash2, Truck } from "lucide-react";
+import { TrashIcon } from "@/components/TrashIcon";
+import { CheckCircle2, Clock, Inbox, MapPin, PackageCheck, Plus, Truck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { OrdersTable, openOrder } from "./OrdersPage";
 import { SHIP_STAGE, shipStage, useOps, type ShipStage, type ShippingMethod } from "./ops";
@@ -79,7 +80,7 @@ export function Shipping() {
               <span className="text-xs text-(--a-muted)">{num.format(orders.filter((order) => order.zone === zone.id).length)} طلب</span>
               <Switch size="sm" checked={zone.enabled} label={`تفعيل ${zone.nameAr}`} onChange={(enabled) => updateZone(zone.id, { enabled })} />
               {ops.zones.length > 1 ? (
-                <IconButton icon={Trash2} tone="danger" label={`حذف ${zone.nameAr}`} onClick={() => setRemoving({ id: zone.id, name: zone.nameAr })} />
+                <IconButton icon={TrashIcon} tone="danger" label={`حذف ${zone.nameAr}`} onClick={() => setRemoving({ id: zone.id, name: zone.nameAr })} />
               ) : null}
             </li>
           ))}

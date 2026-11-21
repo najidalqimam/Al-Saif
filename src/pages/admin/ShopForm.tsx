@@ -5,9 +5,10 @@ import { apiMessage } from "@/lib/api";
 import { useSiteContent, type ShopInput } from "@/lib/site-content";
 import { cn } from "@/lib/utils";
 import { pushHash, registerLeaveGuard } from "./nav";
+import { ShopPaymentSummary } from "../shop/ShopPaymentMethods";
 import { Badge, Button, Empty, Field, PageHead, Pager, Panel, SearchBox, Tabs, num, sar, usePager } from "./ui";
 
-const EMPTY: Required<ShopInput> = { name: "", ownerName: "", phone: "", email: "", city: "", address: "", description: "" };
+const EMPTY: Required<ShopInput> = { name: "", ownerName: "", phone: "", email: "", city: "", address: "", description: "", payment: {} };
 
 /**
  * Add a shop (#shops/add) or edit one (#shops/<id>): its details, and under them its products. Ticking a product links
@@ -126,6 +127,8 @@ export function ShopFormPage({ id }: { id: string | null }) {
           </div>
         </div>
       </Panel>
+
+      {id ? <ShopPaymentSummary payment={shop?.payment} /> : null}
 
       <Panel title="منتجات المحل" lead="علّم على المنتجات اللي تتبع هذا المحل. منتج تابع لمحل ثاني لو علّمته ينتقل لهذا المحل.">
         <div className="flex flex-wrap items-center gap-3 border-b border-(--a-line) p-4">

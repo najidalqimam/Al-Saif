@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Archive, ArchiveRestore, Check, ChevronDown, ExternalLink, ImagePlus, PackageSearch, Pencil, Plus, Save, Send, Trash2, X } from "lucide-react";
+import { TrashIcon } from "@/components/TrashIcon";
+import { ArchiveRestore, Check, ChevronDown, ExternalLink, ImagePlus, PackageSearch, Pencil, Plus, Save, Send, X } from "lucide-react";
 import { ProductArt } from "@/components/site/card-art";
 import { categoryById, categoryTrail, departmentOf } from "@/lib/catalog";
 import { apiMessage } from "@/lib/api";
@@ -9,13 +10,15 @@ import { cn } from "@/lib/utils";
 import { validWholesale } from "@/lib/wholesale";
 import { departmentTree, productCategoryOf, productInCategory } from "@/lib/product-categories";
 import { onHashMove, pushHash, readHash, registerLeaveGuard } from "./nav";
-import { Badge, Button, Confirm, control, Empty, Field, IconButton, num, PageHead, Pager, Panel, rowOpen, sar, SearchBox, SearchSelect, Select, Switch, usePager, BilingualField} from "./ui";
+import { STOCK_LEVEL, stockLevel, useOps } from "./ops";
+import { Badge, Button, Confirm, control, Empty, Field, IconButton, num, DemoNote, PageHead, Pager, Panel, rowOpen, sar, SearchBox, SearchSelect, Select, Switch, usePager, BilingualField} from "./ui";
 
 type Filter = "all" | "live" | "hidden" | "archived";
 
 /** The products list. `shopScope` (a shop id) shows the list inside the shops section: that shop's products, titled with its name. */
-export function Products({ shopScope }: { shopScope?: string } = {}) {
+export function Products({ shopScope, shopMode }: { shopScope?: string; shopMode?: ShopMode } = {}) {
   const { content, updateProduct, shops } = useSiteContent();
+  const { ops } = useOps();
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
   // The departments page links here as #products/<category>, optionally with /add or /edit-<id>.
@@ -23,13 +26,14 @@ export function Products({ shopScope }: { shopScope?: string } = {}) {
   const [link] = useState(() => {
     const [linked = "", action = ""] = (readHash().view === "products" ? (readHash().sub ?? "") : "").split("/");
     const shop = linked.startsWith("shop-") ? linked.slice(5) : null;
-    return { category: !shop && linked && categoryById(linked) ? linked : "all", shopId: shopScope ?? shop, action: shopScope ? "" : action };
+    return { category: !shop && linked && categoryById(linked) ? linked : "all", shopId: shopScope ?? shop, action: shopScope && !shopMode ? "" : action };
   });
   const [category, setCategory] = useState(link.category);
   const [shopId, setShopId] = useState<string | null>(link.shopId);
   const shop = shopId ? shops.find((item) => item.id === shopId) : undefined;
   // What the hash carries for the current filter, so editing a product and coming back keeps the shop or department.
-  const scope = shopId ? `shop-${shopId}` : category;
+  // On a shop's own dashboard the hash stays #products/<category>: the shop filter is built in, not a link.
+  const scope = shopId && !shopMode ? `shop-${shopId}` : category;
   const [editing, setEditing] = useState<string | null>(link.action.startsWith("edit-") ? link.action.slice(5) : null);
   // Editing a product is its own page (#products/<category>/edit-<id>), so the back gesture returns to the list.
   useEffect(
@@ -41,7 +45,7 @@ export function Products({ shopScope }: { shopScope?: string } = {}) {
         setEditing(action.startsWith("edit-") ? action.slice(5) : null);
         setAdding(action === "add");
         // Back and forward also restore or drop the shop filter.
-        setShopId(linked.startsWith("shop-") ? linked.slice(5) : null);
+        setShopId(shopScope ?? (linked.startsWith("shop-") ? linked.slice(5) : null));
       }),
     [],
   );
@@ -84,25 +88,29 @@ export function Products({ shopScope }: { shopScope?: string } = {}) {
 
   const pager = usePager(rows, `${filter}|${query}|${category}|${shopId ?? ""}`);
 
-  if (current) return <ProductEditor product={current} />;
+  if (current) return <ProductEditor product={current} lockShop={Boolean(shopMode)} />;
   if (adding) {
     return (
-      <AddProductPage
-        defaultCategory={category === "all" ? null : category}
-        defaultShopId={shopId}
-        onClose={closeAdd}
-        onAdded={() => {
-          setFilter("all");
-          setQuery("");
-        }}
-      />
+      <div className="space-y-6">
+        {shopMode ? <DemoNote title="يحتاج موافقة الإدارة">المنتجات اللي تضيفها من لوحة المحل تنتظر موافقة الإدارة قبل ما تنزل في المتجر. تتابع حالتها من «طلبات المنتجات».</DemoNote> : null}
+        <AddProductPage
+          defaultCategory={category === "all" ? null : category}
+          defaultShopId={shopId}
+          onClose={closeAdd}
+          onAdded={() => {
+            setFilter("all");
+            setQuery("");
+          }}
+          shopMode={shopMode}
+        />
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
       <PageHead
-        title={shopScope ? `منتجات ${shop?.name ?? ""}` : "المنتجات"}
+        title={shopMode ? "منتجاتي" : shopScope ? `منتجات ${shop?.name ?? ""}` : "المنتجات"}
         lead={shopScope ? "المنتجات اللي تتبع هذا المحل. الأسعار والظهور والتعديل يظهر على الموقع مباشرة." : "الأسعار والأسماء والظهور في المتجر، والتعديل يظهر على الموقع مباشرة."}
         actions={
           <Button variant="primary" icon={Plus} onClick={openAdd}>
@@ -127,7 +135,7 @@ export function Products({ shopScope }: { shopScope?: string } = {}) {
         </div>
       ) : null}
 
-      {shop ? (
+      {shop && !shopMode ? (
         <Panel
           title={shop.name}
           lead="بيانات المحل"
@@ -204,12 +212,13 @@ export function Products({ shopScope }: { shopScope?: string } = {}) {
       <Panel>
         {rows.length ? (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px] text-sm">
+            <table className="w-full min-w-[860px] text-sm">
               <thead>
                 <tr className="text-xs text-(--a-muted)">
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">المنتج</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">السعر</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">سعر الجملة</th>
+                  <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">الكمية المتاحة</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">التقييم</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">معروض</th>
                   <th className="px-4 py-2 first:ps-5 last:pe-5 text-start font-medium">عروض الرئيسية</th>
@@ -261,6 +270,18 @@ export function Products({ shopScope }: { shopScope?: string } = {}) {
                           </span>
                         )}
                       </td>
+                      <td className="px-4 py-2 first:ps-5 last:pe-5 tabular-nums">
+                        {(() => {
+                          const qty = ops.stock[item.id];
+                          const level = STOCK_LEVEL[stockLevel(qty, ops.lowStock)];
+                          return (
+                            <div className="flex flex-wrap items-center gap-1.5">
+                              <span className="font-medium">{qty === undefined ? "—" : num.format(qty)}</span>
+                              <Badge tone={level.tone}>{level.label}</Badge>
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="px-4 py-2 first:ps-5 last:pe-5 tabular-nums text-(--a-muted)">
                         {item.rating > 0 ? `★ ${item.rating.toFixed(1)} · ${num.format(item.reviews)}` : "—"}
                       </td>
@@ -285,7 +306,7 @@ export function Products({ shopScope }: { shopScope?: string } = {}) {
                           ) : (
                             <>
                               <IconButton icon={Pencil} label={`تعديل ${item.nameAr}`} onClick={() => openEditor(item.id)} />
-                              <IconButton icon={Archive} label={`حذف ${item.nameAr}`} tone="danger" onClick={() => setArchiving(item)} />
+                              <IconButton icon={TrashIcon} label={`حذف ${item.nameAr}`} tone="danger" onClick={() => setArchiving(item)} />
                             </>
                           )}
                         </div>
@@ -714,7 +735,7 @@ function ProductPageFields({
                 ))}
               </div>
               {/* One delete removes the line in all three languages. */}
-              <IconButton icon={Trash2} tone="danger" label="حذف السطر" onClick={() => LANGS.forEach((lang) => changeFeatures(lang, features[lang].filter((_, at) => at !== index)))} />
+              <IconButton icon={TrashIcon} tone="danger" label="حذف السطر" onClick={() => LANGS.forEach((lang) => changeFeatures(lang, features[lang].filter((_, at) => at !== index)))} />
             </div>
           ))}
         </div>
@@ -756,7 +777,7 @@ function ProductPageFields({
                 })}
               </div>
               {/* One delete removes the row in all three languages. */}
-              <IconButton icon={Trash2} tone="danger" label="حذف الصف" onClick={() => LANGS.forEach((lang) => changeSpecs(lang, specs[lang].filter((_, at) => at !== index)))} />
+              <IconButton icon={TrashIcon} tone="danger" label="حذف الصف" onClick={() => LANGS.forEach((lang) => changeSpecs(lang, specs[lang].filter((_, at) => at !== index)))} />
             </div>
           ))}
         </div>
@@ -844,7 +865,7 @@ function productDraftDirty(draft: ProductRow, saved: ProductRow) {
 }
 
 /** Full-page product editor: edits stay as a draft until Save. */
-function ProductEditor({ product }: { product: ProductRow }) {
+function ProductEditor({ product, lockShop }: { product: ProductRow; lockShop?: boolean }) {
   const { content, saveProduct, shops, catalogue } = useSiteContent();
   const connected = catalogue.source === "admin";
   const [draft, setDraft] = useState(product);
@@ -972,7 +993,7 @@ function ProductEditor({ product }: { product: ProductRow }) {
                   ...departmentTree(content.categoryHidden).map((item): [string, string] => [item.id, `${"\u00a0\u00a0\u00a0".repeat(item.level - 1)}${item.nameAr}`]),
                 ]}
               />
-              <Select label="المحل" value={draft.shopId ?? ""} onChange={(shopId) => patch({ shopId: shopId || null })} options={shopOptions(shops, draft.shopId)} />
+              {lockShop ? null : <Select label="المحل" value={draft.shopId ?? ""} onChange={(shopId) => patch({ shopId: shopId || null })} options={shopOptions(shops, draft.shopId)} />}
               <BilingualField
                 label="اسم القسم الظاهر على المنتج"
                 ar={draft.categoryAr}

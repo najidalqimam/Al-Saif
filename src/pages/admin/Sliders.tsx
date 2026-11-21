@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Archive, ArchiveRestore, ChevronDown } from "lucide-react";
+import { TrashIcon } from "@/components/TrashIcon";
+import { ArchiveRestore, ChevronDown } from "lucide-react";
 import { heroDefaultLink } from "@/components/site/Hero";
 import { categoryLabel, rootDepartments } from "@/lib/catalog";
 import { translations } from "@/lib/i18n";
@@ -51,7 +52,7 @@ export function SlidesEditor() {
                 </p>
               </button>
               <Switch checked={on} label={`تفعيل الشريحة ${index + 1}`} onChange={(next) => setSlideHidden(index, !next)} />
-              <IconButton icon={Archive} label={`حذف الشريحة ${index + 1}`} tone="danger" onClick={() => setArchiving(index)} />
+              <IconButton icon={TrashIcon} label={`حذف الشريحة ${index + 1}`} tone="danger" onClick={() => setArchiving(index)} />
               <button
                 type="button"
                 onClick={() => setOpenIndex(expanded ? null : index)}

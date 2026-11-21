@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { OrdersTable, openOrder } from "./OrdersPage";
 import { SHIP_STAGE, shipStage, stockLevel, useOps } from "./ops";
 import type { Order } from "./orders";
+import { useShopRequests, useShopScope } from "./shopScope";
 import { pushHash, type View } from "./nav";
 import { AR_DATE, Button, PageHead, Panel, StatCard, num, sar, type IconType } from "./ui";
 
@@ -13,6 +14,9 @@ const DAYS = 14;
 export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
   const { content } = useSiteContent();
   const { ops, orders } = useOps();
+  // On a shop's own dashboard the same page shows only that shop, without the store-wide tools (departments, shipping, home page).
+  const shopScope = useShopScope();
+  const requests = useShopRequests();
 
   const kept = orders.filter((order) => order.status !== "cancelled");
   const sales = kept.reduce((sum, order) => sum + order.total, 0);
@@ -30,10 +34,10 @@ export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
   const noDiscount = live.filter((item) => item.onHome && item.compareAt <= item.price).length;
   const sectionsOn = content.homeOrder.filter((id) => (id.startsWith("custom-") ? !content.customSections.find((item) => item.id === id)?.hidden : !content.sectionHidden.includes(id as never))).length;
   // Only things that need someone to act; counts come straight from the orders, stock and offers data.
-  const awaitingApproval = content.products.filter((item) => item.approval === "pending").length;
+  const awaitingApproval = (shopScope ? requests : content.products).filter((item) => item.approval === "pending").length;
   const attention = [
     { key: "new", icon: ShoppingCart, label: "طلبات جديدة بانتظار التجهيز", value: newOrders, tone: "warn" as const, open: () => pushHash("orders", "new") },
-    { key: "approval", icon: Package, label: "منتجات من المحلات بانتظار موافقتك", value: awaitingApproval, tone: "warn" as const, open: () => onOpen("productRequests") },
+    { key: "approval", icon: Package, label: shopScope ? "منتجاتك بانتظار موافقة الإدارة" : "منتجات من المحلات بانتظار موافقتك", value: awaitingApproval, tone: "warn" as const, open: () => onOpen("productRequests") },
     { key: "failed", icon: CreditCard, label: "طلبات فشل دفعها", value: failedPayments, tone: "danger" as const, open: () => onOpen("payments") },
     { key: "out", icon: PackageX, label: "منتجات نفدت من المخزون", value: outOfStock, tone: "danger" as const, open: () => onOpen("inventory") },
     { key: "low", icon: Boxes, label: "منتجات مخزونها منخفض", value: low.length - outOfStock, tone: "warn" as const, open: () => onOpen("inventory") },
@@ -72,9 +76,9 @@ export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
         <h2 className="text-base font-semibold">إجراءات سريعة</h2>
         <div className="mt-3 grid grid-cols-2 gap-3 xl:grid-cols-4">
           <QuickAction icon={Plus} label="إضافة منتج" onClick={() => pushHash("products", "all/add")} />
-          <QuickAction icon={FolderPlus} label="إضافة قسم" onClick={() => pushHash("departments", "add")} />
+          {shopScope ? null : <QuickAction icon={FolderPlus} label="إضافة قسم" onClick={() => pushHash("departments", "add")} />}
           <QuickAction icon={ShoppingCart} label="الطلبات الجديدة" count={newOrders} onClick={() => pushHash("orders", "new")} />
-          <QuickAction icon={LayoutTemplate} label="إضافة قسم للصفحة الرئيسية" onClick={() => pushHash("content", "add")} />
+          {shopScope ? <QuickAction icon={Boxes} label="المخزون" onClick={() => onOpen("inventory")} /> : <QuickAction icon={LayoutTemplate} label="إضافة قسم للصفحة الرئيسية" onClick={() => pushHash("content", "add")} />}
         </div>
       </section>
 
@@ -101,11 +105,13 @@ export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
               );
             })}
           </ul>
-          <div className="border-t border-(--a-line) p-4">
-            <Button icon={Truck} onClick={() => onOpen("shipping")} className="w-full">
-              إعدادات الشحن
-            </Button>
-          </div>
+          {shopScope ? null : (
+            <div className="border-t border-(--a-line) p-4">
+              <Button icon={Truck} onClick={() => onOpen("shipping")} className="w-full">
+                إعدادات الشحن
+              </Button>
+            </div>
+          )}
         </Panel>
       </div>
 
@@ -124,7 +130,7 @@ export function Overview({ onOpen }: { onOpen: (view: View) => void }) {
           <OrdersTable orders={orders.slice(0, 5)} onView={openOrder} compact />
         </Panel>
 
-        <Panel title="يحتاج انتباهك" lead={`${num.format(sectionsOn)} قسم ظاهر في الصفحة الرئيسية · ${num.format(featuredDepartments(content.categoryHidden).length)} قسم في الشبكة`}>
+        <Panel title="يحتاج انتباهك" lead={shopScope ? "طلبات ومنتجات ومخزون محلك" : `${num.format(sectionsOn)} قسم ظاهر في الصفحة الرئيسية · ${num.format(featuredDepartments(content.categoryHidden).length)} قسم في الشبكة`}>
           {attention.length ? (
             <ul className="divide-y divide-(--a-line)">
               {attention.map((item) => (

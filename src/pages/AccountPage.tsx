@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
-import { Check, CheckCircle2, Clock, LoaderCircle, LogOut, MapPin, Package, PackageCheck, Pencil, Plus, Star, Trash2, Truck, XCircle } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { TrashIcon } from "@/components/TrashIcon";
+import * as Dialog from "@radix-ui/react-dialog";
+import { AlertTriangle, Check, CheckCircle2, Clock, LoaderCircle, LogOut, MapPin, Package, PackageCheck, Pencil, Plus, Star, Truck } from "lucide-react";
 import { Link, Redirect, useLocation, useSearch } from "wouter";
 import { SiteFooter } from "@/components/site/SiteFooter";
 import { SiteHeader } from "@/components/site/SiteHeader";
@@ -8,11 +10,13 @@ import { AVATAR_PRESETS, Avatar } from "@/lib/avatars";
 import { api } from "@/lib/api";
 import { errorCode, useCustomer, type Customer } from "@/lib/customer";
 import { useLang } from "@/lib/i18n";
+import { announceChange } from "@/lib/live-sync";
 import { publicUrl } from "@/lib/utils";
 import { ErrorText, Field, inputClass } from "@/pages/AuthPage";
 
-type Tab = "orders" | "addresses" | "profile" | "password";
-const TABS: Tab[] = ["orders", "addresses", "profile", "password"];
+type Tab = "orders" | "profile" | "password";
+// Addresses are managed inside the profile tab; the separate tab was removed.
+const TABS: Tab[] = ["orders", "profile", "password"];
 
 type OrderStatus = "NEW" | "PROCESSING" | "SHIPPED" | "DELIVERED" | "CANCELLED";
 type AccountOrder = {
@@ -43,8 +47,15 @@ export function AccountPage() {
   const copy = ACCOUNT_COPY[lang];
   const { customer, ready, logout } = useCustomer();
   const [, navigate] = useLocation();
-  const requested = new URLSearchParams(useSearch()).get("tab") as Tab | null;
+  const asked = new URLSearchParams(useSearch()).get("tab");
+  // Old links to the addresses tab open the profile tab, where the addresses now are.
+  const requested = (asked === "addresses" ? "profile" : asked) as Tab | null;
   const tab: Tab = requested && TABS.includes(requested) ? requested : "orders";
+  // Set by the profile form while it has edits that are not saved yet.
+  const unsaved = useRef(false);
+  const saveRef = useRef<() => Promise<boolean>>(async () => true);
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const [leaveBusy, setLeaveBusy] = useState(false);
 
   if (!ready) {
     return (
@@ -91,6 +102,13 @@ export function AccountPage() {
             key={item}
             href={`/${lang}/account${item === "orders" ? "" : `?tab=${item}`}`}
             aria-current={tab === item ? "page" : undefined}
+            onClick={(event) => {
+              // Switching tabs would drop the unsaved edits of the profile form: ask first.
+              if (item !== tab && unsaved.current) {
+                event.preventDefault();
+                setLeaving(`/${lang}/account${item === "orders" ? "" : `?tab=${item}`}`);
+              }
+            }}
             className={`h-10 shrink-0 rounded-full px-4 text-sm font-semibold leading-10 transition-colors ${tab === item ? "bg-brand text-navy" : "text-navy/60 hover:text-navy"}`}
           >
             {copy.tabs[item]}
@@ -100,10 +118,54 @@ export function AccountPage() {
 
       <div className="mt-6">
         {tab === "orders" ? <Orders /> : null}
-        {tab === "addresses" ? <Addresses /> : null}
-        {tab === "profile" ? <Profile customer={customer} /> : null}
+        {tab === "profile" ? <Profile customer={customer} unsaved={unsaved} saveRef={saveRef} /> : null}
         {tab === "password" ? <Password /> : null}
       </div>
+      <Dialog.Root open={leaving !== null} onOpenChange={(next) => (next || leaveBusy ? null : setLeaving(null))}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/50" />
+          <Dialog.Content dir={lang === "en" ? "ltr" : "rtl"} className="fixed inset-x-4 top-1/2 z-50 mx-auto w-auto max-w-md -translate-y-1/2 rounded-3xl bg-white p-6 text-navy shadow-2xl">
+            <span className="grid size-11 place-items-center rounded-xl bg-burgundy/10 text-burgundy">
+              <AlertTriangle className="size-5" />
+            </span>
+            <Dialog.Title className="mt-4 text-lg font-bold">{copy.leaveTitle}</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm leading-7 text-navy/60">{copy.leaveLead}</Dialog.Description>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={leaveBusy}
+                onClick={async () => {
+                  setLeaveBusy(true);
+                  // Leaves only when the save worked; a failed save stays on the page with its message.
+                  const saved = await saveRef.current();
+                  setLeaveBusy(false);
+                  if (saved && leaving) {
+                    unsaved.current = false;
+                    navigate(leaving);
+                  }
+                  setLeaving(null);
+                }}
+                className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-full bg-brand px-5 text-sm font-bold text-navy hover:bg-brand-hover disabled:opacity-70"
+              >
+                {leaveBusy ? <LoaderCircle className="size-4 animate-spin" /> : null}
+                {copy.leaveSave}
+              </button>
+              <button
+                type="button"
+                disabled={leaveBusy}
+                onClick={() => {
+                  unsaved.current = false;
+                  if (leaving) navigate(leaving);
+                  setLeaving(null);
+                }}
+                className="inline-flex h-11 cursor-pointer items-center rounded-full bg-burgundy px-5 text-sm font-bold text-white hover:opacity-90 disabled:opacity-70"
+              >
+                {copy.leaveDiscard}
+              </button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </Shell>
   );
 }
@@ -186,6 +248,25 @@ function Orders() {
     <div className="space-y-4">
       {orders.map((order) => {
         const reached = STEPS.findIndex((step) => step.id === order.status);
+        // A finished order (delivered or cancelled) collapses to one line: the product, the date and the final status.
+        if (order.status === "DELIVERED" || order.status === "CANCELLED") {
+          const first = order.items[0]?.name ?? "";
+          const more = order.items.length - 1;
+          return (
+            <Panel key={order.id}>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+                <p className="min-w-0 flex-1 truncate text-sm font-semibold">
+                  {first}
+                  {more > 0 ? <span className="ms-2 text-xs font-medium text-navy/50">+{more}</span> : null}
+                </p>
+                <p className="text-sm text-navy/60">{date(order.placedAt)}</p>
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${order.status === "CANCELLED" ? "bg-burgundy/10 text-burgundy" : "bg-brand/10 text-brand-ink"}`}>
+                  {copy.orderStatus[order.status]}
+                </span>
+              </div>
+            </Panel>
+          );
+        }
         return (
           <Panel key={order.id}>
             <div className="flex flex-wrap items-start justify-between gap-3">
@@ -194,36 +275,27 @@ function Orders() {
                 <p className="font-semibold">{date(order.placedAt)}</p>
               </div>
               <div className="flex flex-wrap gap-2">
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${order.status === "CANCELLED" ? "bg-burgundy/10 text-burgundy" : "bg-brand/10 text-brand-ink"}`}>
-                  {copy.orderStatus[order.status]}
-                </span>
+                <span className="rounded-full bg-brand/10 px-3 py-1 text-xs font-semibold text-brand-ink">{copy.orderStatus[order.status]}</span>
                 <span className="rounded-full bg-[var(--tone-b)] px-3 py-1 text-xs font-medium text-navy/70">
                   {copy.paymentMethod[order.paymentMethod]} · {copy.paymentStatus[order.paymentStatus]}
                 </span>
               </div>
             </div>
 
-            {order.status === "CANCELLED" ? (
-              <p className="mt-4 flex items-center gap-2 text-sm text-burgundy">
-                <XCircle className="size-4" />
-                {copy.orderStatus.CANCELLED}
-              </p>
-            ) : (
-              <ol className="mt-5 grid grid-cols-4 gap-2">
-                {STEPS.map((step, index) => {
-                  const done = index <= reached;
-                  const Icon = step.icon;
-                  return (
-                    <li key={step.id} className="flex flex-col items-center gap-1.5 text-center">
-                      <span className={`grid size-9 place-items-center rounded-full ${done ? "bg-brand text-navy" : "bg-[var(--tone-b)] text-navy/30"}`}>
-                        <Icon className="size-4" />
-                      </span>
-                      <span className={`text-[11px] font-medium leading-4 ${done ? "text-navy" : "text-navy/40"}`}>{copy.orderStatus[step.id]}</span>
-                    </li>
-                  );
-                })}
-              </ol>
-            )}
+            <ol className="mt-5 grid grid-cols-4 gap-2">
+              {STEPS.map((step, index) => {
+                const done = index <= reached;
+                const Icon = step.icon;
+                return (
+                  <li key={step.id} className="flex flex-col items-center gap-1.5 text-center">
+                    <span className={`grid size-9 place-items-center rounded-full ${done ? "bg-brand text-navy" : "bg-[var(--tone-b)] text-navy/30"}`}>
+                      <Icon className="size-4" />
+                    </span>
+                    <span className={`text-[11px] font-medium leading-4 ${done ? "text-navy" : "text-navy/40"}`}>{copy.orderStatus[step.id]}</span>
+                  </li>
+                );
+              })}
+            </ol>
 
             <ul className="mt-5 divide-y divide-navy/10 border-t border-navy/10">
               {order.items.map((item, index) => (
@@ -262,8 +334,6 @@ function Orders() {
 // Addresses
 // ---------------------------------------------------------------------------
 
-type AddressForm = { label: string; zoneCode: string; city: string; line1: string; notes: string; isDefault: boolean };
-const EMPTY_ADDRESS: AddressForm = { label: "", zoneCode: "", city: "", line1: "", notes: "", isDefault: false };
 
 export function useZones() {
   const [zones, setZones] = useState<Zone[]>([]);
@@ -277,116 +347,7 @@ export function useZones() {
   return zones;
 }
 
-function Addresses() {
-  const { lang } = useLang();
-  const copy = ACCOUNT_COPY[lang];
-  const zones = useZones();
-  const [addresses, setAddresses] = useState<SavedAddress[] | null>(null);
-  const [editing, setEditing] = useState<string | "new" | null>(null);
-  const [removing, setRemoving] = useState<string | null>(null);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    api<{ addresses: SavedAddress[] }>("/account/addresses")
-      .then((result) => setAddresses(result.addresses))
-      .catch((failure) => setError(copy.errors[errorCode(failure)] ?? copy.errors.generic));
-  }, [copy]);
-
-  async function run(request: Promise<{ addresses: SavedAddress[] }>) {
-    setError("");
-    try {
-      setAddresses((await request).addresses);
-      setEditing(null);
-      setRemoving(null);
-      return true;
-    } catch (failure) {
-      setError(copy.errors[errorCode(failure)] ?? copy.errors.generic);
-      return false;
-    }
-  }
-
-  if (!addresses) return error ? <Notice tone="error" text={error} /> : <LoaderCircle className="mx-auto size-6 animate-spin text-navy/40" />;
-
-  return (
-    <div className="space-y-4">
-      {error ? <Notice tone="error" text={error} /> : null}
-      {addresses.length === 0 && editing !== "new" ? (
-        <Panel className="text-center text-sm text-navy/60">{copy.noAddresses}</Panel>
-      ) : null}
-
-      <div className="grid gap-4 md:grid-cols-2">
-        {addresses.map((item) =>
-          editing === item.id ? (
-            <AddressEditor
-              key={item.id}
-              zones={zones}
-              initial={{ label: item.label, zoneCode: item.zoneCode ?? "", city: item.city, line1: item.line1, notes: item.notes, isDefault: item.isDefault }}
-              onCancel={() => setEditing(null)}
-              onSave={(form) => run(api(`/account/addresses/${item.id}`, { method: "PATCH", body: { ...form, isDefault: form.isDefault || undefined } }))}
-            />
-          ) : (
-            <Panel key={item.id} className={item.isDefault ? "border-brand/50" : ""}>
-              <div className="flex items-start justify-between gap-3">
-                <p className="flex items-center gap-2 font-semibold">
-                  <MapPin className="size-4 text-brand-ink" />
-                  {item.label || item.city}
-                </p>
-                {item.isDefault ? <span className="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand-ink">{copy.isDefault}</span> : null}
-              </div>
-              <p className="mt-3 text-sm leading-7 text-navy/70">
-                {item.zoneName ? `${item.zoneName} · ` : ""}
-                {item.city}
-                <br />
-                {item.line1}
-                {item.notes ? (
-                  <>
-                    <br />
-                    <span className="text-navy/50">{item.notes}</span>
-                  </>
-                ) : null}
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <SmallButton icon={Pencil} onClick={() => setEditing(item.id)}>
-                  {copy.edit}
-                </SmallButton>
-                {!item.isDefault ? (
-                  <SmallButton icon={Star} onClick={() => void run(api(`/account/addresses/${item.id}`, { method: "PATCH", body: { isDefault: true } }))}>
-                    {copy.setDefault}
-                  </SmallButton>
-                ) : null}
-                {removing === item.id ? (
-                  <SmallButton icon={Trash2} danger onClick={() => void run(api(`/account/addresses/${item.id}`, { method: "DELETE" }))}>
-                    {copy.removeConfirm}
-                  </SmallButton>
-                ) : (
-                  <SmallButton icon={Trash2} onClick={() => setRemoving(item.id)}>
-                    {copy.remove}
-                  </SmallButton>
-                )}
-              </div>
-            </Panel>
-          ),
-        )}
-        {editing === "new" ? (
-          <AddressEditor zones={zones} initial={{ ...EMPTY_ADDRESS, isDefault: addresses.length === 0 }} onCancel={() => setEditing(null)} onSave={(form) => run(api("/account/addresses", { body: form }))} />
-        ) : null}
-      </div>
-
-      {editing === null ? (
-        <button
-          type="button"
-          onClick={() => setEditing("new")}
-          className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-full border border-brand-ink px-5 text-sm font-bold text-brand-ink hover:bg-brand/10"
-        >
-          <Plus className="size-4" />
-          {copy.addAddress}
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-function SmallButton({ icon: Icon, onClick, danger, children }: { icon: typeof Plus; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
+function SmallButton({ icon: Icon, onClick, danger, children }: { icon: React.ComponentType<{ className?: string }>; onClick: () => void; danger?: boolean; children: React.ReactNode }) {
   return (
     <button
       type="button"
@@ -401,37 +362,98 @@ function SmallButton({ icon: Icon, onClick, danger, children }: { icon: typeof P
   );
 }
 
-function AddressEditor({ zones, initial, onSave, onCancel }: { zones: Zone[]; initial: AddressForm; onSave: (form: AddressForm) => Promise<boolean>; onCancel: () => void }) {
+// ---------------------------------------------------------------------------
+// Profile and password
+// ---------------------------------------------------------------------------
+
+type AddressDraft = { key: string; id?: string; label: string; zoneCode: string; city: string; line1: string; notes: string; isDefault: boolean; wasDefault: boolean; dirty: boolean; editing: boolean };
+const draftOf = (item: SavedAddress): AddressDraft => ({ key: item.id, id: item.id, label: item.label, zoneCode: item.zoneCode ?? "", city: item.city, line1: item.line1, notes: item.notes, isDefault: item.isDefault, wasDefault: item.isDefault, dirty: false, editing: false });
+const newDraft = (): AddressDraft => ({ key: `new-${Math.random().toString(36).slice(2)}`, label: "", zoneCode: "", city: "", line1: "", notes: "", isDefault: false, wasDefault: false, dirty: true, editing: true });
+function draftErrors(draft: AddressDraft) {
+  const errors: Partial<Record<"zoneCode" | "city" | "line1", true>> = {};
+  if (!draft.zoneCode) errors.zoneCode = true;
+  if (draft.city.trim().length < 2) errors.city = true;
+  if (draft.line1.trim().length < 3) errors.line1 = true;
+  return errors;
+}
+
+/** One address inside the account form. Nothing is sent from here; the form's Save button sends everything. */
+function AddressCard({ draft, zones, tried, onChange, onEdit, onConfirm, onDefault, onRemove }: { draft: AddressDraft; zones: Zone[]; tried: boolean; onChange: (patch: Partial<AddressDraft>) => void; onEdit: () => void; onConfirm: () => void; onDefault: () => void; onRemove: () => void }) {
   const { lang } = useLang();
   const copy = ACCOUNT_COPY[lang];
-  const [form, setForm] = useState(initial);
-  const [tried, setTried] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const set = (patch: Partial<AddressForm>) => setForm((current) => ({ ...current, ...patch }));
-  const errors: Partial<Record<keyof AddressForm, string>> = {};
-  if (!form.zoneCode) errors.zoneCode = copy.errors.required;
-  if (form.city.trim().length < 2) errors.city = copy.errors.required;
-  if (form.line1.trim().length < 3) errors.line1 = copy.errors.required;
-  const show = (key: keyof AddressForm) => (tried ? errors[key] : undefined);
-
+  const [confirmTried, setConfirmTried] = useState(false);
+  const errors = tried || confirmTried ? draftErrors(draft) : {};
+  if (!draft.editing) {
+    const zone = zones.find((item) => item.code === draft.zoneCode);
+    const zoneName = zone ? (lang === "en" && zone.nameEn ? zone.nameEn : zone.nameAr) : "";
+    const title = draft.label || draft.city;
+    return (
+      <div className="flex items-start justify-between gap-3 text-sm leading-7">
+        <p className="min-w-0 text-navy/60">
+          <span className="font-semibold text-navy">
+            {title}
+            {draft.isDefault ? ` (${copy.mainShort})` : ""}
+          </span>
+          {" · "}
+          {[zoneName, draft.city, draft.line1].filter(Boolean).join(" · ")}
+        </p>
+        <span className="flex shrink-0 items-center gap-1">
+          <button type="button" onClick={onEdit} aria-label={copy.edit} title={copy.edit} className="grid size-8 cursor-pointer place-items-center rounded-full text-navy/50 hover:bg-navy/5 hover:text-navy">
+            <Pencil className="size-4" />
+          </button>
+          {!draft.isDefault ? (
+            <button type="button" onClick={onDefault} aria-label={copy.setDefault} title={copy.setDefault} className="grid size-8 cursor-pointer place-items-center rounded-full text-navy/50 hover:bg-navy/5 hover:text-navy">
+              <Star className="size-4" />
+            </button>
+          ) : null}
+          <button type="button" onClick={onRemove} aria-label={copy.remove} title={copy.remove} className="grid size-8 cursor-pointer place-items-center rounded-full text-navy/50 hover:bg-navy/5 hover:text-burgundy">
+            <TrashIcon className="size-4" />
+          </button>
+        </span>
+      </div>
+    );
+  }
+  const required = (key: "zoneCode" | "city" | "line1") => (errors[key] ? copy.errors.required : undefined);
   return (
-    <Panel className="md:col-span-2">
-      <form
-        noValidate
-        onSubmit={async (event) => {
-          event.preventDefault();
-          setTried(true);
-          if (Object.keys(errors).length) return;
-          setBusy(true);
-          await onSave({ ...form, label: form.label.trim(), city: form.city.trim(), line1: form.line1.trim(), notes: form.notes.trim() });
-          setBusy(false);
-        }}
-        className="grid gap-4 sm:grid-cols-2"
-      >
-        <Field label={`${copy.label} (${copy.optional})`} value={form.label} onChange={(label) => set({ label })} placeholder={copy.labelHint} />
+    <div className={`space-y-4 rounded-2xl border p-4 ${draft.isDefault ? "border-brand/50" : "border-navy/10"}`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-2 text-sm font-semibold">
+          <MapPin className="size-4 text-brand-ink" />
+          {draft.label || draft.city || copy.addAddress}
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          {draft.isDefault ? (
+            <span className="rounded-full bg-brand/10 px-2.5 py-1 text-xs font-semibold text-brand-ink">{copy.isDefault}</span>
+          ) : (
+            <SmallButton icon={Star} onClick={onDefault}>
+              {copy.setDefault}
+            </SmallButton>
+          )}
+          <SmallButton icon={TrashIcon} onClick={onRemove}>
+            {copy.remove}
+          </SmallButton>
+        </div>
+      </div>
+      <div className="grid items-start gap-4 sm:grid-cols-2">
+        <div>
+          <Field label={`${copy.label} (${copy.optional})`} value={draft.label} onChange={(label) => onChange({ label })} placeholder={copy.labelHint} />
+          <div className="mt-2 flex flex-wrap gap-2">
+            {copy.labelPresets.map((preset) => (
+              <button
+                key={preset}
+                type="button"
+                onClick={() => onChange({ label: preset })}
+                aria-pressed={draft.label === preset}
+                className={`h-8 cursor-pointer rounded-full border px-3 text-xs font-semibold transition-colors ${draft.label === preset ? "border-brand-ink bg-brand/10 text-brand-ink" : "border-navy/15 text-navy/60 hover:text-navy"}`}
+              >
+                {preset}
+              </button>
+            ))}
+          </div>
+        </div>
         <label className="block">
           <span className="mb-1.5 block text-sm font-medium">{copy.zone}</span>
-          <select value={form.zoneCode} onChange={(event) => set({ zoneCode: event.target.value })} className={inputClass(show("zoneCode"))}>
+          <select value={draft.zoneCode} onChange={(event) => onChange({ zoneCode: event.target.value })} className={inputClass(required("zoneCode"))}>
             <option value="">{copy.chooseZone}</option>
             {zones.map((zone) => (
               <option key={zone.code} value={zone.code}>
@@ -440,58 +462,107 @@ function AddressEditor({ zones, initial, onSave, onCancel }: { zones: Zone[]; in
               </option>
             ))}
           </select>
-          <ErrorText text={show("zoneCode")} />
+          <ErrorText text={required("zoneCode")} />
         </label>
-        <Field label={copy.city} value={form.city} onChange={(city) => set({ city })} error={show("city")} autoComplete="address-level2" />
-        <Field label={copy.street} value={form.line1} onChange={(line1) => set({ line1 })} error={show("line1")} placeholder={copy.streetHint} autoComplete="street-address" />
+        <Field label={copy.city} value={draft.city} onChange={(city) => onChange({ city })} error={required("city")} autoComplete="address-level2" />
+        <Field label={copy.street} value={draft.line1} onChange={(line1) => onChange({ line1 })} error={required("line1")} placeholder={copy.streetHint} autoComplete="street-address" />
         <div className="sm:col-span-2">
-          <Field label={`${copy.notes} (${copy.optional})`} value={form.notes} onChange={(notes) => set({ notes })} />
+          <Field label={`${copy.notes} (${copy.optional})`} value={draft.notes} onChange={(notes) => onChange({ notes })} />
         </div>
-        {!initial.isDefault ? (
-          <label className="flex cursor-pointer items-center gap-2 text-sm sm:col-span-2">
-            <input type="checkbox" checked={form.isDefault} onChange={(event) => set({ isDefault: event.target.checked })} className="size-4 accent-[var(--brand)]" />
-            {copy.makeDefault}
-          </label>
-        ) : null}
-        <div className="flex flex-wrap gap-2 sm:col-span-2">
-          <button type="submit" disabled={busy} className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-navy hover:bg-brand-hover disabled:opacity-70">
-            {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
-            {copy.save}
-          </button>
-          <button type="button" onClick={onCancel} className="inline-flex h-11 cursor-pointer items-center rounded-full border border-navy/15 px-5 text-sm font-medium text-navy/70 hover:text-navy">
-            {copy.cancel}
-          </button>
-        </div>
-      </form>
-    </Panel>
+      </div>
+      <button
+        type="button"
+        onClick={() => {
+          setConfirmTried(true);
+          if (!Object.keys(draftErrors(draft)).length) onConfirm();
+        }}
+        className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-navy hover:bg-brand-hover"
+      >
+        <Check className="size-4" />
+        {copy.confirmAddress}
+      </button>
+    </div>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Profile and password
-// ---------------------------------------------------------------------------
-
-function Profile({ customer }: { customer: Customer }) {
+function Profile({ customer, unsaved, saveRef }: { customer: Customer; unsaved: { current: boolean }; saveRef: { current: () => Promise<boolean> } }) {
   const { lang } = useLang();
   const copy = ACCOUNT_COPY[lang];
   const { setCustomer } = useCustomer();
   const [form, setForm] = useState({ firstName: customer.firstName, lastName: customer.lastName, email: customer.email });
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tried, setTried] = useState(false);
+  const zones = useZones();
+  const [drafts, setDrafts] = useState<AddressDraft[] | null>(null);
+  const [removed, setRemoved] = useState<string[]>([]);
   const set = (patch: Partial<typeof form>) => setForm((current) => ({ ...current, ...patch }));
+  const dirty =
+    form.firstName !== customer.firstName ||
+    form.lastName !== customer.lastName ||
+    form.email !== customer.email ||
+    removed.length > 0 ||
+    (drafts ?? []).some((draft) => draft.dirty || !draft.id);
+  unsaved.current = dirty;
+  saveRef.current = () => save();
+  useEffect(() => () => void (unsaved.current = false), [unsaved]);
+  // Closing or reloading the page with unsaved edits asks first.
+  useEffect(() => {
+    if (!dirty) return;
+    const warn = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [dirty]);
 
-  async function save(event: React.FormEvent) {
-    event.preventDefault();
+  useEffect(() => {
+    api<{ addresses: SavedAddress[] }>("/account/addresses")
+      .then((result) => setDrafts(result.addresses.map(draftOf)))
+      .catch(() => setDrafts([]));
+  }, []);
+
+  const fail = (text: string) => {
+    setNotice({ tone: "error", text });
+    return false;
+  };
+
+  async function save(event?: React.FormEvent): Promise<boolean> {
+    event?.preventDefault();
     setNotice(null);
-    if (!form.firstName.trim() || !form.lastName.trim()) return setNotice({ tone: "error", text: copy.errors.required });
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) return setNotice({ tone: "error", text: copy.errors.badEmail });
+    setTried(true);
+    if (!form.firstName.trim() || !form.lastName.trim()) return fail(copy.errors.required);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(form.email.trim())) return fail(copy.errors.badEmail);
+    if ((drafts ?? []).some((draft) => Object.keys(draftErrors(draft)).length)) return fail(copy.errors.required);
     setBusy(true);
     try {
       const result = await api<{ customer: Customer }>("/account/me", { method: "PATCH", body: { firstName: form.firstName.trim(), lastName: form.lastName.trim(), email: form.email.trim() } });
       setCustomer(result.customer);
+      if (drafts) {
+        // Deletes first, then the other changes, and the address that becomes the main one last.
+        let latest: SavedAddress[] | null = null;
+        for (const id of removed) latest = (await api<{ addresses: SavedAddress[] }>(`/account/addresses/${id}`, { method: "DELETE" })).addresses;
+        const gone = new Set(removed);
+        const work = drafts
+          .filter((draft) => !draft.id || (!gone.has(draft.id) && draft.dirty))
+          .sort((a, b) => Number(a.isDefault) - Number(b.isDefault));
+        for (const draft of work) {
+          const body = { label: draft.label.trim(), zoneCode: draft.zoneCode, city: draft.city.trim(), line1: draft.line1.trim(), notes: draft.notes.trim() };
+          const wantsDefault = draft.isDefault && !draft.wasDefault;
+          latest = draft.id
+            ? (await api<{ addresses: SavedAddress[] }>(`/account/addresses/${draft.id}`, { method: "PATCH", body: { ...body, isDefault: wantsDefault || undefined } })).addresses
+            : (await api<{ addresses: SavedAddress[] }>("/account/addresses", { body: { ...body, isDefault: draft.isDefault || undefined } })).addresses;
+        }
+        if (latest) setDrafts(latest.map(draftOf));
+        setRemoved([]);
+      }
+      announceChange("customers");
       setNotice({ tone: "ok", text: copy.saved });
+      return true;
     } catch (failure) {
       setNotice({ tone: "error", text: copy.errors[errorCode(failure)] ?? copy.errors.generic });
+      return false;
     } finally {
       setBusy(false);
     }
@@ -514,6 +585,7 @@ function Profile({ customer }: { customer: Customer }) {
     try {
       const result = await api<{ customer: Customer }>("/account/me", { method: "PATCH", body: { avatar } });
       setCustomer(result.customer);
+      announceChange("customers");
     } catch (failure) {
       setCustomer(previous);
       setNotice({ tone: "error", text: copy.errors[errorCode(failure)] ?? copy.errors.generic });
@@ -555,6 +627,46 @@ function Profile({ customer }: { customer: Customer }) {
           <Field label={copy.phone} value={customer.phone} onChange={() => undefined} dir="ltr" disabled />
           <p className="mt-1.5 text-xs text-navy/50">{copy.phoneLocked}</p>
         </div>
+        <div className="space-y-4 border-t border-navy/10 pt-5 sm:col-span-2">
+          <div className="flex items-center justify-between gap-3">
+            <h3 id="profile-addresses" className="text-base font-bold">
+              {copy.addresses}
+            </h3>
+            {drafts && !drafts.some((row) => row.editing) ? (
+              <button
+                type="button"
+                onClick={() => setDrafts((list) => [...(list ?? []), { ...newDraft(), isDefault: (list ?? []).length === 0 }])}
+                aria-label={copy.addAddress}
+                title={copy.addAddress}
+                className="grid size-9 cursor-pointer place-items-center rounded-full border border-brand-ink text-brand-ink hover:bg-brand/10"
+              >
+                <Plus className="size-4" />
+              </button>
+            ) : null}
+          </div>
+          {drafts === null ? <LoaderCircle className="mx-auto size-5 animate-spin text-navy/40" /> : null}
+          {drafts && drafts.length === 0 ? <p className="rounded-2xl border border-navy/10 p-4 text-center text-sm text-navy/60">{copy.noAddresses}</p> : null}
+          {(drafts ?? []).map((draft) => (
+            <AddressCard
+              key={draft.key}
+              draft={draft}
+              zones={zones}
+              tried={tried}
+              onChange={(patch) => setDrafts((list) => list && list.map((row) => (row.key === draft.key ? { ...row, ...patch, dirty: true } : row)))}
+              onEdit={() => setDrafts((list) => list && list.map((row) => (row.key === draft.key ? { ...row, editing: true } : row)))}
+              onConfirm={() => setDrafts((list) => list && list.map((row) => (row.key === draft.key ? { ...row, editing: false } : row)))}
+              onDefault={() => setDrafts((list) => list && list.map((row) => ({ ...row, isDefault: row.key === draft.key, dirty: row.dirty || (row.key === draft.key && !row.isDefault) })))}
+              onRemove={() => {
+                if (draft.id) setRemoved((list) => [...list, draft.id!]);
+                setDrafts((list) => {
+                  const rest = (list ?? []).filter((row) => row.key !== draft.key);
+                  // The main address moves to the first one left, so there is always one.
+                  return draft.isDefault && rest.length ? rest.map((row, index) => (index === 0 ? { ...row, isDefault: true, dirty: true } : row)) : rest;
+                });
+              }}
+            />
+          ))}
+        </div>
         {welcome ? (
           <p className="flex flex-wrap items-center gap-2 text-xs text-navy/60 sm:col-span-2">
             {welcome.status === "SENT" ? copy.welcomeSent : welcome.status === "FAILED" ? copy.welcomeFailed : copy.welcomePending}
@@ -571,12 +683,13 @@ function Profile({ customer }: { customer: Customer }) {
           </div>
         ) : null}
         <div className="sm:col-span-2">
-          <button type="submit" disabled={busy} className="inline-flex h-11 cursor-pointer items-center gap-2 rounded-full bg-brand px-6 text-sm font-bold text-navy hover:bg-brand-hover disabled:opacity-70">
+          <button type="submit" disabled={busy || !dirty} className={`inline-flex h-11 items-center gap-2 rounded-full px-6 text-sm font-bold transition-colors ${dirty ? "cursor-pointer bg-brand text-navy hover:bg-brand-hover disabled:opacity-70" : "cursor-default bg-brand/35 text-navy/50"}`}>
             {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Check className="size-4" />}
             {copy.save}
           </button>
         </div>
       </form>
+
     </Panel>
   );
 }
